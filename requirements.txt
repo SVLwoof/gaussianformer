@@ -11,3 +11,4 @@ natsort
 imageio[ffmpeg]
 simple-ocio
 git+https://github.com/iamNCJ/renderformer-liger-kernel.git
+numpy
