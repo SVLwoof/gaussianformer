@@ -50,7 +50,12 @@ def generate_scene_gaussians(scene_config: SceneConfig, scene_config_dir: Path) 
         num_points: int = len(means)
 
         # Robustly access custom vertex data from trimesh metadata
-        vertex_data = point_cloud.metadata['_ply_raw']['vertex']['data']
+        try:
+            vertex_data = point_cloud.metadata['_ply_raw']['vertex']['data']
+        except KeyError:
+            # Fallback if metadata is missing
+            print(f"  Warning: No PLY metadata found for {obj_key}. Using defaults.")
+            vertex_data = np.zeros(num_points, dtype=[])
 
         # Default values in case attributes are not found in the PLY file
         scales = np.full((num_points, 3), 0.01)
@@ -77,10 +82,12 @@ def generate_scene_gaussians(scene_config: SceneConfig, scene_config_dir: Path) 
         # --- 2. Apply transformations from the scene config ---
         transform = obj_config.transform
 
-        # Get transformation components
-        obj_translation = np.array(transform.translation)
-        obj_scale = np.array(transform.scale)
-        obj_rotation = R.from_quat(transform.rotation[1:] + [transform.rotation[0]])  # Scipy expects (x, y, z, w)
+        # Get transformation components and force the `float32` type to avoid division errors
+        obj_translation = np.array(transform.translation, dtype=np.float32)
+        obj_scale = np.array(transform.scale, dtype=np.float32)
+
+        # Rotation: Scipy expects (x, y, z, w)
+        obj_rotation = R.from_quat(transform.rotation[1:] + [transform.rotation[0]])
 
         # Apply transformations to each Gaussian
         # Position (mean): Rotate, then scale, then translate
@@ -98,7 +105,7 @@ def generate_scene_gaussians(scene_config: SceneConfig, scene_config_dir: Path) 
         # Scale: Compose object scale with a Gaussian scale
         transformed_scales = scales * obj_scale
 
-        # BUG FIX: Correctly reorder quaternion from (w, x, y, z) to (x, y, z, w) for scipy
+        # Reorder quaternion from (w, x, y, z) to (x, y, z, w) for scipy multiplication
         quat_xyzw = np.concatenate([quats[:, 1:], quats[:, :1]], axis=-1)
         initial_quats_scipy = R.from_quat(quat_xyzw)
 

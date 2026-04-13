@@ -42,7 +42,8 @@ def transform_gaussians_to_cam_coord(c2w: torch.Tensor, gaussians: torch.Tensor)
 
     # Get the world-to-camera rotation as a quaternion from the inverse transform's rotation matrix.
     # T_inv.linear gives the 3x3 rotation matrix component.
-    w2c_rotations = roma.rotmat_to_unitquat(T_inv.linear)
+    # roma returns (x,y,z,w); reorder to (w,x,y,z) for quaternion_multiply
+    w2c_rotations = roma.rotmat_to_unitquat(T_inv.linear)[..., [3, 0, 1, 2]]
 
     # Ensure the per-Gaussian rotations are normalized to be unit quaternions.
     rotations_normalized = rotations / torch.linalg.norm(rotations, dim=-1, keepdim=True)
