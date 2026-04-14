@@ -50,7 +50,7 @@ def get_rotation_to_align_vectors(vec_a, vec_b):
     return quats[:, [3, 0, 1, 2]]
 
 
-def convert_obj_to_gaussian_ply(obj_path: Path, ply_path: Path, num_samples=1000):
+def convert_obj_to_gaussian_ply(obj_path: Path, ply_path: Path, num_samples: int | None = None):
     """
     Converts an OBJ to a Gaussian PLY by sampling the surface,
     extracting colors, and aligning rotations to normals.
@@ -63,7 +63,10 @@ def convert_obj_to_gaussian_ply(obj_path: Path, ply_path: Path, num_samples=1000
             print(f"Warning: No vertices found in {obj_path}. Skipping.")
             return
 
-        print(f"  Processing {obj_path.name}...")
+        if num_samples is None:
+            num_samples = max(100, min(5000, len(mesh.vertices) // 2))
+
+        print(f"  Processing {obj_path.name} ({num_samples} samples)...")
 
         # --- 1. Surface Sampling ---
         # sample_surface returns (points, face_index)
@@ -95,9 +98,15 @@ def convert_obj_to_gaussian_ply(obj_path: Path, ply_path: Path, num_samples=1000
         avg_area_per_point = mesh.area / (num_points + 1e-8)
         radius = np.sqrt(avg_area_per_point) * 1.5  # Slight overlap factor to prevent holes
 
-        # Note: 3DGS typically uses log(scale), but your pipeline seems to read raw scales.
-        # We store linear radius here.
-        scales = np.full((num_points, 3), radius, dtype=np.float32)
+        # Anisotropic: flat discs on the surface (thin along normal direction).
+        # The rotation quaternion aligns local Z to the surface normal,
+        # so scale_2 (Z) should be much thinner than scale_0/scale_1 (tangent plane).
+        NORMAL_SCALE_FACTOR = 0.1
+        scales = np.column_stack([
+            np.full(num_points, radius, dtype=np.float32),
+            np.full(num_points, radius, dtype=np.float32),
+            np.full(num_points, radius * NORMAL_SCALE_FACTOR, dtype=np.float32),
+        ])
 
         # --- 3. Calculate Rotations ---
         # Align the Gaussian's Z-axis with the surface normal

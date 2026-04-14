@@ -27,7 +27,7 @@ OUTPUT_DIR: Path = ROOT_DIR / "training_examples"
 
 # ─── Generation Settings ──────────────────────────────────────────────────────
 
-NUM_SCENES: int = 30
+NUM_SCENES: int = 400
 NUM_CAMERAS_RANGE: tuple[int, int] = (1, 3)
 NUM_OBJECTS_RANGE: tuple[int, int] = (1, 2)
 NUM_LIGHTS_RANGE: tuple[int, int] = (1, 3)

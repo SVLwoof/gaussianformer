@@ -1,0 +1,296 @@
+{
+  "scene_name": "scene_0066_ball_teapot",
+  "version": "1.1-gaussian",
+  "cameras": [
+    {
+      "position": [
+        0.21348312365961408,
+        1.550884021240985,
+        1.0606681731443321
+      ],
+      "look_at": [
+        -0.04429163586293481,
+        -0.0685684807138682,
+        -0.04551593304221022
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 59.71428851186562
+    }
+  ],
+  "objects": {
+    "background_0": {
+      "ply_path": "templates/backgrounds/plane.ply",
+      "material": {
+        "color_tint": [
+          0.1292124261146475,
+          0.20660767288312742,
+          0.17703407157149292
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_1": {
+      "ply_path": "templates/backgrounds/wall0.ply",
+      "material": {
+        "color_tint": [
+          0.05527464862388022,
+          0.14113256666893098,
+          0.39467464624194576
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_2": {
+      "ply_path": "templates/backgrounds/wall1.ply",
+      "material": {
+        "color_tint": [
+          0.1320780453864766,
+          0.6722200571011956,
+          0.7190738495619896
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_3": {
+      "ply_path": "templates/backgrounds/wall2.ply",
+      "material": {
+        "color_tint": [
+          0.21115948020866776,
+          0.2932037159351522,
+          0.28325939485888857
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "ball": {
+      "ply_path": "objects/shader-ball/ball.ply",
+      "material": {
+        "color_tint": [
+          0.005921204854914853,
+          0.036123156001039346,
+          0.02286575868023362
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          -0.014463000524009666,
+          -0.24235668409060981,
+          -0.012405363331790417
+        ],
+        "rotation": [
+          0.9109360223321534,
+          0.0,
+          0.0,
+          0.4125476496329538
+        ],
+        "scale": [
+          0.6893104685485838,
+          0.6893104685485838,
+          0.6893104685485838
+        ],
+        "normalize": true
+      }
+    },
+    "teapot": {
+      "ply_path": "objects/classical/teapot.ply",
+      "material": {
+        "color_tint": [
+          0.02063316638314649,
+          0.03183492383609069,
+          0.029599647597203096
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.014463000524009666,
+          0.24235668409060981,
+          0.025549427535576638
+        ],
+        "rotation": [
+          -0.6200311030464579,
+          0.0,
+          0.0,
+          0.7845772309052772
+        ],
+        "scale": [
+          0.6595423244674727,
+          0.6595423244674727,
+          0.6595423244674727
+        ],
+        "normalize": true
+      }
+    },
+    "light_0": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.20025237563558979,
+          0.1772838103548699,
+          2.2861751712224847
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.2008391669654923,
+          2.2008391669654923,
+          2.2008391669654923
+        ],
+        "normalize": false
+      }
+    },
+    "light_1": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.629580636325717,
+          0.42939334537583185,
+          2.1274343927870216
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.287155291152779,
+          2.287155291152779,
+          2.287155291152779
+        ],
+        "normalize": false
+      }
+    },
+    "light_2": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          -0.35763595082311306,
+          1.5403423728873007,
+          1.569365004773769
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.158619873873774,
+          2.158619873873774,
+          2.158619873873774
+        ],
+        "normalize": false
+      }
+    }
+  }
+}
