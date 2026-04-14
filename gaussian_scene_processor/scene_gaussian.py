@@ -33,6 +33,8 @@ def generate_scene_gaussians(scene_config: SceneConfig, scene_config_dir: Path) 
     all_opacities: list = []
 
     for obj_key, obj_config in scene_config.objects.items():
+        if obj_key.startswith("light_"):
+            continue
         print(f"Processing object: {obj_key}")
         ply_full_path: Path = scene_config_dir / obj_config.ply_path
 

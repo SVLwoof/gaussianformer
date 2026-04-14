@@ -7,12 +7,14 @@ requires-python = ">=3.12"
 dependencies = [
     "dacite>=1.9.2",
     "einops>=0.8.1",
+    "gsplat>=1.5.3",
     "h5py>=3.14.0",
     "hf-xet>=1.1.5",
     "huggingface-hub>=0.33.1",
     "imageio[ffmpeg]>=2.37.0",
     "natsort>=8.4.0",
     "networkx>=3.6.1",
+    "ninja>=1.13.0",
     "numpy==2.3.2",
     "plyfile>=1.1.2",
     "pymeshlab>=2023.12.post3",
@@ -23,11 +25,18 @@ dependencies = [
     "scipy-stubs==1.16.1.0",
     "simple-ocio>=0.2.0",
     "torch>=2.11.0",
+    "torchvision>=0.26.0",
     "trimesh>=4.6.12",
 ]
 
 [tool.uv.sources]
 renderformer-liger-kernel = { git = "https://github.com/iamNCJ/renderformer-liger-kernel.git" }
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 
 [[tool.uv.index]]
 url = "https://download.pytorch.org/whl/cu128"

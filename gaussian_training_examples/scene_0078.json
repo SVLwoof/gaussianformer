@@ -1,0 +1,302 @@
+{
+  "scene_name": "scene_0078_6k",
+  "version": "1.1-gaussian",
+  "cameras": [
+    {
+      "position": [
+        1.4406007685204087,
+        -1.1498393340076447,
+        0.35787638347335327
+      ],
+      "look_at": [
+        -0.06416636086459648,
+        -0.08987422603900555,
+        0.08648709966830528
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 57.14754848877999
+    },
+    {
+      "position": [
+        -1.7958576606957768,
+        -0.23727516428910903,
+        0.6834983216655355
+      ],
+      "look_at": [
+        0.02570060214127029,
+        0.0521991671658798,
+        0.03667411946552082
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 37.651500992685264
+    },
+    {
+      "position": [
+        -1.6950922941111977,
+        0.2009879483900791,
+        0.37077843585802583
+      ],
+      "look_at": [
+        0.0403430021746817,
+        -0.0776251931693333,
+        0.01932552813801096
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 46.25612335787673
+    }
+  ],
+  "objects": {
+    "background_0": {
+      "ply_path": "templates/backgrounds/plane.ply",
+      "material": {
+        "color_tint": [
+          0.7684605883752579,
+          0.6170861242199082,
+          0.4835188008793378
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_1": {
+      "ply_path": "templates/backgrounds/wall0.ply",
+      "material": {
+        "color_tint": [
+          0.06856075017937847,
+          0.2999458090797352,
+          0.21734652808677973
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_2": {
+      "ply_path": "templates/backgrounds/wall1.ply",
+      "material": {
+        "color_tint": [
+          0.7415982169202548,
+          0.7311104827614554,
+          0.148077351316866
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_3": {
+      "ply_path": "templates/backgrounds/wall2.ply",
+      "material": {
+        "color_tint": [
+          0.2711204333514131,
+          0.47695506227490697,
+          0.38930040838876917
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "6k": {
+      "ply_path": "objects/lucy/6k.ply",
+      "material": {
+        "color_tint": [
+          0.5158902397977646,
+          0.32575036661682233,
+          0.17703680547287212
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          -0.03234482360058802
+        ],
+        "rotation": [
+          -0.4520047102779851,
+          0.0,
+          0.0,
+          0.8920155502492738
+        ],
+        "scale": [
+          1.1343254537313663,
+          1.1343254537313663,
+          1.1343254537313663
+        ],
+        "normalize": true
+      }
+    },
+    "light_0": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          -0.1757088457474053,
+          -0.0616442782400595,
+          2.481946582517862
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.1368620041465576,
+          2.1368620041465576,
+          2.1368620041465576
+        ],
+        "normalize": false
+      }
+    },
+    "light_1": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          -1.2758911283862289,
+          0.4255931170929561,
+          1.9720915947281932
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.2607627101342453,
+          2.2607627101342453,
+          2.2607627101342453
+        ],
+        "normalize": false
+      }
+    },
+    "light_2": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          -0.69808556117122,
+          0.033343215462685594,
+          1.6824173467561063
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.02926418556334,
+          2.02926418556334,
+          2.02926418556334
+        ],
+        "normalize": false
+      }
+    }
+  }
+}

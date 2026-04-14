@@ -1,0 +1,406 @@
+{
+    "scene_name": "scene_0383_6k_3k",
+    "version": "1.0",
+    "objects": {
+        "background_0": {
+            "mesh_path": "templates/backgrounds/plane.obj",
+            "transform": {
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    0.5,
+                    0.5,
+                    0.5
+                ],
+                "normalize": false
+            },
+            "material": {
+                "diffuse": [
+                    0.6101304406656989,
+                    0.4588313522446214,
+                    0.5235828713145655
+                ],
+                "specular": [
+                    0.0932448491158163,
+                    0.0932448491158163,
+                    0.0932448491158163
+                ],
+                "roughness": 0.5230728206806405,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.0,
+                "random_diffuse_type": "per-shading-group"
+            }
+        },
+        "background_1": {
+            "mesh_path": "templates/backgrounds/wall0.obj",
+            "transform": {
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    0.5,
+                    0.5,
+                    0.5
+                ],
+                "normalize": false
+            },
+            "material": {
+                "diffuse": [
+                    0.7087398261844139,
+                    0.18302687594502343,
+                    0.37382608748379464
+                ],
+                "specular": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "roughness": 0.7764609787398264,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.10334181140062887,
+                "random_diffuse_type": "per-shading-group"
+            }
+        },
+        "background_2": {
+            "mesh_path": "templates/backgrounds/wall1.obj",
+            "transform": {
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    0.5,
+                    0.5,
+                    0.5
+                ],
+                "normalize": false
+            },
+            "material": {
+                "diffuse": [
+                    0.3885098564802082,
+                    0.29286508726267385,
+                    0.6558960023023735
+                ],
+                "specular": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "roughness": 0.5735633200630879,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": true,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.24891314443136192,
+                "random_diffuse_type": "per-triangle"
+            }
+        },
+        "background_3": {
+            "mesh_path": "templates/backgrounds/wall2.obj",
+            "transform": {
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    0.5,
+                    0.5,
+                    0.5
+                ],
+                "normalize": false
+            },
+            "material": {
+                "diffuse": [
+                    0.7490413625308978,
+                    0.49807999366483124,
+                    0.6267452834855456
+                ],
+                "specular": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "roughness": 0.8035557174489922,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.2765361454271563,
+                "random_diffuse_type": "per-shading-group"
+            }
+        },
+        "6k": {
+            "mesh_path": "objects/lucy/6k.obj",
+            "material": {
+                "diffuse": [
+                    0.3215104428113386,
+                    0.13727681000587982,
+                    0.31363310860760313
+                ],
+                "specular": [
+                    0.005169364509341023,
+                    0.005169364509341023,
+                    0.005169364509341023
+                ],
+                "roughness": 0.8177521225568387,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": true,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.0,
+                "random_diffuse_type": "per-shading-group"
+            },
+            "transform": {
+                "translation": [
+                    0.20376534751989794,
+                    0.005284125368606277,
+                    0.015551030093959792
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    18.62614306703254
+                ],
+                "scale": [
+                    0.5613919419076825,
+                    0.5613919419076825,
+                    0.5613919419076825
+                ],
+                "normalize": true
+            }
+        },
+        "3k": {
+            "mesh_path": "objects/lucy/3k.obj",
+            "material": {
+                "diffuse": [
+                    0.7763343823965337,
+                    0.8602776882816265,
+                    0.8593844410219007
+                ],
+                "specular": [
+                    0.04480259325665003,
+                    0.04480259325665003,
+                    0.04480259325665003
+                ],
+                "roughness": 0.9547719405747918,
+                "emissive": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.013912541271103418,
+                "random_diffuse_type": "per-shading-group"
+            },
+            "transform": {
+                "translation": [
+                    -0.20376534751989794,
+                    -0.005284125368606277,
+                    0.019863114159470938
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    34.86411737250974
+                ],
+                "scale": [
+                    0.724010155817628,
+                    0.724010155817628,
+                    0.724010155817628
+                ],
+                "normalize": true
+            }
+        },
+        "light_0": {
+            "mesh_path": "templates/lighting/tri.obj",
+            "material": {
+                "diffuse": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "specular": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "roughness": 1.0,
+                "emissive": [
+                    1605.5376614394597,
+                    1605.5376614394597,
+                    1605.5376614394597
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.0,
+                "random_diffuse_type": "per-shading-group"
+            },
+            "transform": {
+                "translation": [
+                    0.20684309153909913,
+                    -0.07066826121992609,
+                    2.4146552172246105
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    2.1130014428087454,
+                    2.1130014428087454,
+                    2.1130014428087454
+                ],
+                "normalize": false
+            }
+        },
+        "light_1": {
+            "mesh_path": "templates/lighting/tri.obj",
+            "material": {
+                "diffuse": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "specular": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "roughness": 1.0,
+                "emissive": [
+                    711.1469873519267,
+                    711.1469873519267,
+                    711.1469873519267
+                ],
+                "smooth_shading": false,
+                "rand_tri_diffuse_seed": null,
+                "random_diffuse_max": 0.0,
+                "random_diffuse_type": "per-shading-group"
+            },
+            "transform": {
+                "translation": [
+                    1.4685428195157606,
+                    1.2543304676396214,
+                    1.7841370886264323
+                ],
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    2.2027783175266693,
+                    2.2027783175266693,
+                    2.2027783175266693
+                ],
+                "normalize": false
+            }
+        }
+    },
+    "cameras": [
+        {
+            "position": [
+                1.1719578175526058,
+                -0.7123891907551241,
+                0.681868648353818
+            ],
+            "look_at": [
+                0.033409013603942606,
+                0.021092419376410668,
+                0.07963870583252156
+            ],
+            "up": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "fov": 47.4558395673795
+        },
+        {
+            "position": [
+                0.8687958502750442,
+                1.605625662594272,
+                0.3949898448304427
+            ],
+            "look_at": [
+                -0.09489209335932165,
+                -0.07323231871265508,
+                -0.06041703601736892
+            ],
+            "up": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "fov": 42.91598071361696
+        },
+        {
+            "position": [
+                1.4689438678919693,
+                0.6754209343757546,
+                1.0842845688577156
+            ],
+            "look_at": [
+                0.08126021718587201,
+                -0.05403331782962737,
+                -0.07482248278452484
+            ],
+            "up": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "fov": 30.99459121933596
+        }
+    ]
+}

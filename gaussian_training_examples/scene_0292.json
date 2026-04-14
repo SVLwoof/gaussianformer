@@ -1,0 +1,254 @@
+{
+  "scene_name": "scene_0292_fox",
+  "version": "1.1-gaussian",
+  "cameras": [
+    {
+      "position": [
+        -1.103808890363843,
+        0.7220411686422591,
+        0.8791485083254491
+      ],
+      "look_at": [
+        -0.003380859261882918,
+        0.07882807025638455,
+        0.044144742506511736
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 46.35490581518042
+    },
+    {
+      "position": [
+        0.9622486767332041,
+        1.2121823184797633,
+        0.3191994546711806
+      ],
+      "look_at": [
+        0.062251091184755025,
+        -0.03969213959059799,
+        -5.3413457220957694e-05
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "fov": 56.91336061343654
+    }
+  ],
+  "objects": {
+    "background_0": {
+      "ply_path": "templates/backgrounds/plane.ply",
+      "material": {
+        "color_tint": [
+          0.5459783058555953,
+          0.32515248454694684,
+          0.7082482561354305
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_1": {
+      "ply_path": "templates/backgrounds/wall0.ply",
+      "material": {
+        "color_tint": [
+          0.21581986244218365,
+          0.7968830814650689,
+          0.304480385548693
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_2": {
+      "ply_path": "templates/backgrounds/wall1.ply",
+      "material": {
+        "color_tint": [
+          0.735522938506986,
+          0.4059167991827221,
+          0.6455627027152542
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "background_3": {
+      "ply_path": "templates/backgrounds/wall2.ply",
+      "material": {
+        "color_tint": [
+          0.6460128080383318,
+          0.5075153956955195,
+          0.5290788322395579
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      }
+    },
+    "fox": {
+      "ply_path": "objects/fox-in-the-wild/fox.ply",
+      "material": {
+        "color_tint": [
+          0.7531006429584163,
+          0.3823209925489107,
+          0.22832830821223127
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.0,
+          0.0,
+          -0.03779708678429714
+        ],
+        "rotation": [
+          -0.025499594195555565,
+          0.0,
+          0.0,
+          0.9996748324809733
+        ],
+        "scale": [
+          1.008292078222615,
+          1.008292078222615,
+          1.008292078222615
+        ],
+        "normalize": true
+      }
+    },
+    "light_0": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.19508155726064463,
+          0.2012657032708563,
+          2.4962528967314364
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.351025129664095,
+          2.351025129664095,
+          2.351025129664095
+        ],
+        "normalize": false
+      }
+    },
+    "light_1": {
+      "ply_path": "templates/lighting/tri.ply",
+      "material": {
+        "color_tint": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "opacity_multiplier": 1.0
+      },
+      "transform": {
+        "translation": [
+          0.04095415327140084,
+          -1.778427905243936,
+          1.876594336489143
+        ],
+        "rotation": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          2.262752456242005,
+          2.262752456242005,
+          2.262752456242005
+        ],
+        "normalize": false
+      }
+    }
+  }
+}
