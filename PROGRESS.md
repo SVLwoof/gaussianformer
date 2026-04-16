@@ -272,6 +272,50 @@ This triplet keeps us in check across the full pipeline. If column 3 diverges fr
 
 ---
 
+## Session: 2026-04-19
+
+### 10. V4 Training — Real 3DGS Data (data_v2, 100 epochs phase 2)
+
+First training run on the v2 data pipeline: real 3D Gaussian Splatting objects with gsplat-rendered ground truth (vs v3's mesh-sampled Gaussians + RenderFormer GT). Phase 1: 20 epochs frozen backbone. Phase 2: 100 epochs full fine-tune with CosineAnnealingLR (5e-5 → 5e-7), `save_interval=5`, batch_size=2, 512px. Ran as SLURM batch job (`runs/train_phase2.sh`, job 29812427) on an A40/L40S for ~37 h.
+
+**Phase 2 loss progression (log-HDR L1 space):**
+
+| Epoch | Train | Val |
+|-------|-------|-----|
+| 5 | 0.0043 | 0.0038 |
+| 10 | 0.0033 | 0.0040 |
+| 25 | 0.0020 | 0.0019 |
+| 50 | 0.0013 | 0.00141 |
+| 75 | — | 0.00094 |
+| 100 | 0.00063 | **0.00088** |
+
+Training was clean: no divergence, val and train tracked closely, cosine LR decayed smoothly, no overfitting signal.
+
+**Visual validation on held-out val set (`data_v2/h5s_val`, 100 scenes).** Rendered 7 scenes × 2 views with `phase2_epoch_100.pt` and compared LDR (AGX-tonemapped) outputs to gsplat ground truth (`eval_val_set.py`).
+
+| Metric | Value |
+|---|---|
+| Mean PSNR (sRGB, 14 views) | **15.18 dB** |
+| Min / Max | 12.27 / 17.89 dB |
+
+**Verdict: results are not good.** 15 dB is far below any reasonable rendering quality bar (good novel-view synthesis is ≥25 dB; even mediocre baselines are ≥20 dB). The low log-HDR loss (0.00088) is misleadingly optimistic — `log10(ldr + 1)` compresses the target range heavily, so a model that produces the right low-frequency color/brightness distribution can score well while missing all detail. Outputs qualitatively look like blurry color blobs with roughly-correct global color/layout.
+
+**Why it under-performed (hypotheses):**
+1. **Target difficulty jump.** V2's gsplat GT is real 3DGS with fine detail, sharp edges, and view-consistent specular behavior. V3's RenderFormer mesh renders are much smoother and closer to what the RenderFormer backbone was pretrained on.
+2. **Token budget vs. target complexity.** ~2–4k input Gaussians (our constraint from O(N²) attention) represent a real 3DGS scene much less faithfully than they represented simple mesh scenes. Real 3DGS reconstructions use 100k–1M+ Gaussians.
+3. **Loss is in log-HDR space, not perceptual.** Log compression + L1 in HDR strongly rewards getting low-frequency content right and barely penalizes missing detail. The monotonically-decreasing loss curve masked how much perceptual gap remained.
+4. **Data scale is small.** ~400 training scenes for a 195M-parameter fine-tune. Same scale as v3 but on a harder target.
+
+**Next steps to try (in order of expected impact):**
+- Add an sRGB-space perceptual loss (L1/LPIPS on tone-mapped output) so the training signal tracks visual quality.
+- Render earlier checkpoints (epoch 30, 50, 75) to see whether PSNR plateaued — if so, more epochs alone won't help; need loss or architecture changes.
+- Scale data: regenerate 1000+ v2 scenes, diversify object pool.
+- Consider higher Gaussian budget per scene (4096 → 8192) if VRAM allows; targets now genuinely need more points.
+
+**Files:** `eval_val_set.py` (val PSNR + side-by-side renders), `checkpoint_renders/v4_val/scene_*_sbs.png` (GT | GF pairs), `runs/train_phase2.sh`, `runs/train_phase2_29812427.out`.
+
+---
+
 ### Files Modified This Session
 
 | File | Changes |

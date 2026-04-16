@@ -116,17 +116,19 @@ def run_phase(
     log_interval: int,
     save_interval: int,
     global_step: int = 0,
+    val_dataloader: DataLoader | None = None,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
-    print(f"\n{'='*60}")
-    print(f"{phase_name}: {trainable:,} / {total:,} trainable parameters")
-    print(f"{'='*60}\n")
+    print(f"\n{'='*60}", flush=True)
+    print(f"{phase_name}: {trainable:,} / {total:,} trainable parameters", flush=True)
+    print(f"{'='*60}\n", flush=True)
 
     for epoch in range(num_epochs):
+        model.train()
         epoch_loss = 0.0
         epoch_steps = 0
         t0 = time.time()
@@ -138,12 +140,12 @@ def run_phase(
             fov = batch["fov"].to(device)
             target = batch["target"].to(device)
 
-            pred = training_forward(
-                model, ray_generator, gaussians, mask, c2w, fov,
-                config.resolution, model.config,
-            )
-
-            loss = compute_loss(pred, target)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                pred = training_forward(
+                    model, ray_generator, gaussians, mask, c2w, fov,
+                    config.resolution, model.config,
+                )
+                loss = compute_loss(pred, target)
 
             optimizer.zero_grad()
             loss.backward()
@@ -156,14 +158,38 @@ def run_phase(
             global_step += 1
 
             if global_step % log_interval == 0:
-                print(f"  [{phase_name}] step {global_step}, loss: {loss.item():.6f}")
+                print(f"  [{phase_name}] step {global_step}, loss: {loss.item():.6f}", flush=True)
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
         avg_loss = epoch_loss / max(epoch_steps, 1)
         elapsed = time.time() - t0
         print(f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
-              f"avg loss: {avg_loss:.6f}, lr: {current_lr:.2e}, time: {elapsed:.1f}s")
+              f"avg loss: {avg_loss:.6f}, lr: {current_lr:.2e}, time: {elapsed:.1f}s", flush=True)
+
+        # Validation
+        if val_dataloader is not None and (epoch + 1) % save_interval == 0:
+            model.eval()
+            val_loss = 0.0
+            val_steps = 0
+            with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                for batch in val_dataloader:
+                    gaussians = batch["gaussians"].to(device)
+                    mask = batch["mask"].to(device)
+                    c2w = batch["c2w"].to(device)
+                    fov = batch["fov"].to(device)
+                    target = batch["target"].to(device)
+
+                    pred = training_forward(
+                        model, ray_generator, gaussians, mask, c2w, fov,
+                        config.resolution, model.config,
+                    )
+                    val_loss += compute_loss(pred, target).item()
+                    val_steps += 1
+
+            avg_val_loss = val_loss / max(val_steps, 1)
+            print(f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
+                  f"val loss: {avg_val_loss:.6f}", flush=True)
 
         if (epoch + 1) % save_interval == 0:
             ckpt_path = save_dir / f"{phase_name}_epoch_{epoch + 1}.pt"
@@ -175,7 +201,7 @@ def run_phase(
                 "scheduler_state_dict": scheduler.state_dict(),
                 "loss": avg_loss,
             }, ckpt_path)
-            print(f"  Saved checkpoint: {ckpt_path}")
+            print(f"  Saved checkpoint: {ckpt_path}", flush=True)
 
     return global_step
 
@@ -196,6 +222,9 @@ def main():
     parser.add_argument("--max_samples", type=int, default=None, help="Limit dataset to N samples (for quick experiments)")
     parser.add_argument("--resume", type=Path, help="Path to checkpoint to resume from")
     parser.add_argument("--min_lr_ratio", type=float, default=TrainingConfig.min_lr_ratio)
+    parser.add_argument("--save_interval", type=int, default=TrainingConfig.save_interval, help="Save checkpoint every N epochs")
+    parser.add_argument("--val_h5_dir", type=Path, default=None, help="Validation H5 directory")
+    parser.add_argument("--val_renders_dir", type=Path, default=None, help="Validation renders directory")
     args = parser.parse_args()
 
     config = TrainingConfig(
@@ -212,7 +241,7 @@ def main():
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    print(f"Using device: {device}", flush=True)
 
     # --- Dataset ---
     dataset = GaussianRenderDataset(
@@ -228,9 +257,25 @@ def main():
         collate_fn=collate_fn,
     )
 
+    # --- Validation dataset ---
+    val_dataloader = None
+    if args.val_h5_dir and args.val_renders_dir:
+        val_dataset = GaussianRenderDataset(
+            args.val_h5_dir, args.val_renders_dir, config.resolution,
+        )
+        val_dataloader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=config.num_workers,
+            pin_memory=device.type == "cuda",
+            collate_fn=collate_fn,
+        )
+        print(f"Validation set: {len(val_dataset)} samples", flush=True)
+
     # --- Model ---
     if args.resume:
-        print(f"Resuming from checkpoint: {args.resume}")
+        print(f"Resuming from checkpoint: {args.resume}", flush=True)
         from gaussianformer.models.gaussianformer import GaussianFormer
         from gaussianformer.models.config import GaussianFormerConfig
         model = GaussianFormer(GaussianFormerConfig())
@@ -248,7 +293,7 @@ def main():
     # --- Phase 1: Train input module only ---
     if not args.skip_phase1:
         trainable_names = freeze_backbone(model)
-        print(f"Phase 1 trainable params: {trainable_names}")
+        print(f"Phase 1 trainable params: {trainable_names}", flush=True)
 
         optimizer = torch.optim.AdamW(
             [p for p in model.parameters() if p.requires_grad],
@@ -264,7 +309,8 @@ def main():
         global_step = run_phase(
             "phase1", model, ray_generator, dataloader, optimizer, scheduler,
             config, config.phase1_epochs, device, config.save_dir,
-            config.log_interval, config.save_interval, global_step,
+            config.log_interval, args.save_interval, global_step,
+            val_dataloader=val_dataloader,
         )
 
     # --- Phase 2: Full fine-tune ---
@@ -284,15 +330,16 @@ def main():
     global_step = run_phase(
         "phase2", model, ray_generator, dataloader, optimizer, scheduler,
         config, config.phase2_epochs, device, config.save_dir,
-        config.log_interval, config.save_interval, global_step,
+        config.log_interval, args.save_interval, global_step,
+        val_dataloader=val_dataloader,
     )
 
     # --- Save final model ---
     final_path = config.save_dir / "gaussianformer_final"
     final_path.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(final_path)
-    print(f"\nFinal model saved to: {final_path}")
-    print("Use with: python infer_gaussian.py --model_id {final_path}")
+    print(f"\nFinal model saved to: {final_path}", flush=True)
+    print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
 
 
 if __name__ == "__main__":

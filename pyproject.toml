@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "dacite>=1.9.2",
     "einops>=0.8.1",
+    "flash-attn>=2.7.0",
     "gsplat>=1.5.3",
     "h5py>=3.14.0",
     "hf-xet>=1.1.5",
@@ -24,19 +25,19 @@ dependencies = [
     "scipy>=1.16.0",
     "scipy-stubs==1.16.1.0",
     "simple-ocio>=0.2.0",
-    "torch>=2.11.0",
-    "torchvision>=0.26.0",
+    "torch>=2.9,<2.10",
+    "torchvision>=0.24,<0.25",
     "trimesh>=4.6.12",
 ]
 
 [tool.uv.sources]
 renderformer-liger-kernel = { git = "https://github.com/iamNCJ/renderformer-liger-kernel.git" }
-torch = { index = "pytorch-cu130" }
-torchvision = { index = "pytorch-cu130" }
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+# Prebuilt FA2 wheel matching torch 2.9 + cu12 + cp312 + cxx11 ABI. Avoids the
+# from-source build, which would require a CUDA 13 toolkit we don't have.
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }
 
 [[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
-
-[[tool.uv.index]]
+name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
