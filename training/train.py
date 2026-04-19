@@ -85,21 +85,8 @@ def training_forward(
 
 
 def compute_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    """
-    L1 loss in log-HDR space.
-
-    pred: [bs, 1, H, W, 3] -- model output (already log-encoded)
-    target: [bs, H, W, 3] -- ground-truth LDR image [0, 1]
-    """
-    # Convert LDR target to log-HDR space to match model output
-    # The model outputs log10(hdr + 1), and LDR images are approximately
-    # tone-mapped HDR. For LDR targets, log10(ldr + 1) is a reasonable proxy.
-    target_log = torch.log10(target + 1.0)
-
-    # Remove view dimension from pred: [bs, 1, H, W, 3] -> [bs, H, W, 3]
-    pred = pred.squeeze(1)
-
-    return F.l1_loss(pred, target_log)
+    """L1 in log-HDR space. pred is log10(hdr+1); target is LDR in [0,1]."""
+    return F.l1_loss(pred.squeeze(1), torch.log10(target + 1.0))
 
 
 def run_phase(
@@ -158,14 +145,20 @@ def run_phase(
             global_step += 1
 
             if global_step % log_interval == 0:
-                print(f"  [{phase_name}] step {global_step}, loss: {loss.item():.6f}", flush=True)
+                print(
+                    f"  [{phase_name}] step {global_step}, loss: {loss.item():.6f}",
+                    flush=True,
+                )
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
         avg_loss = epoch_loss / max(epoch_steps, 1)
         elapsed = time.time() - t0
-        print(f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
-              f"avg loss: {avg_loss:.6f}, lr: {current_lr:.2e}, time: {elapsed:.1f}s", flush=True)
+        print(
+            f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
+            f"avg loss: {avg_loss:.6f}, lr: {current_lr:.2e}, time: {elapsed:.1f}s",
+            flush=True,
+        )
 
         # Validation
         if val_dataloader is not None and (epoch + 1) % save_interval == 0:
@@ -188,8 +181,10 @@ def run_phase(
                     val_steps += 1
 
             avg_val_loss = val_loss / max(val_steps, 1)
-            print(f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
-                  f"val loss: {avg_val_loss:.6f}", flush=True)
+            print(
+                f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, val loss: {avg_val_loss:.6f}",
+                flush=True,
+            )
 
         if (epoch + 1) % save_interval == 0:
             ckpt_path = save_dir / f"{phase_name}_epoch_{epoch + 1}.pt"

@@ -62,7 +62,7 @@ def main():
             with torch.no_grad():
                 out = pipeline(
                     gaussians=gaussians, mask=mask, c2w=c2w, fov=fov,
-                    resolution=args.resolution, torch_dtype=torch.float32,
+                    resolution=args.resolution, torch_dtype=torch.bfloat16,
                 )
             hdr = out[0, 0].cpu().float().numpy()
             if tone_mapper is not None:
