@@ -316,6 +316,89 @@ Training was clean: no divergence, val and train tracked closely, cosine LR deca
 
 ---
 
+## Session: 2026-04-19 / 2026-04-20
+
+### 11. V5 Training — Dual-Loss Ablation (null result)
+
+Targeted ablation of v4's loss function. v4's single log-HDR L1 loss compresses target range so aggressively that it rewards low-frequency correctness and barely penalizes missing detail — the leading hypothesis for why v4 plateaued at 15 dB PSNR. v5 adds a second term in sRGB space to give training a direct perceptual signal.
+
+**Config changes vs v4 (everything else identical: same data, same phase-1 resume point, same cosine LR 5e-5 → 5e-7, same 100 phase-2 epochs, same bs=2 @ 512px):**
+
+1. **Dual loss.** `total = log_HDR_L1(pred, log10(gt+1)) + sRGB_L1((10**pred - 1).clamp(≥0), gt)` with both weights 1.0. New CLI flags `--log_loss_weight`, `--srgb_loss_weight` (`training/train.py`).
+2. **Flash Attention 2** (2.8.3) installed via `[tool.uv.sources]` URL pin on the prebuilt cu12/torch2.9 wheel. Required torch downgrade 2.11+cu130 → 2.9.1+cu128 (no prebuilt FA wheel for torch 2.11, and system `nvcc` is 12.8 so no from-source build possible; FA4 was ruled out separately because it doesn't support sm_89/Ada).
+3. **bf16 autocast** around forward+loss in both train and val loops (flash-attn requires fp16/bf16; pipeline's internal autocast uses whatever `torch_dtype` is passed).
+
+Ran as SLURM job 29842072 on an L40S (firefoot-02) for ~20 h. ~12 min/epoch — 45% faster than v4's 22 min/epoch, the expected flash-attn speedup. Training was clean: both loss terms descended monotonically in lockstep, train/val tightly matched throughout, no divergence.
+
+**Final losses (epoch 100):**
+
+| | Train | Val |
+|---|-------|-----|
+| total | 0.00332 | 0.00445 |
+| log term | 0.000786 | 0.00106 |
+| srgb term | 0.00253 | 0.00339 |
+
+**Visual eval on the same 7 val scenes × 2 views as v4:**
+
+| Metric | v4 | v5 |
+|---|---|---|
+| Mean PSNR | 15.18 dB | **15.15 dB** |
+| Range | 12.27–17.89 | 12.24–17.92 |
+
+**Verdict: null result.** The dual loss did not improve sRGB PSNR — the delta (-0.03 dB) is well within eval noise, and per-scene spread is essentially identical. Notably v5's log-loss term (0.00079) ended *lower* than v4's final (0.00088), yet perceptual PSNR didn't move. This is informative: **v4 was not under-optimizing the perceptual signal**. The loss function is not the bottleneck; something structural is (input Gaussian budget, data scale, or capacity at low-N inputs).
+
+**Also learned on closer inspection of v4/v5 renders:** while PSNR is low, outputs are visibly recognizable objects — not just color blobs as the v4 write-up suggested. The model is clearly capable of rendering full scenes; it just lacks fidelity. Bumps the ceiling on what we think the architecture can do and changes the diagnosis from "the model isn't learning scenes" to "the model is scene-aware but starved of detail".
+
+**Decisions going forward:**
+- **Revert the dual loss** in the next training run. Simplicity wins when the added complexity buys nothing. Restore v4's single log-HDR L1 as default; keep the CLI flags around so we can re-enable cheaply if a later experiment wants them.
+- **Focus gain-seeking elsewhere.** Most promising levers, in expected-impact order:
+  1. **Raise input Gaussian count.** Current data caps at ~3k per scene (`data_v2/process_objects.py --max_gaussians 3000`, median ~6.4k over the subset); bumping to 5k+ is a drop-in data-regen. Real 3DGS scenes need more points than we're giving the model.
+  2. **More data.** 400 training scenes for a 195M-parameter fine-tune is tight — regenerate 1000+ v2 scenes, diversify the object pool.
+  3. **Architectural levers for higher N.** Gradient checkpointing, sequence/tensor parallelism if we can access multi-GPU.
+
+**Files:** `runs/train_phase2_v5.sh`, `runs/train_phase2_v5_29842072.out`, `checkpoints_v5/phase2_epoch_100.pt`, `checkpoint_renders/v5_val/scene_*_sbs.png` (GT | GF pairs).
+
+---
+
+## Session: 2026-04-20 / 2026-04-23
+
+### 12. V6 Training — Bumped Gaussian Budget (N=3k → 5k), Simple Loss Restored
+
+Follow-up on v5's diagnosis: the loss function was not the bottleneck, so v6 reverts to v4's single log-HDR L1 loss and instead attacks the input-token ceiling. Regenerated the entire v2 dataset with `max_gaussians=5000` (up from 3000) into parallel `_n5k` dirs so the n=3000 baseline stays intact for comparison.
+
+**Data regen (`runs/regen_data_n5k.sh`, SLURM job 29855499):** 1000 train + 100 val scenes. Same `compose_scenes.py` logic as before — train seed=42, val seed=1, drawing from a shared object pool. Scene sizes land at ~7–12k Gaussians each (scenes aggregate multiple objects, each individually capped at 5k), so per-scene token counts roughly doubled vs v4/v5.
+
+**Training (`runs/train_phase2_v6.sh`, SLURM job 29855721, firefoot-04):** identical config to v4 — resume from `checkpoints_v4/phase1_epoch_20.pt`, 100 phase-2 epochs, cosine LR 5e-5 → 5e-7, bs=2 @ 512px, `save_interval=5`. Only differences vs v4: the bumped-N dataset and flash-attn 2.8.3 inherited from v5. Wall-clock ~24 h (~14 min/epoch), consistent with the O(N²) attention cost scaling up from v5's 12 min.
+
+**Final losses (log-HDR L1, epoch 100):**
+
+| | Train | Val |
+|---|-------|-----|
+| v4 | 0.00063 | 0.00088 |
+| **v6** | **0.000626** | — |
+
+Train loss landed essentially on top of v4's — the bigger token budget did not change the achievable training-loss floor.
+
+**Visual eval on the v6 val set (`data_v2/h5s_n5k_val`, 7 scenes × 2 views, `eval_val_set.py`):**
+
+| Metric | v4 | v5 | v6 |
+|---|---|---|---|
+| Mean PSNR | 15.18 dB | 15.15 dB | **15.80 dB** |
+| Range | 12.27–17.89 | 12.24–17.92 | 13.35–18.72 |
+
+**Important caveat:** v6's PSNR is not directly comparable to v4/v5 because the val set itself is different (regenerated with different seed and N=5k). The +0.62 dB headline number mostly reflects a val-set shift, not a true quality gain.
+
+**Verdict: visually indistinguishable from v5.** On side-by-side inspection of `checkpoint_renders/v6_val/`, outputs look essentially the same as v5 — recognizable scene-aware blobs with correct global color/layout, same level of detail. The token-count bump did not buy a visible fidelity improvement at this capacity/data scale.
+
+**Net takeaways:**
+- **Simpler loss confirmed sufficient.** v4's single log-HDR L1 produces results on par with v5's dual loss — and v6 reproduces that quality on the bumped-N data without needing the sRGB term. Reverting v5's loss complexity was the right call; we no longer need to carry the `--srgb_loss_weight` plumbing as load-bearing — it's just an idle option.
+- **Token count alone isn't the lever.** Doubling the per-scene Gaussian budget (3k → 5k) did not move visual quality. The remaining bottleneck is probably model capacity at low-N inputs and/or data scale, not token budget.
+- **Baseline is stable.** Three independent 100-epoch runs now land in the same visual regime. The architecture has a consistent ceiling here; further gain-seeking should target either data diversity, meaningfully higher N (≥8k) with matching model capacity, or architectural changes (e.g. Perceiver-style bottleneck) rather than loss tweaks.
+
+**Files:** `runs/regen_data_n5k.sh`, `runs/train_phase2_v6.sh`, `data_v2/{objects,h5s,h5s_val,renders,renders_val}_n5k/`, `checkpoints_v6/phase2_epoch_100.pt`, `checkpoint_renders/v6_val/scene_*_sbs.png`.
+
+---
+
 ### Files Modified This Session
 
 | File | Changes |
