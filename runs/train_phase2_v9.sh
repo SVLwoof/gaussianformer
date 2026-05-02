@@ -5,6 +5,7 @@
 #SBATCH --output=runs/train_phase2_v9_%j.out
 #SBATCH --job-name=gformer_phase2_v9
 #SBATCH --mail-type=END,FAIL,BEGIN
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:3
 
 # v9 = phase 2 fine-tune on Objaverse_Splats single-object data (2667 train, 183 val).
