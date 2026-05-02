@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository adapts [RenderFormer](https://github.com/microsoft/renderformer) (SIGGRAPH 2025) for **3D Gaussian Splatting** inputs. RenderFormer is a transformer-based neural renderer: it takes triangle-mesh scenes and outputs rendered images without per-scene training. **GaussianFormer** replaces the triangle-mesh input with Gaussians (position, scale, rotation, color, opacity) while keeping the same two-stage transformer architecture.
 
-The project is at an early stage: the model architecture (`gaussianformer/`) has been adapted but is **not yet trained**. The current focus is generating high-quality scene descriptor JSONs that can be:
-1. Rendered through the original RenderFormer mesh pipeline to produce ground-truth images
-2. Used later as training data for GaussianFormer
+A pretrained checkpoint (V10b ep26, LPIPS-fine-tuned from V9 ep60) is published at [`shahafvl/gaussianformer-v10b`](https://huggingface.co/shahafvl/gaussianformer-v10b). It's the default `--model_id` for `infer_gaussian.py`.
 
 ## Environment Setup
 
+`uv` (`pyproject.toml` + `uv.lock`) is the source of truth for dependencies. From a fresh clone:
+
 ```bash
-pip install -r requirements.txt
-python3 -c "import imageio; imageio.plugins.freeimage.download()"  # Needed for HDR image IO
+uv sync
+uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # Needed for HDR image IO
 ```
 
-Uses `uv` for dependency management (`pyproject.toml` + `uv.lock`). Flash Attention is optional; code falls back to SDPA automatically. Force SDPA with `ATTN_IMPL=sdpa`.
+`pip install -r requirements.txt` works as a fallback. Flash Attention is optional; code falls back to SDPA automatically. Force SDPA with `ATTN_IMPL=sdpa`.
 
 ## Key Commands
 
@@ -25,42 +25,45 @@ Uses `uv` for dependency management (`pyproject.toml` + `uv.lock`). Flash Attent
 
 **Single scene: JSON -> H5 -> rendered image:**
 ```bash
-python3 scene_processor/convert_scene.py examples/cbox.json --output_h5_path tmp/cbox/cbox.h5
-python3 infer.py --h5_file tmp/cbox/cbox.h5 --output_dir output/cbox/
+uv run python scene_processor/convert_scene.py examples/cbox.json --output_h5_path tmp/cbox/cbox.h5
+uv run python infer.py --h5_file tmp/cbox/cbox.h5 --output_dir output/cbox/
 ```
 See `render-images.sh` and `render-videos.sh` for full examples with tone mappers.
 
 **Batch (video frames):**
 ```bash
-python3 batch_infer.py --h5_folder <folder> --output_dir <output> --save_video
+uv run python batch_infer.py --h5_folder <folder> --output_dir <output> --save_video
 ```
 
 ### Scene generation for training data
 
 **Step 1 -- Generate randomized scene descriptor JSONs:**
 ```bash
-python3 generate_training_data.py
+uv run python generate_training_data.py
 ```
 Outputs to `training_examples/`. Edit `NUM_SCENES_TO_GENERATE`, camera/light ranges, and material definitions directly in the script.
 
 **Step 2 -- Convert mesh examples to Gaussian format (OBJ -> PLY + JSON rewrite):**
 ```bash
-python3 batch_convert_to_gaussian_examples.py
+uv run python batch_convert_to_gaussian_examples.py
 ```
 Reads `training_examples/` -> writes `gaussian_training_examples/`.
 
 **Step 3 -- Compile Gaussian scenes to HDF5:**
 ```bash
-python3 gaussian_scene_processor/batch_generate_h5.py
+uv run python gaussian_scene_processor/batch_generate_h5.py
 ```
 Reads `gaussian_training_examples/` -> writes `gaussian_training_h5s/`.
 
-### GaussianFormer inference (WIP, model not yet trained)
+### GaussianFormer inference
+
+Defaults to the published checkpoint `shahafvl/gaussianformer-v10b` (downloads on first run):
 
 ```bash
-python3 create_local_model.py                # Create random-weight model for testing
-python3 infer_gaussian.py --h5_file path/to/scene.h5 --model_id ./my-gaussianformer-model
+uv run python infer_gaussian.py --h5_file path/to/scene.h5 --output_dir output/scene
 ```
+
+Pass `--model_id <path-or-hf-id>` to use a local checkpoint or a different Hub model.
 
 ## Architecture
 
