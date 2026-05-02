@@ -100,10 +100,13 @@ def main():
         hdr_path = os.path.join(output_dir, f"{base_name}_view_{i}.exr")
         ldr_path = os.path.join(output_dir, f"{base_name}_view_{i}.png")
 
-        imageio.v3.imwrite(hdr_path, hdr_img)
         imageio.v3.imwrite(ldr_path, ldr_img)
+        try:
+            imageio.v3.imwrite(hdr_path, hdr_img)
+        except OSError:
+            print(f"Warning: could not write EXR (missing backend) — skipping {hdr_path}")
 
-        print(f"Saved {hdr_path} and {ldr_path}")
+        print(f"Saved {ldr_path}")
 
 
 if __name__ == '__main__':
