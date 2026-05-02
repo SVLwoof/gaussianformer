@@ -9,13 +9,17 @@ Usage:
 """
 
 import argparse
+import os
 import time
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from gaussianformer.utils.ray_generator import RayGenerator
 from gaussianformer.utils.transform import transform_gaussians_to_cam_coord
@@ -23,6 +27,40 @@ from gaussianformer.utils.transform import transform_gaussians_to_cam_coord
 from training.config import TrainingConfig
 from training.dataset import GaussianRenderDataset, collate_fn
 from training.weight_transfer import transfer_weights, freeze_backbone, unfreeze_all
+
+
+def setup_ddp() -> tuple[int, int, int, torch.device]:
+    """Init NCCL when launched via torchrun. Returns (rank, local_rank, world_size, device).
+
+    Single-GPU path: when LOCAL_RANK is unset, returns (0, 0, 1, cuda) and skips
+    process-group init -- the rest of the script then behaves exactly like before.
+    """
+    if "LOCAL_RANK" not in os.environ:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return 0, 0, 1, device
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend="nccl")
+    return rank, local_rank, world_size, torch.device(f"cuda:{local_rank}")
+
+
+def is_main_process() -> bool:
+    return not dist.is_initialized() or dist.get_rank() == 0
+
+
+def unwrap_model(m: torch.nn.Module) -> torch.nn.Module:
+    return m.module if isinstance(m, DDP) else m
+
+
+def reduce_metric(value: float, device: torch.device) -> float:
+    """Average a scalar across ranks. No-op when single-process."""
+    if not dist.is_initialized():
+        return value
+    t = torch.tensor(value, device=device, dtype=torch.float32)
+    dist.all_reduce(t, op=dist.ReduceOp.AVG)
+    return t.item()
 
 
 def training_forward(
@@ -84,9 +122,50 @@ def training_forward(
     return rendered_imgs
 
 
-def compute_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    """L1 in log-HDR space. pred is log10(hdr+1); target is LDR in [0,1]."""
-    return F.l1_loss(pred.squeeze(1), torch.log10(target + 1.0))
+_lpips_fn = None
+
+
+def get_lpips(device: torch.device) -> torch.nn.Module:
+    """Lazy-init LPIPS-VGG. Frozen, eval mode."""
+    global _lpips_fn
+    if _lpips_fn is None:
+        import lpips
+        _lpips_fn = lpips.LPIPS(net="vgg").to(device).eval()
+        for p in _lpips_fn.parameters():
+            p.requires_grad = False
+    return _lpips_fn
+
+
+def compute_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    log_w: float,
+    lpips_w: float,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return (total, log_term, lpips_term).
+
+    pred: [bs, 1, H, W, 3] in log10(hdr+1) space.
+    target: [bs, H, W, 3] LDR PNG values in [0, 1].
+
+    log_term = L1(pred, log10(target + 1))  -- v6 baseline.
+    lpips_term = LPIPS-VGG(pred_ldr, target) on display-space values in [-1, 1].
+                 pred_ldr = clamp(10^pred - 1, 0, 1) brings the log-HDR prediction
+                 back to the same display-referred space the PNG target lives in.
+    """
+    log_target = torch.log10(target + 1.0)
+    log_term = F.l1_loss(pred.squeeze(1), log_target)
+    total = log_w * log_term
+
+    lpips_term = torch.tensor(0.0, device=device)
+    if lpips_w > 0:
+        pred_ldr = torch.clamp(10.0 ** pred.squeeze(1) - 1.0, 0.0, 1.0)
+        p = pred_ldr.permute(0, 3, 1, 2) * 2.0 - 1.0
+        g = target.permute(0, 3, 1, 2) * 2.0 - 1.0
+        lpips_term = get_lpips(device)(p, g).mean()
+        total = total + lpips_w * lpips_term
+
+    return total, log_term, lpips_term
 
 
 def run_phase(
@@ -102,21 +181,30 @@ def run_phase(
     save_dir: Path,
     log_interval: int,
     save_interval: int,
+    log_loss_weight: float,
+    lpips_loss_weight: float,
+    model_config,
     global_step: int = 0,
     val_dataloader: DataLoader | None = None,
+    train_sampler: DistributedSampler | None = None,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
-    print(f"\n{'='*60}", flush=True)
-    print(f"{phase_name}: {trainable:,} / {total:,} trainable parameters", flush=True)
-    print(f"{'='*60}\n", flush=True)
+    if is_main_process():
+        print(f"\n{'='*60}", flush=True)
+        print(f"{phase_name}: {trainable:,} / {total:,} trainable parameters", flush=True)
+        print(f"{'='*60}\n", flush=True)
 
     for epoch in range(num_epochs):
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
         model.train()
         epoch_loss = 0.0
+        epoch_log = 0.0
+        epoch_lpips = 0.0
         epoch_steps = 0
         t0 = time.time()
 
@@ -130,9 +218,11 @@ def run_phase(
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 pred = training_forward(
                     model, ray_generator, gaussians, mask, c2w, fov,
-                    config.resolution, model.config,
+                    config.resolution, model_config,
                 )
-                loss = compute_loss(pred, target)
+                loss, log_term, lpips_term = compute_loss(
+                    pred, target, log_loss_weight, lpips_loss_weight, device,
+                )
 
             optimizer.zero_grad()
             loss.backward()
@@ -141,29 +231,39 @@ def run_phase(
             optimizer.step()
 
             epoch_loss += loss.item()
+            epoch_log += log_term.item()
+            epoch_lpips += lpips_term.item()
             epoch_steps += 1
             global_step += 1
 
-            if global_step % log_interval == 0:
+            if global_step % log_interval == 0 and is_main_process():
                 print(
-                    f"  [{phase_name}] step {global_step}, loss: {loss.item():.6f}",
+                    f"  [{phase_name}] step {global_step}, total: {loss.item():.6f}, "
+                    f"log: {log_term.item():.6f}, lpips: {lpips_term.item():.6f}",
                     flush=True,
                 )
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
-        avg_loss = epoch_loss / max(epoch_steps, 1)
+        # Reduce per-epoch averages across ranks so the printed numbers are global.
+        avg_loss = reduce_metric(epoch_loss / max(epoch_steps, 1), device)
+        avg_log = reduce_metric(epoch_log / max(epoch_steps, 1), device)
+        avg_lpips = reduce_metric(epoch_lpips / max(epoch_steps, 1), device)
         elapsed = time.time() - t0
-        print(
-            f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
-            f"avg loss: {avg_loss:.6f}, lr: {current_lr:.2e}, time: {elapsed:.1f}s",
-            flush=True,
-        )
+        if is_main_process():
+            print(
+                f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
+                f"avg total: {avg_loss:.6f}, log: {avg_log:.6f}, lpips: {avg_lpips:.6f}, "
+                f"lr: {current_lr:.2e}, time: {elapsed:.1f}s",
+                flush=True,
+            )
 
         # Validation
         if val_dataloader is not None and (epoch + 1) % save_interval == 0:
             model.eval()
             val_loss = 0.0
+            val_log = 0.0
+            val_lpips = 0.0
             val_steps = 0
             with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 for batch in val_dataloader:
@@ -175,23 +275,33 @@ def run_phase(
 
                     pred = training_forward(
                         model, ray_generator, gaussians, mask, c2w, fov,
-                        config.resolution, model.config,
+                        config.resolution, model_config,
                     )
-                    val_loss += compute_loss(pred, target).item()
+                    total, log_term, lpips_term = compute_loss(
+                        pred, target, log_loss_weight, lpips_loss_weight, device,
+                    )
+                    val_loss += total.item()
+                    val_log += log_term.item()
+                    val_lpips += lpips_term.item()
                     val_steps += 1
 
-            avg_val_loss = val_loss / max(val_steps, 1)
-            print(
-                f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, val loss: {avg_val_loss:.6f}",
-                flush=True,
-            )
+            avg_val_loss = reduce_metric(val_loss / max(val_steps, 1), device)
+            avg_val_log = reduce_metric(val_log / max(val_steps, 1), device)
+            avg_val_lpips = reduce_metric(val_lpips / max(val_steps, 1), device)
+            if is_main_process():
+                print(
+                    f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
+                    f"val total: {avg_val_loss:.6f}, log: {avg_val_log:.6f}, "
+                    f"lpips: {avg_val_lpips:.6f}",
+                    flush=True,
+                )
 
-        if (epoch + 1) % save_interval == 0:
+        if (epoch + 1) % save_interval == 0 and is_main_process():
             ckpt_path = save_dir / f"{phase_name}_epoch_{epoch + 1}.pt"
             torch.save({
                 "epoch": epoch + 1,
                 "global_step": global_step,
-                "model_state_dict": model.state_dict(),
+                "model_state_dict": unwrap_model(model).state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "loss": avg_loss,
@@ -220,6 +330,14 @@ def main():
     parser.add_argument("--save_interval", type=int, default=TrainingConfig.save_interval, help="Save checkpoint every N epochs")
     parser.add_argument("--val_h5_dir", type=Path, default=None, help="Validation H5 directory")
     parser.add_argument("--val_renders_dir", type=Path, default=None, help="Validation renders directory")
+    parser.add_argument("--log_loss_weight", type=float, default=1.0,
+                        help="Weight on the log-HDR L1 term (v6 baseline loss).")
+    parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
+                        help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--num_workers", type=int, default=None,
+                        help="DataLoader num_workers per rank. None = use TrainingConfig default. "
+                        "DDP runs with num_workers=0 saturate one main thread per rank on disk IO; "
+                        "set to 4 for prefetching parallelism.")
     args = parser.parse_args()
 
     config = TrainingConfig(
@@ -235,19 +353,29 @@ def main():
         min_lr_ratio=args.min_lr_ratio,
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}", flush=True)
+    rank, local_rank, world_size, device = setup_ddp()
+    num_workers = args.num_workers if args.num_workers is not None else config.num_workers
+    if is_main_process():
+        print(f"Using device: {device}, world_size: {world_size}, "
+              f"num_workers (per rank): {num_workers}", flush=True)
 
     # --- Dataset ---
     dataset = GaussianRenderDataset(
         config.gaussian_h5_dir, config.renders_dir, config.resolution,
         max_samples=args.max_samples,
     )
+    train_sampler: DistributedSampler | None = None
+    if world_size > 1:
+        train_sampler = DistributedSampler(
+            dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=False,
+        )
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=config.num_workers,
+        sampler=train_sampler,
+        shuffle=(train_sampler is None),
+        num_workers=num_workers,
+        persistent_workers=(num_workers > 0),
         pin_memory=device.type == "cuda",
         collate_fn=collate_fn,
     )
@@ -258,19 +386,29 @@ def main():
         val_dataset = GaussianRenderDataset(
             args.val_h5_dir, args.val_renders_dir, config.resolution,
         )
+        val_sampler: DistributedSampler | None = None
+        if world_size > 1:
+            val_sampler = DistributedSampler(
+                val_dataset, num_replicas=world_size, rank=rank,
+                shuffle=False, drop_last=False,
+            )
         val_dataloader = DataLoader(
             val_dataset,
             batch_size=args.batch_size,
+            sampler=val_sampler,
             shuffle=False,
-            num_workers=config.num_workers,
+            num_workers=num_workers,
+        persistent_workers=(num_workers > 0),
             pin_memory=device.type == "cuda",
             collate_fn=collate_fn,
         )
-        print(f"Validation set: {len(val_dataset)} samples", flush=True)
+        if is_main_process():
+            print(f"Validation set: {len(val_dataset)} samples", flush=True)
 
     # --- Model ---
     if args.resume:
-        print(f"Resuming from checkpoint: {args.resume}", flush=True)
+        if is_main_process():
+            print(f"Resuming from checkpoint: {args.resume}", flush=True)
         from gaussianformer.models.gaussianformer import GaussianFormer
         from gaussianformer.models.config import GaussianFormerConfig
         model = GaussianFormer(GaussianFormerConfig())
@@ -280,15 +418,22 @@ def main():
         model = transfer_weights(config.renderformer_model_id)
 
     model.to(device)
+    # Stash the config now -- DDP wrapping moves it under model.module, and
+    # training_forward needs the unwrapped reference at every call site.
+    model_config = model.config
+    if world_size > 1:
+        model = DDP(model, device_ids=[local_rank], output_device=local_rank)
     ray_generator = RayGenerator().to(device)
 
-    config.save_dir.mkdir(parents=True, exist_ok=True)
+    if is_main_process():
+        config.save_dir.mkdir(parents=True, exist_ok=True)
     global_step = 0
 
     # --- Phase 1: Train input module only ---
     if not args.skip_phase1:
-        trainable_names = freeze_backbone(model)
-        print(f"Phase 1 trainable params: {trainable_names}", flush=True)
+        trainable_names = freeze_backbone(unwrap_model(model))
+        if is_main_process():
+            print(f"Phase 1 trainable params: {trainable_names}", flush=True)
 
         optimizer = torch.optim.AdamW(
             [p for p in model.parameters() if p.requires_grad],
@@ -304,12 +449,14 @@ def main():
         global_step = run_phase(
             "phase1", model, ray_generator, dataloader, optimizer, scheduler,
             config, config.phase1_epochs, device, config.save_dir,
-            config.log_interval, args.save_interval, global_step,
-            val_dataloader=val_dataloader,
+            config.log_interval, args.save_interval,
+            args.log_loss_weight, args.lpips_loss_weight,
+            model_config, global_step, val_dataloader=val_dataloader,
+            train_sampler=train_sampler,
         )
 
     # --- Phase 2: Full fine-tune ---
-    unfreeze_all(model)
+    unfreeze_all(unwrap_model(model))
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -325,16 +472,22 @@ def main():
     global_step = run_phase(
         "phase2", model, ray_generator, dataloader, optimizer, scheduler,
         config, config.phase2_epochs, device, config.save_dir,
-        config.log_interval, args.save_interval, global_step,
-        val_dataloader=val_dataloader,
+        config.log_interval, args.save_interval,
+        args.log_loss_weight, args.lpips_loss_weight,
+        model_config, global_step, val_dataloader=val_dataloader,
+        train_sampler=train_sampler,
     )
 
-    # --- Save final model ---
-    final_path = config.save_dir / "gaussianformer_final"
-    final_path.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(final_path)
-    print(f"\nFinal model saved to: {final_path}", flush=True)
-    print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
+    # --- Save final model (rank 0 only; unwrap before save_pretrained) ---
+    if is_main_process():
+        final_path = config.save_dir / "gaussianformer_final"
+        final_path.mkdir(parents=True, exist_ok=True)
+        unwrap_model(model).save_pretrained(final_path)
+        print(f"\nFinal model saved to: {final_path}", flush=True)
+        print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
+
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
