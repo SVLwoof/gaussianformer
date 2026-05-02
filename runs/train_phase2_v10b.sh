@@ -5,6 +5,7 @@
 #SBATCH --output=runs/train_phase2_v10b_%j.out
 #SBATCH --job-name=gformer_phase2_v10b
 #SBATCH --mail-type=END,FAIL,BEGIN
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:4
 
 # v10b = v10 restart with bs=4 + 4 GPUs (effective batch 16, up from 6).

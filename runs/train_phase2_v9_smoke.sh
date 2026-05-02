@@ -5,6 +5,7 @@
 #SBATCH --output=runs/train_phase2_v9_smoke_%j.out
 #SBATCH --job-name=v9_smoke
 #SBATCH --mail-type=END,FAIL
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:2
 
 # DDP smoke test: 2 GPUs via torchrun, 50 samples, 1 epoch.

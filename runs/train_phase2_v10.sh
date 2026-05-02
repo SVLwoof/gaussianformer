@@ -5,6 +5,7 @@
 #SBATCH --output=runs/train_phase2_v10_%j.out
 #SBATCH --job-name=gformer_phase2_v10
 #SBATCH --mail-type=END,FAIL,BEGIN
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:3
 
 # v10 = LPIPS fine-tune from a V9 checkpoint. V9 plateaued on tomatoes vs-full

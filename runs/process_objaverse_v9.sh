@@ -5,6 +5,7 @@
 #SBATCH --output=runs/process_objaverse_v9_%j.out
 #SBATCH --job-name=v9_process
 #SBATCH --mail-type=END,FAIL,BEGIN
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:1
 
 # V9 Phase A: process Objaverse_Splats objects into H5 + GT renders for the
