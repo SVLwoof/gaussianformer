@@ -59,7 +59,7 @@ def main():
     # Use Path for type validation
     parser.add_argument("--h5_file", type=Path, required=True, help="Path to the input H5 file with Gaussian data")
     parser.add_argument("--model_id", type=str, help="Model ID on Hugging Face or local path",
-                        default="path/to/your/gaussianformer/model")
+                        default="shahafvl/gaussianformer-v10b")
     parser.add_argument("--precision", type=str, choices=['bf16', 'fp16', 'fp32'], default='fp16',
                         help="Precision for inference")
     parser.add_argument("--resolution", type=int, default=512, help="Resolution for inference")
