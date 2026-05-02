@@ -1,0 +1,1602 @@
+[
+  {
+    "chunk": "000-060",
+    "uid": "a01b9a7cdf1f4708977fcc97b5f83d7a",
+    "psnr": 32.45206832885742,
+    "lpips": 0.0467717722058296,
+    "caption": "[\"A table lamp with a spherical, diamond-panel lattice lampshade in light brown and light purple on top, and a straight, light green cylindrical stand with a flared circular base.\", \"Light brown, diamond-panel lattice lampshade with purple tones and green cylindrical stand.\", \"A spherical lampshade with diamond paneling resting on a green cylindrical stand.\", \"Lamp with diamond-lattice lampshade and light green cylindrical stand.\", \"Light brown and purple lamp with green cylindrical stand.\", \"La",
+    "scene_idx": 0
+  },
+  {
+    "chunk": "000-091",
+    "uid": "235e2e4cc56c479ba638b8952c2105a5",
+    "psnr": 35.04994583129883,
+    "lpips": 0.0322019942104816,
+    "caption": "[\"A stylized cartoon character resembling an elderly person with a large oval yellow head, bulging eyes, hexagonal glasses, sparse black hair, a hunched body in a white lab coat, short yellow arms, green pants, and square grey shoes.\", \"Elderly cartoon character with large oval yellow head, hexagonal glasses, white lab coat, green pants.\", \"A hunched cartoon elder with a large yellow head, white lab coat.\", \"Animated elderly figure with oval head, white lab coat.\", \"Cartoon with large head in la",
+    "scene_idx": 1
+  },
+  {
+    "chunk": "000-031",
+    "uid": "4272ba78929d45b8ba250079d292c7b8",
+    "psnr": 35.68706130981445,
+    "lpips": 0.0369366370141506,
+    "caption": "[\"A 3D model of a residential house with a gabled terracotta roof, beige exterior walls, an entrance with garden and pathway, a spacious rear patio, organized flower beds, and a white fence.\", \"Residential house with terracotta roof, beige exterior, garden, patio, flower beds, and white fence.\", \"House with gabled roof, beige exterior, garden entrance, patio, flowers, and fence.\", \"3D model of a house with a garden, patio, flower beds, and a fence.\", \"House with terracotta roof, garden, patio, a",
+    "scene_idx": 2
+  },
+  {
+    "chunk": "000-091",
+    "uid": "579cf3a6017148cda0868e54302e4b19",
+    "psnr": 39.03603363037109,
+    "lpips": 0.0421505458652973,
+    "caption": "[\"Cylindrical, handmade pottery container with earthy tones, coarse texture, slightly widening top, rounded, convex base, uneven rims, signs of wear, and two small, illegible labels. Plain and utilitarian, suggesting ancient or primitive origins.\", \"Handmade cylindrical pottery container with earthy tones, uneven rims and two labels.\", \"Cylindrical pottery with coarse texture, uneven rims, and two labels.\", \"Handmade pottery with widening top, convex base and signs of wear.\", \"Earthy toned potte",
+    "scene_idx": 3
+  },
+  {
+    "chunk": "000-045",
+    "uid": "7cddac29d2644be4abdec7e558450991",
+    "psnr": 36.6550178527832,
+    "lpips": 0.0304493177682161,
+    "caption": "[\"A red, muscular anthropomorphic dragon stands on two legs, with a long tail, elongated neck, and backward-protruding horns. It has a white segmented chest, sharp fangs, and claws, and is mounted on a grassy circular base.\", \"Muscular anthropomorphic dragon with elongated neck, backward horns, standing on grassy base.\", \"Red dragon, long tail, white segmented chest, sharp fangs, on grass.\", \"Anthropomorphic dragon, long tail, backward horns, standing on circular base.\", \"Red dragon with elongat",
+    "scene_idx": 4
+  },
+  {
+    "chunk": "000-031",
+    "uid": "2d46ed5484454454b8fdf07cc8c9e364",
+    "psnr": 35.292659759521484,
+    "lpips": 0.0342616774141788,
+    "caption": "[\"Character with flowing red hair, raised arms, and wearing a white gown with yellow trim, standing on a multi-layered stone pedestal inscribed \\\"-APOLLO-\\\".\", \"Character has red hair, raised arms, white gown with yellow trim, standing on inscribed stone pedestal.\", \"Red-haired character in white gown with yellow trim, arms up, on inscribed stone pedestal.\", \"Flowing red-haired character, white and yellow gown, raised arms, on stone pedestal.\", \"Character with red hair in white and yellow gown o",
+    "scene_idx": 5
+  },
+  {
+    "chunk": "000-094",
+    "uid": "ba2bc42641f34e07aeb36a5c99f4e654",
+    "psnr": 32.89463806152344,
+    "lpips": 0.0406279750168323,
+    "caption": "[\"Ornate vintage wall lamp with gold metallic and marble-like accents, featuring scroll-like patterns, oval decorative pieces, a curved arm, gold socket, white bulb, and a white fabric shade with gold stripes, designed for wall mounting.\", \"Vintage wall lamp with gold metallic and marble accents with scroll patterns.\", \"Ornate wall lamp with gold and marble-like details, scroll patterns.\", \"Vintage lamp with gold and marble accents, scroll patterns.\", \"Ornate lamp, gold and marble accents, white",
+    "scene_idx": 6
+  },
+  {
+    "chunk": "000-094",
+    "uid": "3937e7b02107456da531b2446f548830",
+    "psnr": 37.20573806762695,
+    "lpips": 0.0227622464299201,
+    "caption": "[\"A stylized axe with a broad, angular metallic blade featuring intricate glowing cyan swirled patterns, a cylindrical brown wooden handle with a black mid-band, and an engraved end cap.\", \"Stylized axe with broad metallic blade, glowing cyan patterns, wooden handle, black mid-band, and engraved end cap.\", \"Axe with broad metallic blade, glowing cyan designs, wooden handle, black mid-band, and engraved cap.\", \"Axe with metallic blade, cyan patterns, wooden handle, black band, and cap.\", \"Metalli",
+    "scene_idx": 7
+  },
+  {
+    "chunk": "000-024",
+    "uid": "79d52c55d1814ca3a76458f32e5f5287",
+    "psnr": 35.75376892089844,
+    "lpips": 0.0284159742295742,
+    "caption": "[\"A small Gothic-style decorative tower on a hexagonal base with cylindrical columns, pointed arches, intricate carvings, and a heptagonal spire adorned with mosaics and a finial. The color scheme is light gray with accents in reddish-brown, blue, and pastels.\", \"Gothic tower, hexagonal base, cylindrical pillars, intricate carvings, heptagonal spire adorned with mosaics, light gray with color accents.\", \"Gothic-style tower on hexagonal base with heptagonal spire, adorned with intricate carvings ",
+    "scene_idx": 8
+  },
+  {
+    "chunk": "000-071",
+    "uid": "1b347387cd8741b5846534742ebc476b",
+    "psnr": 35.968692779541016,
+    "lpips": 0.0308504570275545,
+    "caption": "[\"A humanoid bird with a blue head and crest, purple glasses, pale yellow beak, red sleeveless vest with yellow outlines and brown belt, blue wings with gradient, yellow legs, three-toed feet, and blue feathered tail.\", \"Humanoid bird with blue head, crest, wings, tail, yellow beak, legs, red vest, brown belt, purple glasses.\", \"Blue-headed humanoid bird with yellow beak and legs, red vest, brown belt, purple glasses, gradient wings.\", \"Anthropomorphic bird with blue crest, yellow legs, red slee",
+    "scene_idx": 9
+  },
+  {
+    "chunk": "000-094",
+    "uid": "75b3cdabb90b47a785b94226dfdca93d",
+    "psnr": 36.02012634277344,
+    "lpips": 0.0268371235579252,
+    "caption": "[\"A stylized motorcycle with a pink fork, yellow-accented body panels, a blue headlight, pink handlebars with blue ends, gray cylindrical fuel tank and seat, pink rear fender with a yellow stripe, and gray wheels with rounded treads.\", \"Motorcycle with pink fork, yellow-accented panels, blue headlight, pink-blue handlebars, gray tank and seat, pink-yellow fender, and gray wheels.\", \"Stylized motorcycle with pink fork, yellow accents, blue headlight, pink and blue handlebars, gray tank and seat, ",
+    "scene_idx": 10
+  },
+  {
+    "chunk": "000-060",
+    "uid": "4357d8613e614b8584463997e7fcf38e",
+    "psnr": 34.92988586425781,
+    "lpips": 0.0236542057245969,
+    "caption": "[\"Futuristic delta wing aircraft, white with red accents, black-tinted canopy, two rear cylindrical red engines with white highlights, metallic grey nozzles, smooth wing-fuselage integration, lacks vertical stabilizers.\", \"Futuristic delta wing aircraft, white and red, with black canopy, two red engines, and grey nozzles.\", \"A futuristic white and red delta wing aircraft with two red engines and a black canopy.\", \"White, red-accented futuristic aircraft with a delta wing design and two red engin",
+    "scene_idx": 11
+  },
+  {
+    "chunk": "000-046",
+    "uid": "033da97c0a4549d28a9ff24e62f2ac43",
+    "psnr": 35.49675750732422,
+    "lpips": 0.039038099348545,
+    "caption": "[\"A detailed double bass with a curvaceous dark brown glossy body, light-colored bridge, black tailpiece, silver strings, f-holes, a slender neck with a spiral scroll, and an extendable endpin at the bottom.\", \"Detailed double bass with glossy brown body, light bridge, black tailpiece, silver strings, f-holes, slender neck, spiral scroll, and extendable endpin.\", \"Double bass with glossy dark body, light-colored bridge, black tailpiece, silver strings, f-holes, slender neck with scroll, and endp",
+    "scene_idx": 12
+  },
+  {
+    "chunk": "000-020",
+    "uid": "1a9aafa5ad324c8a809be10f08daf3ec",
+    "psnr": 34.26114654541016,
+    "lpips": 0.0415433384478092,
+    "caption": "[\"A polygonal, white, hexagonal pot with a tapered base and a flared top, containing a series of sharp, elongated white prisms of varying sizes that emerge from the center and spread outward randomly.\", \"A white, hexagonal pot with tapered base, flared top and containing varying elongated prisms.\", \"White pot, hexagonal shape, tapered base, flared top with different sized prisms.\", \"A hexagonal pot holding white prisms with a flared top.\", \"White pot of varied prisms with hexagonal shape.\", \"Var",
+    "scene_idx": 13
+  },
+  {
+    "chunk": "000-091",
+    "uid": "822f7dfce31448e7ba5b3b0736d2793b",
+    "psnr": 32.82421875,
+    "lpips": 0.0489542037248611,
+    "caption": "[\"A light tan, stylized cartoonish pony with a voluminous, multi-colored mane and tail, large green eyes, small spiraled horn, feathered wings, a red apple symbol on the hindquarters, and short cylindrical legs ending in rounded hooves.\", \"Tan cartoon pony with multi-colored mane, green eyes, small horn, wings, apple symbol, short legs with round hooves.\", \"Stylized tan pony with multi-colored mane, green eyes, horn, wings, apple mark, and short, round hooves.\", \"A cartoon pony with multi-color ",
+    "scene_idx": 14
+  },
+  {
+    "chunk": "000-091",
+    "uid": "66df2d9ab48c4a9090e63eded8946a2e",
+    "psnr": 35.166290283203125,
+    "lpips": 0.0312765426933765,
+    "caption": "[\"Cartoonish plant-like creature with a light yellow pear-shaped head, black circular eyes, light pink ring at neck, slender tan stem-like body, light green oval leaves (two sets), and thin branching roots at the bottom.\", \"Cartoon plant creature with yellow pear head, black eyes, pink neck, tan body, green leaves, and roots.\", \"Animated plant creature with pear-shaped head, tan body, green oval leaves, and branching roots.\", \"Cartoonish plant creature with pear head, tan stem body, and light gr",
+    "scene_idx": 15
+  },
+  {
+    "chunk": "000-030",
+    "uid": "88be244352be4cb989e924b04867646e",
+    "psnr": 33.50492477416992,
+    "lpips": 0.0407157875597476,
+    "caption": "[\"A blue, fuzzy character with a triangular head, large round eyes, a wide red smile, an elongated body, long thin arms and legs, large yellow hands with four fingers, and large yellow flat feet.\", \"Blue character with triangular head, large eyes, wide smile, elongated body, thin limbs, yellow hands and flat feet.\", \"Blue character with large eyes, wide smile, elongated body, thin limbs, yellow hands and feet.\", \"Blue character with large eyes, wide smile, yellow hands and feet.\", \"Blue characte",
+    "scene_idx": 16
+  },
+  {
+    "chunk": "000-060",
+    "uid": "1b29cfac16bc426e82d6bee7c7e5bfab",
+    "psnr": 35.45829391479492,
+    "lpips": 0.0390185751020908,
+    "caption": "[\"Spherical robot with a worn copper metallic finish, divided into multiple segments, featuring a green eye-like lens, mounted on a cylindrical base of the same material and texture.\", \"Spherical, segmented robot with worn copper finish and green eye-lens, mounted on a cylindrical base.\", \"Copper-finished, segmented sphere robot with green lens on cylindrical base.\", \"Multi-segmented sphere robot, with copper finish and green lens.\", \"Copper sphere robot with green lens on base.\", \"Segmented sph",
+    "scene_idx": 17
+  },
+  {
+    "chunk": "000-091",
+    "uid": "70402e1b9c9147b199d1497ccd0b3e84",
+    "psnr": 36.148555755615234,
+    "lpips": 0.0306208468973636,
+    "caption": "[\"Red single-engine propeller aircraft with white accents, straight wing with square tips, cylindrical red fuselage with side door, transparent cockpit windscreen, vertical and horizontal tail stabilizers, black propeller with white spinner, and tricycle landing gear.\", \"Red single-engine propeller plane, white highlights, straight-wing square tips, red cylindrical fuselage, door.\", \"Red propeller aircraft with white accents, straight-wing, cylindrical fuselage, tricycle gear.\", \"Red plane, whit",
+    "scene_idx": 18
+  },
+  {
+    "chunk": "000-091",
+    "uid": "e1aedf40efa34db5989ea0f28ad01955",
+    "psnr": 33.80580520629883,
+    "lpips": 0.0495164729654789,
+    "caption": "[\"A rectangular single-story beige residential house with a flat white roof, large glass windows, three garages, gray stairs at the entrance, light-colored interiors, two bedrooms, two bathrooms, a living room with gray couches, and a round dining table.\", \"A beige, single-story house with a flat white roof, large windows, three garages, and gray entrance stairs.\", \"A beige, one-story home with three garages, large windows, and a flat roof.\", \"Residential house with large windows, three garages,",
+    "scene_idx": 19
+  },
+  {
+    "chunk": "000-030",
+    "uid": "20d0c87ad7864534b82712862b4d060e",
+    "psnr": 37.2255744934082,
+    "lpips": 0.0242627635598182,
+    "caption": "[\"Cartoon-like humanoid with a cubical black-tan head, green-black hat, black side prisms, black torso with orange stripe, orange-black arms with white prismatic hands, blue legs, and brown rectangular feet.\", \"Cartoon-like character, cubical black-tan head, green-black hat, orange-striped black torso, orange-black arms, white hands, blue legs, brown feet.\", \"Humanoid figure with black-tan block head, greenish hat, black body, orange accents, white hands, blue legs, brown feet.\", \"Block-headed b",
+    "scene_idx": 20
+  },
+  {
+    "chunk": "000-060",
+    "uid": "2edd54662be54d05892d5947c209de2d",
+    "psnr": 33.770851135253906,
+    "lpips": 0.0356302000582218,
+    "caption": "[\"Blocky humanoid character with a rectangular head (purple, red, blue stripes), light blue torso, arms, and legs in a walking stance, holding a yellow-handled, gray-white segmented sword/tool with the left arm bent.\", \"Blocky humanoid with rectangular head, light blue body, holding yellow-handled sword.\", \"Purple, red, blue striped head figure with light blue body and sword.\", \"Walking stance humanoid, striped head, light blue body, yellow-handled sword.\", \"Purple-red-blue head, light blue body",
+    "scene_idx": 21
+  },
+  {
+    "chunk": "000-091",
+    "uid": "d52a9dbab17d4cd4aa36edf408287c5f",
+    "psnr": 36.32646179199219,
+    "lpips": 0.0567154362797737,
+    "caption": "[\"A high-backed armchair with a wooden frame and dark grey fabric cushions, featuring angled back legs, vertical front legs, straight armrests, rectangular seat and back cushions, and three horizontal wooden panels on the back.\", \"Grey high-backed armchair with wooden frame, straight armrests, and three-panel back.\", \"Sleek, grey, wooden-framed armchair with high back and straight armrests.\", \"High-backed armchair with dark grey cushions and wooden framework.\", \"Grey and wood high-back armchair ",
+    "scene_idx": 22
+  },
+  {
+    "chunk": "000-091",
+    "uid": "8b27df7b79d64b4db76addf155143eca",
+    "psnr": 37.88908004760742,
+    "lpips": 0.023218622431159,
+    "caption": "[\"Humanoid figure in a vintage, armored deep-sea diving suit, with a spherical dark bronze helmet, viewing windows, muscular and heavily armored torso, segmented arm and leg armor, large boots, and weathered copper color finish.\", \"Humanoid figure in armored deep-sea diving suit with dark bronze helmet.\", \"Humanoid in vintage diving suit with segmented armor.\", \"Vintage deep-sea diving suit with bronze helmet.\", \"Armored humanoid in old diving suit.\", \"Bronzed diving suit on humanoid figure.\", \"",
+    "scene_idx": 23
+  },
+  {
+    "chunk": "000-030",
+    "uid": "b5ff8d262de94a458da7a3be6002d0e2",
+    "psnr": 37.773963928222656,
+    "lpips": 0.0580738000571727,
+    "caption": "[\"A vintage, rectangular wooden box with a faded brown color, reinforced darker corners, side handles, metallic hinges, a clasp, and a worn, dirty beige top surface, all showing signs of age and rust.\", \"Vintage wooden box, rectangular, faded brown, dark corners, side handles, metallic hinges and clasp, dirty beige top.\", \"Rectangular wooden box, vintage, brown, reinforced corners, handles, hinges, clasp, worn beige top.\", \"Aged, rectangular wooden box with handles, hinges, clasp, and worn top.\"",
+    "scene_idx": 24
+  },
+  {
+    "chunk": "000-094",
+    "uid": "d2762385ef0f4878a8d8f87cd1fbb066",
+    "psnr": 36.85895538330078,
+    "lpips": 0.0472302362322807,
+    "caption": "[\"Tall, slender, ink-like humanoid with elongated head, black color, sinister grin without eyes, long thin arms (left hand black, right hand yellow), long thin legs, yellow bow tie, yellow wristbands, shiny, glossy finish, cartoonish yet sinister.\", \"Tall, slender, ink-like humanoid with elongated head, black body, yellow accessories and sinister grin.\", \"Inky humanoid with yellow bow tie, wristbands, and one yellow hand, projecting a sinister grin.\", \"Tall, black, slender figure with long limbs",
+    "scene_idx": 25
+  },
+  {
+    "chunk": "000-088",
+    "uid": "7a52d0bfd83e44dd9201ad7ef94f044b",
+    "psnr": 32.019344329833984,
+    "lpips": 0.0535464473068714,
+    "caption": "[\"Cylindrical wooden trunk with a yellow star on top, wrapped in white fluffy garland, decorated with multicolored ornaments, green band, and small branch-like extensions.\", \"Cylindrical wooden trunk with star, wrapped in white garland, decorated with ornaments and green band.\", \"Wooden trunk with star, wrapped in white garland, decorated with multicolored ornaments.\", \"Cylindrical tree trunk with star, garnished with white garland and colorful decorations.\", \"Trunk topped by a star, draped in w",
+    "scene_idx": 26
+  },
+  {
+    "chunk": "000-091",
+    "uid": "e6bc68627cc04ab5af3a914c435b9e9f",
+    "psnr": 37.90383529663086,
+    "lpips": 0.0325249768793582,
+    "caption": "[\"A semi-circular, heavily damaged bowl with a wavy, uneven rim and multiple fractures. The light grey to beige inner surface is worn and cracked, while the outer surface is rough with brown to grey patches. Large sections are missing.\", \"Semi-circular damaged bowl with uneven rim, multiple fractures, worn inner surface and rough, patchy outer surface, with sections missing.\", \"Battered semi-circular bowl with a wavy rim, multi-faceted cracks and a rough, discolored outer surface.\", \"Heavily-wor",
+    "scene_idx": 27
+  },
+  {
+    "chunk": "000-050",
+    "uid": "ce335fa19cb141ae8467bb8d4320f56b",
+    "psnr": 38.42261505126953,
+    "lpips": 0.0391982980072498,
+    "caption": "[\"A low-polygon 3D mammoth with a large cylindrical body, brown furry texture, rectangular head, curved white tusks, thick cylindrical legs, and a short tapering tail.\", \"Low-polygon 3D mammoth, brown furry texture, large cylindrical body, short tapering tail.\", \"A 3D brown mammoth with a cylindrical shape and curved tusks.\", \"A brown, low-polygon 3D mammoth with large body and tusks.\", \"Low-polygon 3D mammoth with large body and curved tusks.\", \"3D mammoth model, large brown body, white tusks.\"",
+    "scene_idx": 28
+  },
+  {
+    "chunk": "000-091",
+    "uid": "cc501218f1cb42ce9a6723f3989f4a39",
+    "psnr": 34.57374572753906,
+    "lpips": 0.0494252480566501,
+    "caption": "[\"A cylindrical flowerpot, light pink, with a slightly tapered, cone-like shape, rounded bottom, outward flaring rim, smooth texture, and filled with fine-grained brown soil just below the rim.\", \"Light pink cylindrical flowerpot, with tapered shape, filled with brown soil.\", \"Light pink tapered flowerpot filled with brown soil.\", \"Rounded, pink tapered pot containing soil.\", \"Cylindrical pot with soil, outward flaring rim.\", \"Pink pot with brown soil, flaring rim.\", \"Pink flowerpot with brown g",
+    "scene_idx": 29
+  },
+  {
+    "chunk": "000-071",
+    "uid": "a8079ec447494b0cb3b2fa485357f8b2",
+    "psnr": 33.79991149902344,
+    "lpips": 0.0295894239097833,
+    "caption": "[\"Three traditionally-shaped wooden barrels with bulging midsections, light brown wood texture, visible grain patterns, and three grayish-silver metal rings each, are clustered in a triangular formation, with one partially obscured behind the other two.\", \"Three wooden barrels with visible grain and metal rings in a triangular formation.\", \"Wooden barrels with metal rings arranged in a triangle.\", \"Cluster of wooden barrels with metal rings.\", \"Three barrels with grain texture in triangle.\", \"Wo",
+    "scene_idx": 30
+  },
+  {
+    "chunk": "000-031",
+    "uid": "3677be38487148d489e0f8e13be93c37",
+    "psnr": 34.60641098022461,
+    "lpips": 0.0257479641586542,
+    "caption": "[\"A white seahorse with yellow stripes on its snout and body, purple patches near the gills and fin, and a blue dorsal fin. It has an S-shaped body with ridges and bony protrusions, an elongated snout, and curled tail.\", \"White seahorse with yellow stripes, blue fin, purple patches, and bony protrusions.\", \"White seahorse, yellow stripes, blue fin, gills have purple patches.\", \"Seahorse with yellow stripes, blue fin, and purple patches.\", \"White seahorse with colored stripes and patches.\", \"Stri",
+    "scene_idx": 31
+  },
+  {
+    "chunk": "000-030",
+    "uid": "8ded87c19e8c491ca58fe6a956926ab9",
+    "psnr": 40.21194839477539,
+    "lpips": 0.0256486497819423,
+    "caption": "[\"Highly detailed 3D model of a character in a red and black combat suit, with a masked head, muscular form, two guns, swords on back, and a utility belt; dynamic pose highlighting a thumbs-up gesture and weaponry.\", \"Character in red-black combat suit, masked head, muscular, two guns, swords, utility belt, thumbs-up pose.\", \"3D model of masked, muscular character in dynamic pose with red-black suit, guns, swords, and belt.\", \"Red-black suited character with mask, muscles, weaponry in dynamic th",
+    "scene_idx": 32
+  },
+  {
+    "chunk": "000-050",
+    "uid": "9f349b6b1fad4e7e91531a863961cc21",
+    "psnr": 37.33051300048828,
+    "lpips": 0.0300864912569522,
+    "caption": "[\"A seated statue with a rounded form, crossed arms over a pronounced chest, folded legs, a broad face with minimal features, a headdress with carved patterns, and a uniform yellowish-brown color.\", \"Statue seated with crossed arms, folded legs, broad face, patterned headdress.\", \"Rounded statue with crossed arms, folded legs, and carved headdress.\", \"Seated statue with broad face and patterned headdress.\", \"Rounded statue with crossed arms and folded legs.\", \"Yellowish-brown statue with broad f",
+    "scene_idx": 33
+  },
+  {
+    "chunk": "000-050",
+    "uid": "2ee648c2df504e8bb825910769c52226",
+    "psnr": 35.09598922729492,
+    "lpips": 0.027092533186078,
+    "caption": "[\"A stylized, low-poly futuristic toy gun with a blocky rectangular main body, bright orange cylindrical nozzle, dark grey color scheme, slight elevation on the top section, angular ergonomic handle, secondary shorter handle, and geometric side panels with screws and vents.\", \"Low-poly, futuristic toy gun with bright orange nozzle and angular handle.\", \"Stylized, low-poly, futuristic toy gun with an orange nozzle.\", \"Futuristic toy gun with stylized low-poly design.\", \"Toy gun with low-poly desi",
+    "scene_idx": 34
+  },
+  {
+    "chunk": "000-046",
+    "uid": "3a0a2f4979eb46999401efa3de471666",
+    "psnr": 34.38909912109375,
+    "lpips": 0.0343094244599342,
+    "caption": "[\"The 3D object is a simple humanoid figure with a blue hexagonal prism head, white rectangular prism torso, white spherical joints at shoulders and hips, segmented rectangular prism arms and legs, cuboid feet and hands, colored in blue and white, robot-like.\", \"Blue hexagonal prism head, white rectangular prism torso humanoid figure with blue and white segmented arms and legs.\", \"Blue and white humanoid figure with prism head, rectangular torso, and segmented limbs.\", \"Humanoid robot with hexag",
+    "scene_idx": 35
+  },
+  {
+    "chunk": "000-071",
+    "uid": "f72f91ca89dc45188178ae66e8cc0d55",
+    "psnr": 42.17239761352539,
+    "lpips": 0.0270332805812358,
+    "caption": "[\"A small, round, slightly cylindrical reddish-brown clay pot with a stubby handle, uneven rim, geometric black and white painted patterns, and visible cracks and chips. The surface is coarse and unpolished with minor imperfections.\", \"Small, round, slightly cylindrical clay pot with geometric patterns and imperfections.\", \"Cylindrical reddish-brown pot with geometric designs and visible cracks.\", \"Round clay pot with black and white geometric patterns.\", \"Unpolished clay pot with a stubby handl",
+    "scene_idx": 36
+  },
+  {
+    "chunk": "000-046",
+    "uid": "dcd46c60fcc9416e8750aed2e04f7071",
+    "psnr": 33.658721923828125,
+    "lpips": 0.0338706895709037,
+    "caption": "[\"A sleek, aerodynamic sports car with red and black colors, smooth integrated doors, exposed engine, elongated headlights, oval grille, alloy multi-spoke wheels, circular rear lights, visible exhausts, dark-tinted windows, and small side mirrors.\", \"Aerodynamic sports car, red-and-black, sleek doors, exposed engine, elongated headlights, and multi-spoke wheels.\", \"Red and black sports car with an aerodynamic design, sleek doors, and exposed engine components.\", \"Aerodynamic sports car, red and ",
+    "scene_idx": 37
+  },
+  {
+    "chunk": "000-046",
+    "uid": "b468d5b113b8478283bd8584e4920de0",
+    "psnr": 32.69516372680664,
+    "lpips": 0.0486599132418632,
+    "caption": "[\"Vintage car with rectangular body, curved fenders, cylindrical headlights, and a split windshield. On top, a two-story Gothic house with arched and round windows, pitched roof, ornate spire, and cylindrical chimney. Light grey, untextured model.\", \"Vintage car beneath two-story Gothic house with ornate spire, both grey.\", \"Grey vintage car under two-story Gothic house.\", \"Vintage car under a Gothic house, grey.\", \"Grey Gothic house and vintage car.\", \"Gothic house atop vintage car.\", \"House an",
+    "scene_idx": 38
+  },
+  {
+    "chunk": "000-020",
+    "uid": "7c6be9d171724a30b02ae1f275c55607",
+    "psnr": 36.51985931396485,
+    "lpips": 0.0386128611862659,
+    "caption": "[\"A low-poly, stylized human figure with gray, wavy hair, wearing a beige cardigan with red buttons over a dark shirt, gray pants, and brown, oversized shoes.\", \"Low-poly figure with gray wavy hair, beige cardigan, dark shirt, gray pants and brown oversized shoes.\", \"Stylized human figure with gray wavy hair, beige cardigan and brown shoes.\", \"Low-poly human in beige cardigan, dark shirt, and brown shoes.\", \"Figure with wavy hair, cardigan, shirt, pants, and oversized shoes.\", \"Human figure in c",
+    "scene_idx": 39
+  },
+  {
+    "chunk": "000-031",
+    "uid": "7c265f6c42ef40b8b3e9c42560c28a97",
+    "psnr": 36.38205337524414,
+    "lpips": 0.0383771620690822,
+    "caption": "[\"A circular, white, shallow dinner plate with slightly raised edges, smooth uniform surface, and a flat base.\", \"White circular dinner plate with raised edges and flat base.\", \"Circular, white, shallow dinner plate with raised edges.\", \"Shallow dinner plate with slightly raised edges.\", \"White dinner plate with flat base.\", \"Circular plate with elevated edges.\", \"White dinner plate, slightly raised edges.\", \"Smooth surfaced white dinner plate.\", \"Flat based dinner plate.\", \"Raised edge dinner p",
+    "scene_idx": 40
+  },
+  {
+    "chunk": "000-094",
+    "uid": "365eb2cd146e4b85aae0c1424831f21d",
+    "psnr": 38.03718948364258,
+    "lpips": 0.037305761128664,
+    "caption": "[\"A symmetrical, dual-hulled sci-fi vehicle with a rusty red color, featuring pointed fronts, broader rears with exhaust vents, transparent canopies on each hull, and a central black rectangular block with a light blue glowing element.\", \"Dual-hulled sci-fi vehicle, rusty red, with exhaust vents and transparent canopies.\", \"Sci-fi vehicle with pointed fronts, broad rears and glowing element.\", \"Rusty red vehicle with dual hulls and transparent canopies.\", \"Sci-fi dual-hull vehicle with glowing b",
+    "scene_idx": 41
+  },
+  {
+    "chunk": "000-024",
+    "uid": "c283c87ee2164dd7a7e1bfb1c29898d4",
+    "psnr": 36.12464904785156,
+    "lpips": 0.0461742207407951,
+    "caption": "[\"A sculpted lion made of white marble, with a detailed mane, muscular body, extended front right leg on a ball, ready-to-pounce hind legs, curved tail, and smooth polished texture on a solid rectangular base.\", \"White marble lion sculpture, detailed mane, muscular body, poised on ball.\", \"Sculpted marble lion with detailed mane and muscular body on ball.\", \"Poised lion sculpture made from white marble on rectangular base.\", \"Marble lion with extended leg, detailed mane on rectangular base.\", \"M",
+    "scene_idx": 42
+  },
+  {
+    "chunk": "000-031",
+    "uid": "9e0eedbb1712418cb5ccfe66242dcd14",
+    "psnr": 37.42787551879883,
+    "lpips": 0.0306870136409997,
+    "caption": "[\"Low-polygon blue airplane with cylindrical fuselage, blunt pink nose with four-blade propeller, trapezoidal wings with circular protrusions, triangular tail fin, and rectangular dark blue cockpit window.\", \"Blue airplane with cylindrical body, pink nose, four-blade propeller, trapezoidal wings, protrusions, triangular tail and dark blue cockpit.\", \"Blue airplane with cylindrical body, pink nose, four-blade propeller, trapezoidal wings, triangular tail and blue cockpit.\", \"Blue airplane with cy",
+    "scene_idx": 43
+  },
+  {
+    "chunk": "000-050",
+    "uid": "47564c8c6a724be795c8fe3bd1477078",
+    "psnr": 37.88933563232422,
+    "lpips": 0.038615595549345,
+    "caption": "[\"A 3D model of a man in business casual attire: light blue long-sleeved shirt, dark gray straight-cut pants, black tie, dark brown belt with silver buckle, brown slip-on dress shoes; standing upright with relaxed arms and feet slightly outward.\", \"Man in business casual attire standing upright, relaxed arms and feet slightly outward.\", \"Man in business casual wear standing with relaxed pose.\", \"Casually dressed man with relaxed pose standing upright.\", \"Man in business clothes standing upright ",
+    "scene_idx": 44
+  },
+  {
+    "chunk": "000-091",
+    "uid": "8bb90de4d67e41fd90e46ad30209dce7",
+    "psnr": 37.24171447753906,
+    "lpips": 0.0183972585946321,
+    "caption": "[\"Grumpy light-green head, orange eyes, red Santa hat with white trim, protruding mouth. Round orange body, light-green neck, red arms with white cuffs. Cartoonish, smooth texture with a festive Christmas theme.\", \"Light-green cartoon head with orange eyes, red Santa hat, round body, green neck, red arms.\", \"Light-green grumpy head, orange eyes, Santa hat, round orange body, and red arms.\", \"Green head and neck, orange eyes and body, red Santa hat and arms.\", \"Green head, orange body, eyes, Sant",
+    "scene_idx": 45
+  },
+  {
+    "chunk": "000-030",
+    "uid": "53d0ae77a5324c3b995305f122c20cb1",
+    "psnr": 37.04981994628906,
+    "lpips": 0.0382057018578052,
+    "caption": "[\"A female figure in a T-pose with shoulder-length wavy orange or light brown hair, wearing a fitted dark jacket and white t-shirt, light blue or grey jeans, and brown ankle-high boots, standing with legs slightly apart.\", \"A T-posing female figure with wavy orange hair, fitted dark jacket, white t-shirt, light-blue jeans, brown boots.\", \"A posing woman with shoulder-length wavy orange hair, dark jacket, white t-shirt, light-blue jeans, brown boots.\", \"A woman in T-pose with orange hair, dark ja",
+    "scene_idx": 46
+  },
+  {
+    "chunk": "000-094",
+    "uid": "b57f43870e944629a75ffc8651c7d221",
+    "psnr": 34.37186813354492,
+    "lpips": 0.0449275448918342,
+    "caption": "[\"A cannon with a cylindrical greenish patina barrel, engraved bands, stone-like light grey carriage with carved face motif, and two spoked wheels. Barrel mounts (trunnions) allow elevation adjustments, with handles along the barrel and ornate designs.\", \"A greenish, cylindrical cannon barrel with engraved bands, mounted on a stone-like carriage with a face motif, and two wheels.\", \"Cannon with engraved green barrel, carved face motif carriage and spoked wheels.\", \"An engraved cannon with green ",
+    "scene_idx": 47
+  },
+  {
+    "chunk": "000-060",
+    "uid": "c3b76740ea9248f28c512eea3727c885",
+    "psnr": 35.90608215332031,
+    "lpips": 0.0393670536577701,
+    "caption": "[\"A transparent light green, cubic-headed character with simple features stands on a light purple and pink textured oval platform, holding a small rectangular object in one hand.\", \"Transparent green cubic-headed figure on purple-pink platform with object.\", \"Cubic character on oval platform holding object.\", \"Green cube-head on pastel platform with item.\", \"Transparent green cube-head on platform.\", \"Character with cube head on platform.\", \"Green head on purple-pink platform.\", \"Cube character ",
+    "scene_idx": 48
+  },
+  {
+    "chunk": "000-050",
+    "uid": "de516e7330e1491fac4144e3d2f458f1",
+    "psnr": 32.32954406738281,
+    "lpips": 0.040351390838623,
+    "caption": "[\"A humanoid-shaped yellow gas mask with round metallic grey eyepieces and a two-part cylindrical metallic grey filter extending from the bottom-central front. The mask is smooth with a slightly wrinkled texture and appears worn.\", \"Yellow humanoid gas mask, metallic round eyepieces, two-part cylinder filter.\", \"Humanoid gas mask, grey eyepieces, cylinder filter.\", \"Yellow gas mask, metallic round eyepieces.\", \"Grey eyepieces, two-part filter, yellow mask.\", \"Yellow humanoid gas mask and filter.",
+    "scene_idx": 49
+  },
+  {
+    "chunk": "000-088",
+    "uid": "3bc32ffb62f0429e81b13585cc30b3cc",
+    "psnr": 36.65813446044922,
+    "lpips": 0.019830297678709,
+    "caption": "[\"A cylindrical column tapering towards the top with textured engravings, three segmented sections, circular base, vertical wood-like texture, small rectangular recesses, top resembling a thatched texture, predominantly off-white with darker patches.\", \"Cylindrical column with engravings, three sections, circular base, wood-like textures, rectangular recesses, thatched top, off-white and dark patches.\", \"Tapering cylindrical column with textured engravings, three sections, wood-like texture, sma",
+    "scene_idx": 50
+  },
+  {
+    "chunk": "000-050",
+    "uid": "9014251a7f0249dc86baa46bc3e96a06",
+    "psnr": 34.97438049316406,
+    "lpips": 0.0424039885401725,
+    "caption": "[\"A stylized white Roman helmet sculpture with a high, curved crest, almond-shaped eye openings, embossed \\\"ROMA\\\" on front, detailed relief scenes on sides, and intricate swirling patterns throughout.\", \"White Roman helmet sculpture with curved crest and detailed reliefs.\", \"Stylized white Roman helmet with embossed \\\"ROMA\\\" and intricate patterns.\", \"Embossed helmet with detailed reliefs and almond-shaped openings.\", \"Elegant Roman helmet sculpture with high, curved crest.\", \"Curved crest Roma",
+    "scene_idx": 51
+  },
+  {
+    "chunk": "000-088",
+    "uid": "a1f75b1946b5476e80c36e450ae20294",
+    "psnr": 36.62161636352539,
+    "lpips": 0.0281784795224666,
+    "caption": "[\"Circular tent with a conical roof and cylindrical walls, featuring alternating red and white vertical stripes. Roof includes triangular valances. An extended canopy on one side is upheld by two wooden poles, matching the red and white stripes.\", \"Striped circular tent with conical roof, cylindrical walls, triangular valances and extended canopy upheld by wooden poles.\", \"Circular tent with conical roof, striped cylindrical walls, and extended canopy with supporting poles.\", \"Striped tent with ",
+    "scene_idx": 52
+  },
+  {
+    "chunk": "000-046",
+    "uid": "8aee8c79afe042018e4eda67403d12a9",
+    "psnr": 35.594566345214844,
+    "lpips": 0.0272107608616352,
+    "caption": "[\"A white sedan police car with \\\"Police\\\" and \\\"Miami-Dade\\\" in light green, green and gold stripes, black push bumper, red and blue roof light bar, dark tires with metallic hubcaps, and standard headlights and taillights.\", \"White sedan police car with \\\"Police\\\", \\\"Miami-Dade\\\", and multicolored stripes.\", \"White sedan police car with distinct \\\"Police\\\" and \\\"Miami-Dade\\\" markings.\", \"Sedan police car with \\\"Miami-Dade\\\", striped, and marked \\\"Police\\\".\", \"White police sedan with \\\"Miami-Dad",
+    "scene_idx": 53
+  },
+  {
+    "chunk": "000-094",
+    "uid": "e52f1898536a4fbb946eb3079d1a6aa5",
+    "psnr": 33.49177932739258,
+    "lpips": 0.0358582064509391,
+    "caption": "[\"Floating island with grassy terrain, stone cliffs, a curved stone pathway, a traditional small building with a red-brown tiled roof, dense pink foliage tree, a cylindrical stone well, and a traditional stone lantern.\", \"Floating island, grassy terrain, stone cliffs, curved pathway, small traditional building, dense pink tree, stone well, stone lantern.\", \"Grassy, floating island with stone cliffs, traditional building, pathway, pink tree, well, and lantern.\", \"Island with grass, cliffs, curved",
+    "scene_idx": 54
+  },
+  {
+    "chunk": "000-094",
+    "uid": "0059763cb94544c9ba4eed0cecd4f1b3",
+    "psnr": 35.46235275268555,
+    "lpips": 0.0389355234801769,
+    "caption": "[\"A cartoon-like teddy bear figure with an oval-shaped head, rounded ears, circular indents for eyes, rounded nub for nose, egg-shaped body, cylindrical arms, and bent legs. Predominantly light blue with pale yellow gradient highlights.\", \"Light blue cartoon teddy bear with oval head, rounded ears and nose, cylindrical arms, bent legs, and yellow highlights.\", \"Cartoon teddy bear with oval head, cylindrical arms, bent legs, light blue and yellow tints.\", \"Oval-headed, light blue teddy bear with ",
+    "scene_idx": 55
+  },
+  {
+    "chunk": "000-060",
+    "uid": "b4a8d2cc8187486892e6016d2cb9b600",
+    "psnr": 35.36150360107422,
+    "lpips": 0.0546064116060733,
+    "caption": "[\"3D model of a near-spherical, slightly asymmetrical red apple with a smooth, glossy surface, a tapered bottom, a short brown stem, and slight top indentation.\", \"Glossy, near-spherical red apple with a tapered bottom and slight top indentation.\", \"Red apple with near-spherical shape, glossy surface, and short stem.\", \"Glossy red apple, slightly asymmetrical with a short stem.\", \"Asymmetrical red apple with glossy surface and stem.\", \"Near-spherical glossy apple with small brown stem.\", \"Red ap",
+    "scene_idx": 56
+  },
+  {
+    "chunk": "000-020",
+    "uid": "495d775542fe4e2d8a8e3b9b4e339110",
+    "psnr": 34.86962127685547,
+    "lpips": 0.0510283559560775,
+    "caption": "[\"Cylindrical brick well with shades of gray, pink, and white, topped by a slightly curved roof of pink and red tiles, supported by wooden beams, equipped with a wooden crank and beige rope, and surrounded by a circular, sandy base with scattered rocks.\", \"Cylindrical well with gray, pink, and white bricks, pink and red tile roof, wooden beams, crank, beige rope and surrounding sandy base.\", \"Brick well with a curved roof, wooden beams and crank, beige rope, set on a sandy base with rocks.\", \"Gr",
+    "scene_idx": 57
+  },
+  {
+    "chunk": "000-050",
+    "uid": "3d46065cda9d4bce964e2cbf5e5aabb3",
+    "psnr": 35.80134963989258,
+    "lpips": 0.0415254980325698,
+    "caption": "[\"A cubic, light blue teapot with slightly rounded edges, a circular knob lid, an angular spout with a trapezoidal opening, and a square cross-section handle, all featuring a smooth, ceramic-like finish.\", \"A light blue, cubic teapot, having rounded edges, a circular lid, angular spout, a square handle, with a ceramic finish.\", \"Light blue cubic teapot, rounded edges, circular lid, angular spout, square handle, ceramic look.\", \"Blue, cubic teapot with rounded corners, circular lid, trapezoidal s",
+    "scene_idx": 58
+  },
+  {
+    "chunk": "000-088",
+    "uid": "dbe47a439f1d4d7eb7ea444777fde4c0",
+    "psnr": 37.4260139465332,
+    "lpips": 0.0238692685961723,
+    "caption": "[\"A mannequin wearing a floor-length, gradient blue dress with a high round neckline, short sleeves, and intricate floral patterns in red, orange, pink, and purple on the front, made of a smooth, silky fabric.\", \"Mannequin in floor-length, gradient blue dress with high neckline, short sleeves and floral pattern.\", \"Mannequin with gradient blue, floor-length, silky dress with intricate floral design.\", \"Mannequin in blue gradient, floor-length dress with floral pattern.\", \"Mannequin wearing silke",
+    "scene_idx": 59
+  },
+  {
+    "chunk": "000-091",
+    "uid": "e2fd4648ae0b470f8424cdd30c64cb2c",
+    "psnr": 36.68598175048828,
+    "lpips": 0.038002960383892,
+    "caption": "[\"An upright human figure with short light yellow hair, light reddish-brown jacket over a white shirt, light blue pants, and dark brown shoes, with arms slightly extended and feet flat on the ground.\", \"A standing human with short, light yellow hair and light reddish-brown jacket over white shirt and light blue pants.\", \"Upright human, short light yellow hair, reddish-brown jacket, white shirt, blue pants.\", \"Light-haired figure in reddish-brown jacket, white shirt, and blue pants standing.\", \"S",
+    "scene_idx": 60
+  },
+  {
+    "chunk": "000-060",
+    "uid": "47bd1edd44fc46ab875b481e54b57a78",
+    "psnr": 34.22035598754883,
+    "lpips": 0.0526619367301464,
+    "caption": "[\"A hardcover book with a blue-purple gradient cover and \\\"WARRIORS\\\" title, a cat illustration, and \\\"ERIN HUNTER\\\" on the spine and cover, next to a reddish-brown terracotta bowl with three balls (orange, green, purple) on a dark square surface.\", \"\\\"Warriors\\\" hardcover book by Erin Hunter with cat illustration, near a terracotta bowl with three balls.\", \"Hardcover \\\"Warriors\\\" book and terracotta bowl with three balls.\", \"Erin Hunter's \\\"Warriors\\\" book beside a bowl with balls.\", \"\\\"Warrior",
+    "scene_idx": 61
+  },
+  {
+    "chunk": "000-046",
+    "uid": "0df306e0c0854a488602d8336e81dc9b",
+    "psnr": 38.18178176879883,
+    "lpips": 0.0164544563740491,
+    "caption": "[\"A stylized, cartoonish blunderbuss with a silver-grey cylindrical barrel flaring into a yellow, bell-shaped muzzle, a yellow scope with blue lens on top, and a wood brown ergonomic handle, all joined with grey metallic bands.\", \"Cartoonish blunderbuss with silver barrel, yellow bell-shaped muzzle, yellow-blue scope, and brown handle.\", \"Stylized blunderbuss with silver-grey barrel, yellow muzzle, yellow scope, and brown handle.\", \"Cartoon blunderbuss with bell-shaped muzzle, color-focused scop",
+    "scene_idx": 62
+  },
+  {
+    "chunk": "000-094",
+    "uid": "ebbdb346148144df8d516171bbb58b74",
+    "psnr": 35.11275100708008,
+    "lpips": 0.0469392426311969,
+    "caption": "[\"A realistic 3D scene of an adult and juvenile mammoth standing on all fours, both with pale beige fur, white tusks, and interactive postures: the adult's trunk is lifted towards the juvenile, which looks back at the adult.\", \"Adult and juvenile mammoths, with pale beige fur and white tusks, interactively posed.\", \"Two interacting mammoths with beige fur and white tusks.\", \"Adult and juvenile mammoths posing with lifted trunks.\", \"Pair of beige, tusked mammoths in interactive postures.\", \"Two m",
+    "scene_idx": 63
+  },
+  {
+    "chunk": "000-088",
+    "uid": "19035fc846034003b76e2914ba6dd7a6",
+    "psnr": 34.812583923339844,
+    "lpips": 0.0500934906303882,
+    "caption": "[\"A light purple serpentine creature with small arms, horns, and holding a brown stick, alongside a child with peach skin, light hair, wearing a red cape, blue shirt, beige shorts, and holding a toy gun in a toy-filled room.\", \"Purple serpentine creature, child in red cape with toy gun in a toy-filled room.\", \"Purple creature and caped child with toy gun in toy room.\", \"Purple creature, child in cape with toy, in room.\", \"Serpentine creature, caped child in toy-strewn room.\", \"Purple creature, c",
+    "scene_idx": 64
+  },
+  {
+    "chunk": "000-071",
+    "uid": "cea016cbfb8f490593d737ede5fec8b1",
+    "psnr": 40.27452850341797,
+    "lpips": 0.0236427783966064,
+    "caption": "[\"A pear-shaped 3D object with a smooth, red surface featuring variations in red shades and light-colored speckles, a slender, slightly curved brownish stem at the top, and subtle shine with natural blemishes.\", \"A pear-shaped 3D object with smooth red surface, light speckles, subtle shine, and a curved brown stem.\", \"Smooth red pear object with light-colored speckles and a slightly curved stem.\", \"3D pear object with speckled surface and curved stem.\", \"Smooth red object with speckles and brown",
+    "scene_idx": 65
+  },
+  {
+    "chunk": "000-094",
+    "uid": "7a5cc073b19c45bc83a1aeb9bebb549e",
+    "psnr": 39.15932083129883,
+    "lpips": 0.0217303838580846,
+    "caption": "[\"A tall, cylindrical blue crown with gold, red, and light blue geometric patterns; a long, slender neck with naturalistic skin tone; a wide, intricately detailed gold, turquoise, and red collar; visible wear and tear on crown and collar.\", \"Blue cylindrical crown with red, gold, and light blue patterns, naturalistic long neck, and detailed gold collar.\", \"Tall, blue cylinder crown, with multicolored patterns, long slender neck, and intricately detailed gold collar.\", \"Blue crown, intricate gold",
+    "scene_idx": 66
+  },
+  {
+    "chunk": "000-091",
+    "uid": "09c3f302579c45d2b122b7098701288b",
+    "psnr": 34.1878776550293,
+    "lpips": 0.0453294850885868,
+    "caption": "[\"Narrow, vertically elongated two-story building with curved reddish-brown shingle roof, wooden upper story with arched windows, mixed wooden and stone lower story, central arched door, balcony, wooden steps, grey stone chimney, and stilt foundation.\", \"Two-story building with curved roof, arched windows, wooden and stone exterior, balcony, steps, and a chimney.\", \"Vertical building with curved shingle roof, mixed material exterior, arched door, balcony, and chimney.\", \"Vertical two-story build",
+    "scene_idx": 67
+  },
+  {
+    "chunk": "000-060",
+    "uid": "1d9eb42c41b24eac92f9ce9576d55010",
+    "psnr": 32.62775039672852,
+    "lpips": 0.0496046543121337,
+    "caption": "[\"A traditional hexagonal burgundy coffin with a white cross and handle, flanked by two black candle stands each holding three white candles with small flames, situated on a flat, light-colored octagonal tile platform.\", \"Hexagonal burgundy coffin with cross, handle, two black candle stands, three candles each, on a light octagonal platform.\", \"Burgundy coffin with cross and handle, two candle stands, three candles, on an octagonal platform.\", \"Hexagonal coffin with cross, candle stands with thr",
+    "scene_idx": 68
+  },
+  {
+    "chunk": "000-060",
+    "uid": "0ecac20b76804dbcbc7f155c7a41774a",
+    "psnr": 35.45256423950195,
+    "lpips": 0.0417974926531314,
+    "caption": "[\"A low-polygon, stylized antelope with a slender, angular body; small head with pointed snout, large ears, and horns; thin cylindrical legs with black hooves; golden-yellow color with shading; and a short, pointed tail.\", \"Low-polygon, stylized antelope, golden-yellow color, slender body, small head, large ears, horns, thin legs, black hooves, short tail.\", \"Stylized antelope, golden-yellow, slender, small head, large ears, pointed snout, horns, thin legs, short tail.\", \"Golden-yellow antelope,",
+    "scene_idx": 69
+  },
+  {
+    "chunk": "000-088",
+    "uid": "9fe11d0c7f1345f5a6e82a419f45166e",
+    "psnr": 35.52724838256836,
+    "lpips": 0.0412835925817489,
+    "caption": "[\"A human-like character with red hair in spiky pigtails, wearing a cream-colored sleeveless top and matching skirt/tunic with decorative patterns, a red-orange scarf, beige arm wraps, bandaged lower legs, brown sandals, in a dynamic pose with arms raised.\", \"A red-haired figure with cream clothes, red-orange scarf, bandages and brown sandals, posing with raised arms.\", \"Red-haired character in cream attire, scarf, bandaged legs, brown sandals, adopting dynamic pose.\", \"Figure with spiky red hai",
+    "scene_idx": 70
+  },
+  {
+    "chunk": "000-060",
+    "uid": "1060361948a049489e30ecfd98d0fcb0",
+    "psnr": 37.59309387207031,
+    "lpips": 0.0290157403796911,
+    "caption": "[\"A black bus with a rectangular body, six dark red trapezoidal windows on each side, and \\\"IMP City\\\" text. Front has a slanted light blue windshield, yellow-striped gray bumper. Rear is solid dark gray with a red stripe. Six black wheels.\", \"Black bus with six red trapezoidal windows, \\\"IMP City\\\" text, blue slanted windshield, yellow-striped gray bumper, and a dark gray rear.\", \"Black bus with red windows, \\\"IMP City\\\" text, blue windshield, striped bumper, and dark gray rear.\", \"Black \\\"IMP ",
+    "scene_idx": 71
+  },
+  {
+    "chunk": "000-024",
+    "uid": "421f8eabd94e447c8f63711279221ac3",
+    "psnr": 38.26250457763672,
+    "lpips": 0.0357550531625747,
+    "caption": "[\"Triangular cheesecake slice with a thick base, caramelized brown curved top, creamy pale yellow sides, slightly crumbly darker brown bottom edge, and smooth vertical back cut.\", \"Triangular cheesecake slice with caramelized top, creamy yellow sides, darker brown bottom.\", \"Triangular cheesecake slice with caramelized top and darker bottom.\", \"Cheesecake slice with brown top and bottom edges.\", \"Cheesecake slice with brown top and bottom.\", \"Cheesecake slice with caramelized top.\", \"Triangular ",
+    "scene_idx": 72
+  },
+  {
+    "chunk": "000-060",
+    "uid": "62d411a5850a467b8842fe244cb1517d",
+    "psnr": 35.94130325317383,
+    "lpips": 0.0563758499920368,
+    "caption": "[\"A light blue 3D pug figurine sits on a flat rectangular base, with a rounded head and floppy ears, a stout body sitting on hind legs, straight front legs, and a tightly curled tail over its back.\", \"Light blue 3D pug on base with round head, floppy ears, stout body and curled tail.\", \"Blue pug figurine on base with rounded head, stout body and curled tail.\", \"3D pug on base with round head, stout body and curled tail.\", \"Blue pug figure with rounded, stout form and curled tail.\", \"Blue pug wit",
+    "scene_idx": 73
+  },
+  {
+    "chunk": "000-050",
+    "uid": "ffeba8f4875849c2988cfcee3953a82f",
+    "psnr": 35.93120193481445,
+    "lpips": 0.0336661674082279,
+    "caption": "[\"Male warrior with short, curly dark purple hair, greenish-brown worn leather armor, green cloth sash, tan shirt, tattoos on right arm, holding a sword in right hand, a round, metallic shield in left, tan pants, and simple sandals.\", \"Warrior with dark purple curly hair, green-brown worn leather armor, holding sword and shield, tattoos on right arm.\", \"Man with purple hair and leather armor, holding sword and shield, with arm tattoos.\", \"Purple-haired warrior with worn armor, sword, shield, and",
+    "scene_idx": 74
+  },
+  {
+    "chunk": "000-088",
+    "uid": "233cf0aceaf9476f94da66d5b2412b8e",
+    "psnr": 33.57612991333008,
+    "lpips": 0.0568794161081314,
+    "caption": "[\"A tall, rectangular industrial building with a gable roof, two cylindrical chimneys on each side, smaller cylinders, cuboidal extensions, platforms with ramps, and pipes running across, all in a plain white or light gray color.\", \"Tall industrial building with gable roof and dual cylindrical chimneys.\", \"White industrial building with chimneys and cuboidal extensions.\", \"Industrial structure with cylindrical chimneys and extensions.\", \"White building with gable roof and chimneys.\", \"Building w",
+    "scene_idx": 75
+  },
+  {
+    "chunk": "000-045",
+    "uid": "4573dee4938649bd9fb37479757a3365",
+    "psnr": 36.99376678466797,
+    "lpips": 0.0435674861073493,
+    "caption": "[\"Circular wooden bowl with slightly converging walls, flat rounded base, smooth rim and interior, light to medium wood tones with visible grain patterns, made from a single piece of polished hardwood, showcasing natural grain and textures.\", \"Circular wooden bowl, converging walls, rounded base, smooth rim and interior.\", \"Polished hardwood bowl with smooth rim, base, and visible grain patterns.\", \"Hardwood bowl, smooth rim, base, and visible grain textures.\", \"Wooden bowl with converging walls",
+    "scene_idx": 76
+  },
+  {
+    "chunk": "000-024",
+    "uid": "20758578818f4e2790df6c4366ef15f1",
+    "psnr": 37.47341537475586,
+    "lpips": 0.0277361553162336,
+    "caption": "[\"A tall, weathered dark gray/charcoal freestanding metal fountain with ornate detailing, a cap-like top, arched recess with spigot, semi-circular ribbed bowl, and a solid, slightly flared base.\", \"Tall, weathered freestanding metal fountain, with ornate detailing and cap-like top.\", \"Dark gray metal fountain with arched recess and semi-circular bowl.\", \"Charcoal fountain with a spigot, ribbed bowl, and flared base.\", \"Weathered metal fountain with ornate detailing and a cap.\", \"Dark freestandin",
+    "scene_idx": 77
+  },
+  {
+    "chunk": "000-024",
+    "uid": "2710c094443b444b8a7ec3ed54587e36",
+    "psnr": 39.37128448486328,
+    "lpips": 0.0362131558358669,
+    "caption": "[\"A detailed sculpture of two human figures: one standing in a flowing robe, gently holding a partially unclothed kneeling figure who grasps the standing figure's shoulders. The scene is set on a rectangular pedestal, resembling polished, off-white marble.\", \"Sculpture of two figures, one standing in robe, other kneeling, on marble pedestal.\", \"Two human figures sculptured, one standing and robed, other kneeling on marble base.\", \"Sculpture of robed standing figure and kneeling figure on marble ",
+    "scene_idx": 78
+  },
+  {
+    "chunk": "000-020",
+    "uid": "7e7b4a1c749b4ac1b2ebfa0044d0cc16",
+    "psnr": 36.97465133666992,
+    "lpips": 0.0279442742466926,
+    "caption": "[\"A stylized, low-poly terrain with a rectangular brown base featuring a central white spiral pattern and arrow, small brown pyramids, a large central brown mountain with a white peak, floating white cubes, and lighter brown corner blocks.\", \"Low-poly terrain with rectangular base, white spiral and arrow, pyramids, central mountain, floating cubes, and corner locks.\", \"Low-poly rectangular terrain featuring white spiral, arrow, mountain, pyramids, cubes, and corner blocks.\", \"Terrain with spiral",
+    "scene_idx": 79
+  },
+  {
+    "chunk": "000-060",
+    "uid": "4a0bff5c0ebe46bcb0d9ba955f6b80e3",
+    "psnr": 38.85110855102539,
+    "lpips": 0.0274050720036029,
+    "caption": "[\"Ancient, weathered ceramic pot, cylindrical, slightly tapered, thick uneven rim, rounded asymmetrical body, earthy tones, rough surface, protrusions around rim and body, noticeable hole at base, inscriptions including \\\"TDOP2503\\\".\", \"Ancient, cylindrical ceramic pot with tapered shape, uneven rim, inscriptions, and base hole.\", \"Weathered pot with rough surface, asymmetrical body, protrusions, and \\\"TDOP2503\\\" inscription.\", \"Ceramic pot: earthy tones, uneven rim, noticeable base hole, inscri",
+    "scene_idx": 80
+  },
+  {
+    "chunk": "000-088",
+    "uid": "fe3eb81761da4c178f1f247ec11766d9",
+    "psnr": 35.95232391357422,
+    "lpips": 0.0286279916763305,
+    "caption": "[\"A full-head black helmet with a gold visor, black bulky segmented body armor, white slender arms, black gloves, white slim legs with segments, black rugged boots, a black hip pouch, and a black rifle.\", \"A black helmet with gold visor, segmented body armor, slender arms, slim legs, black gloves, boots, hip pouch, and rifle.\", \"A black and gold helmet, bulky armor, white slim arms and legs, black gloves, boots, pouch, and a rifle.\", \"Black helmet, gold visor, black armor, white arms and legs, b",
+    "scene_idx": 81
+  },
+  {
+    "chunk": "000-046",
+    "uid": "d811173e439a4459ab31ae9dd5dfb102",
+    "psnr": 32.92127227783203,
+    "lpips": 0.0355755500495433,
+    "caption": "[\"L-shaped, single-story light gray building with flat roof and wooden paneling, surrounded by dark gray parking lot with marked accessible spots, green trees, grass patches, light gray pathways, central entrance with walkways, and light brown signage.\", \"Light gray, L-shaped building with wooden paneling, central entrance, and surrounded by dark parking lot, trees, and signage.\", \"Single-story, light gray building with wooden paneling surrounded by dark parking, greenery, and light brown signag",
+    "scene_idx": 82
+  },
+  {
+    "chunk": "000-046",
+    "uid": "ba517ed83ece4f6caf5a39730a92bd76",
+    "psnr": 38.597129821777344,
+    "lpips": 0.0291131138801574,
+    "caption": "[\"Light gray penguin standing upright on a rectangular base, wings close to body, slightly lifted head, small beak, elliptical body, webbed feet, rough texture.\", \"Light gray penguin on rectangular base, with upheld head and close wings.\", \"Upright penguin on base with lifted head and close wings.\", \"Standing penguin on base with slightly raised head.\", \"Gray penguin with uplifted head on base.\", \"Penguin on base with close wings.\", \"Upright penguin with small beak.\", \"Standing penguin on rectan",
+    "scene_idx": 83
+  },
+  {
+    "chunk": "000-031",
+    "uid": "da92672e23354ba2aaeae2aa65b30d3e",
+    "psnr": 35.01955795288086,
+    "lpips": 0.032631903886795,
+    "caption": "[\"A rectangular, two-story light red brick building with dark-framed windows, a flat dark roof, front and side large windows, a terrace, a small garden, four cars of different colors in the front parking area, and surrounding vegetation.\", \"Two-story, light red brick building, dark-roofed, dark-framed windows, terrace, garden, four parked cars, surrounding vegetation.\", \"Light red brick, two-story construction with dark-framed windows, four parked cars, a terrace, a garden.\", \"Rectangular brick ",
+    "scene_idx": 84
+  },
+  {
+    "chunk": "000-046",
+    "uid": "9f0c18052ba44b7691201066fd6fb0cd",
+    "psnr": 35.277103424072266,
+    "lpips": 0.0315911956131458,
+    "caption": "[\"Low-poly blue boxy four-door sedan with rectangular body, slightly raised black roof, flat windows, four wheels with hexagonal hubcaps, circular white headlights, rectangular red rear lights, white side mirrors, thin white bumpers, and sharp edges.\", \"Low-poly blue sedan with raised black roof, flat windows, hexagonal hubcaps.\", \"Blue four-door sedan with raised black roof, white side mirrors.\", \"Low-poly blue sedan, raised black roof, four wheels.\", \"Boxy blue sedan, black roof, white headlig",
+    "scene_idx": 85
+  },
+  {
+    "chunk": "000-091",
+    "uid": "7fb53edae00d4a8b98d06383fc1280ad",
+    "psnr": 32.85915756225586,
+    "lpips": 0.051371019333601,
+    "caption": "[\"Yellow Nintendo Game Boy with magenta A/B buttons, black D-pad, black SELECT/START buttons, screen with \\\"DOT MATRIX WITH STEREO SOUND\\\" above and \\\"Nintendo GAME BOY\\\" text below, cartridge slot, battery compartment, and side ports for accessories and headphones.\", \"Yellow Nintendo Game Boy with magenta buttons, black D-pad, screen text.\", \"Nintendo Game Boy in yellow, featuring magenta buttons and screen.\", \"Highlighted Yellow Game Boy with bold screen text and buttons.\", \"Yellow Nintendo Ga",
+    "scene_idx": 86
+  },
+  {
+    "chunk": "000-030",
+    "uid": "9323c2c366724041a3e7c1d90d6f96e2",
+    "psnr": 35.02622604370117,
+    "lpips": 0.0341474302113056,
+    "caption": "[\"Yellow animated character resembling a sponge with square pants, white shirt, red tie, large eyes, cylindrical nose, simple mouth, black shoes; in T-pose.\", \"Yellow sponge-like character with square pants, red tie, large eyes, and T-pose.\", \"Animated figure wearing square pants, red tie, with large eyes, in T-pose.\", \"Sponge-themed figure with red tie, large eyes, and T-pose.\", \"Yellow character with square pants, red tie, in T-pose.\", \"Animated sponge with square pants and T-pose.\", \"Sponge-l",
+    "scene_idx": 87
+  },
+  {
+    "chunk": "000-088",
+    "uid": "261995e08739499c9cde7a9896141d55",
+    "psnr": 34.59588623046875,
+    "lpips": 0.0391924306750297,
+    "caption": "[\"An egg-shaped object with a pale white base color, decorated with light pink roses, green leaves, and small, realistic light gray birds.\", \"Egg-shaped object with white base, adorned with pink roses, green leaves, and small gray birds.\", \"Egg-shaped item with white color, decorated with pink roses, leaves, and small birds.\", \"Oval object with pink roses, leaves, and small birds on white base.\", \"Egg-like item with pink roses, green foliage, and birds.\", \"Oval item with roses, leaves, and birds",
+    "scene_idx": 88
+  },
+  {
+    "chunk": "000-060",
+    "uid": "34d26788e6f5440eb9bf7cd13e7d19d7",
+    "psnr": 37.35858917236328,
+    "lpips": 0.0341450460255146,
+    "caption": "[\"A 3D figure with swept-back brown hair, large rounded ears, a pointed dark brown beard with a curl, a white shirt collar, and a bright red tie.\", \"Figure with swept-back brown hair, large ears, curled dark brown beard, white collar, and red tie.\", \"3D figure with large ears, swept-back hair, curled beard, and red tie.\", \"3D model with brown hair, large ears, curled beard, and red tie.\", \"Model with large ears, swept-back hair, curled beard, and red tie.\", \"Figure having swept-back hair, large ",
+    "scene_idx": 89
+  },
+  {
+    "chunk": "000-071",
+    "uid": "520dcf6baf4642358ce7e9b50dcad8dd",
+    "psnr": 33.37028884887695,
+    "lpips": 0.0415455400943756,
+    "caption": "[\"A white flatbed truck carries an oversized blue athletic shoe with black laces and stripes and a black-and-white soccer ball on a pedestal.\", \"White flatbed truck carrying oversized blue athletic shoe with black features.\", \"Truck transports huge blue athletic shoe with black details.\", \"Flatbed truck with oversized blue sports shoe.\", \"Truck carries massive blue athletic shoe.\", \"White truck with big blue shoe.\", \"Transporting large blue sports shoe.\", \"Flatbed, oversized blue shoe.\", \"Truck,",
+    "scene_idx": 90
+  },
+  {
+    "chunk": "000-094",
+    "uid": "00cdb2f4991a4f0683e2ae5f1b284cad",
+    "psnr": 35.34405517578125,
+    "lpips": 0.0354793258011341,
+    "caption": "[\"A humanoid figure wearing a colorful, layered, tattered costume with a mask-like headgear featuring spikes and wing-like extensions, holding a decorated staff. The costume includes shades of pink, blue, purple, yellow, and green.\", \"A humanoid wearing a colorful, layered costume, mask headgear with wings, carrying a decorative staff.\", \"A costumed humanoid with winged mask and decorated staff.\", \"Colorful humanoid with masked headgear and staff.\", \"Humanoid in layered costume with mask and sta",
+    "scene_idx": 91
+  },
+  {
+    "chunk": "000-071",
+    "uid": "055985e34c4f4f62ba7c110b2e9af723",
+    "psnr": 35.50056838989258,
+    "lpips": 0.0266987700015306,
+    "caption": "[\"Oval wicker basket with two arching handles, rounded bottom, tight weave pattern, natural brown color, and shallow height.\", \"Oval brown wicker basket with two handles and tight weave pattern.\", \"Oval brown basket with two arching handles and weave pattern.\", \"Two-handled brown wicker basket with rounded bottom.\", \"Brown, oval basket with arching handles.\", \"Brown wicker basket with two handles.\", \"Oval basket with two handles.\", \"Two-handled oval wicker basket.\", \"Brown oval basket with handl",
+    "scene_idx": 92
+  },
+  {
+    "chunk": "000-091",
+    "uid": "4a9b3271d0fa4c08bbb51a3e977791c5",
+    "psnr": 37.59038162231445,
+    "lpips": 0.0189632419496774,
+    "caption": "[\"Low-poly, blocky guitar with light brown body and neck, smooth surfaces, circular sound hole, rectangular headstock with tuning pegs, rectangular darker bridge, and six invisible strings.\", \"Low-poly guitar with light brown body, neck, circular hole, rectangular features, and invisible strings.\", \"Blocky guitar with light brown body and neck, plus invisible strings.\", \"Low-poly, light brown guitar with invisible strings.\", \"Blocky guitar with invisible strings.\", \"Light brown, blocky guitar.\",",
+    "scene_idx": 93
+  },
+  {
+    "chunk": "000-046",
+    "uid": "5fff58ecf9084539b25a50642fa2d9f5",
+    "psnr": 35.84196090698242,
+    "lpips": 0.0254054963588714,
+    "caption": "[\"A symmetrical, stylized white pine tree with four angular, pointed layers on each side, divided by a vertical seam, and an extending, jagged base without a distinct trunk.\", \"White pine tree with four symmetrical, pointed layers with a jagged base.\", \"Symmetrical pine tree with four pointed layers with jagged base.\", \"White pine with symmetrical, angular layers and jagged base.\", \"Symmetrical, angular pine tree with jagged stand.\", \"Four layered, symmetrical angular white pine tree.\", \"Angular",
+    "scene_idx": 94
+  },
+  {
+    "chunk": "000-071",
+    "uid": "e54c3dee8f1f4bbb8652bff40544f0bc",
+    "psnr": 36.15914535522461,
+    "lpips": 0.0563842579722404,
+    "caption": "[\"A simple wooden lectern with a trapezoidal front view, rectangular side profile, light wood grain finish, open back with two horizontal shelves and three small drawers with round knobs, all in light wood.\", \"A wooden lectern, trapezoidal front, rectangular side, light finish, open back, two shelves, three drawers with knobs.\", \"Wooden lectern with trapezoidal front, rectangular side, open back, shelves, drawers, light finish.\", \"Light-finished wooden lectern with trapezoidal front, two shelves",
+    "scene_idx": 95
+  },
+  {
+    "chunk": "000-071",
+    "uid": "d8922adae4774e09acfd2451128698ce",
+    "psnr": 36.19353485107422,
+    "lpips": 0.0330984778702259,
+    "caption": "[\"A humanoid rabbit animatronic figure with pale yellowish-beige color, elongated ears, metal machinery in ears, purple vest with bowtie, tear patches, visible metal joints, digitigrade legs, and large rabbit-like feet.\", \"Humanoid rabbit animatronic, pale beige, elongated ears with metal, purple vest, patches, visible joints, digitigrade legs, large feet.\", \"Beige humanoid animatronic rabbit with metal machinery in elongated ears, purple vest and bowtie, large rabbit-like feet.\", \"Humanoid rabb",
+    "scene_idx": 96
+  },
+  {
+    "chunk": "000-020",
+    "uid": "696e5d6ef2254c75ae5ce33a92b2f078",
+    "psnr": 34.48173904418945,
+    "lpips": 0.0236991588026285,
+    "caption": "[\"Highly detailed, ornate war hammer with a gold hammerhead featuring a rectangular striking face, axe blade, and intricate designs, cylindrical handle with fluted grip, braided middle section, golden decorations, and a cap-like pommel, made of reflective materials like gold, steel, and bronze.\", \"Ornate war hammer with gold, rectangular hammerhead, axe blade, intricate design, fluted grip, braided middle, and pommel.\", \"Detailed gold hammerhead war hammer with fluted grip, braided middle, axe b",
+    "scene_idx": 97
+  },
+  {
+    "chunk": "000-024",
+    "uid": "e1278f9ba3cd47ef99e45c958f042eb9",
+    "psnr": 36.03058624267578,
+    "lpips": 0.0383722111582756,
+    "caption": "[\"A small hexagonal table with a yellow top, brown drawers with yellow knobs, a central stand with four curved legs, and a hexagonal base. On top, a white lampshade with blue-gray accents and a brown hexagonal base.\", \"Small hexagonal table, yellow top, brown drawers with yellow knobs, white lampshade with blue-gray accents.\", \"Hexagonal table with yellow top, brown drawers with yellow knobs, blue-grey accented lamp.\", \"Yellow-topped hexagonal table with brown drawers, blue-gray accented white l",
+    "scene_idx": 98
+  },
+  {
+    "chunk": "000-030",
+    "uid": "58b71263123649ca808567e70699a469",
+    "psnr": 38.5275764465332,
+    "lpips": 0.0453151948750019,
+    "caption": "[\"A vintage-style sofa with tufted, dark brown leather upholstery, a distinctively wavy high backrest, three plush seat cushions, rounded padded armrests, and elegantly curved wood legs and base featuring subtle carved floral patterns.\", \"Vintage-style sofa with dark brown, tufted leather and carved wooden base.\", \"Vintage tufted sofa with curved wooden legs and subtle carvings.\", \"Brown leather sofa with carved wooden detailing.\", \"Vintage sofa with tufted leather and woodwork.\", \"Tufted, brown",
+    "scene_idx": 99
+  },
+  {
+    "chunk": "000-031",
+    "uid": "7aa58e978b9f4357b8e73d8e0440c896",
+    "psnr": 37.14908981323242,
+    "lpips": 0.0334648378193378,
+    "caption": "[\"A highly muscular humanoid figure standing upright, slightly bent knees, arms hanging loosely, exaggerated muscles on the entire body, natural pale flesh skin tone, smooth texture, wearing black briefs.\", \"Muscular humanoid figure standing upright, bent knees, loose arms, exaggerated muscles, wearing black briefs.\", \"Muscular humanoid figure standing, slightly bent knees, exaggerated muscles, in black briefs.\", \"Muscular humanoid in upright position, with exaggerated muscles, wearing briefs.\",",
+    "scene_idx": 100
+  },
+  {
+    "chunk": "000-030",
+    "uid": "9228dbec07f145a497546cabb62b44f8",
+    "psnr": 32.17899703979492,
+    "lpips": 0.0292563736438751,
+    "caption": "[\"A vibrant multi-colored attack aircraft with a cylindrical candy pink, light green, and yellow fuselage, pink and purple straight wings, light purple and pink twin turbofan engines, and tail with twin vertical stabilizers in green and red.\", \"A vibrant, multi-colored aircraft with pink, green, and yellow fuselage, straight wings and multicolored twin engines.\", \"Multicolored aircraft with candy-colored fuselage, colored wings, and twin-turbofan engines.\", \"Vivid attack aircraft with twin engin",
+    "scene_idx": 101
+  },
+  {
+    "chunk": "000-020",
+    "uid": "5ff2df65d87241e0b7aa75ebed5530c0",
+    "psnr": 34.72789764404297,
+    "lpips": 0.0471351742744445,
+    "caption": "[\"A bright yellow pumpkin with orange and brown gradients, a vertical ridged body, and a brown stem. It features pink \\\"HAPPY HALLOWEEN!\\\" text with a green splash on the surface, in a festive style.\", \"Yellow pumpkin with orange, brown gradients, vertical ridges, brown stem, pink Happy Halloween text, and green splash.\", \"Bright yellow pumpkin with brown stem and festive Halloween text.\", \"Yellow pumpkin with orange and brown shades and Halloween text.\", \"Festive pumpkin with colorful Halloween",
+    "scene_idx": 102
+  },
+  {
+    "chunk": "000-091",
+    "uid": "5dba22e3d810499b893a52a665866b56",
+    "psnr": 35.02626419067383,
+    "lpips": 0.0360023081302642,
+    "caption": "[\"Military-style, matte tan 6-wheel drive truck with a boxy cabin, raised roof, antennas, spare tire, fuel tanks, open bed, hexagonal fixtures, side steps, guards, visible exhaust, and split rectangular tinted windshield.\", \"Military-style, matte tan 6-wheel truck with boxy cabin and various fixtures.\", \"Matte tan military truck with raised roof and antennas.\", \"6-wheel drive military truck with spare tire and fuel tanks.\", \"Matte tan truck with an open bed and hexagonal fixtures.\", \"Military tr",
+    "scene_idx": 103
+  },
+  {
+    "chunk": "000-050",
+    "uid": "951f75073f3146f9913b10738e7ba22f",
+    "psnr": 37.14119720458984,
+    "lpips": 0.0261750780045986,
+    "caption": "[\"A stylized geometric totem with a light blue squared stepped base containing purple decorations, a light blue tapered square prism middle with blue and white diamond band, and a multi-layer top with an inverted pyramid, angular shapes, and a twisting spiral.\", \"Totem with light blue stepped base, tapered prism middle, multilayered top.\", \"Stylized totem with light blue base, prism middle, multilayered top.\", \"Geometric totem with light blue base, prism middle, multilayered top.\", \"Blue-based t",
+    "scene_idx": 104
+  },
+  {
+    "chunk": "000-088",
+    "uid": "af9684eb91a844b09a7757102ed66043",
+    "psnr": 35.275936126708984,
+    "lpips": 0.0509865917265415,
+    "caption": "[\"A stylized rocky mountain landscape with multiple plateaus connected by wood bridges, featuring small houses, a windmill, green conical trees, and scattered boulders on a flat hexagonal base representing grass.\", \"Rocky mountainous landscape, plateaus interconnected by wooden bridges, small houses, windmill, green trees, on a flat hexagonal base.\", \"Stylized mountain terrain, interlinked plateaus with bridges, small dwellings, a windmill, trees, on hexagonal grass base.\", \"Mountain landscape, ",
+    "scene_idx": 105
+  },
+  {
+    "chunk": "000-046",
+    "uid": "62658b70d76b4f499767326e98853e50",
+    "psnr": 33.689697265625,
+    "lpips": 0.0577031373977661,
+    "caption": "[\"A rounded, barrel-shaped black cauldron with two symmetrical cylindrical handles and an open top, featuring a metallic reddish-brown interior and filled with a bubbling yellow-red-orange lava-like substance.\", \"Black barrel-shaped cauldron with two handles, red-brown interior, filled with bubbling lava.\", \"Barrel-shaped cauldron with cylindrical handles, filled with lava.\", \"Black cauldron with red interior and bubbling lava.\", \"Black cauldron with handles, filled with lava.\", \"Cauldron with h",
+    "scene_idx": 106
+  },
+  {
+    "chunk": "000-060",
+    "uid": "731a3d707a354588a5a28e9a6de93739",
+    "psnr": 34.653099060058594,
+    "lpips": 0.0372254103422164,
+    "caption": "[\"A sleek, modern sports car with smooth curves, two-door coupe, integrated headlights and grille, sporty rims, horizontal tail lights, dual exhausts, and a monochromatic white color.\", \"A modern, sleek, two-door sports car with smooth curves and integrated lights, sporty rims, and dual exhausts, in white.\", \"White, sleek, two-door sports car with integrated lights, sporty rims, and dual exhaust.\", \"White sports car with smooth curves, integrated lights, and sporty rims.\", \"Two-door white sports",
+    "scene_idx": 107
+  },
+  {
+    "chunk": "000-094",
+    "uid": "1020ea92f41240b78688adc0915bd981",
+    "psnr": 36.51696014404297,
+    "lpips": 0.0270517412573099,
+    "caption": "[\"A Spider-Man character model standing upright in a neutral pose, muscular and well-proportioned, featuring a red mask with web pattern, white almond-shaped eyes, red and blue costume with black web patterns, and spider emblems on chest and back.\", \"Spider-Man model, standing upright, neutral pose, muscular, red-blue-black costume with web patterns.\", \"Spider-Man character model posed neutrally with a muscular build.\", \"A neutral-posed muscular Spider-Man model with colored costume.\", \"Upright ",
+    "scene_idx": 108
+  },
+  {
+    "chunk": "000-050",
+    "uid": "15477afc0770443388923d5ac08ea6df",
+    "psnr": 36.88623046875,
+    "lpips": 0.0497342459857463,
+    "caption": "[\"A blue, rectangular trash bin with rounded edges, a flat lid with a handle, two black wheels at the rear base, and made of matte plastic.\", \"Blue rectangular bin with rounded edges, flat lid, handle, and wheels.\", \"Blue rectangular bin with flat lid, handle, and rear wheels.\", \"Blue bin with rounded edges, lid, handle, and wheels.\", \"Blue bin with flat lid, handle, and wheels.\", \"Blue trash bin with handle and wheels.\", \"Blue container with lid, handle, wheels.\", \"Blue bin with lid and wheels.",
+    "scene_idx": 109
+  },
+  {
+    "chunk": "000-094",
+    "uid": "e7433bef7df34855b9cf891b512fb030",
+    "psnr": 34.43526840209961,
+    "lpips": 0.0395542196929454,
+    "caption": "[\"A stone or marble bust on a tall cylindrical pedestal with cherubs and an oval plaque, all atop a circular platform. Steps lead up to the base adorned with carved pumpkins and small green bushes.\", \"Stone bust on cylindrical pedestal, cherubs, plaque, circular platform, stairs, carved pumpkins, small bushes.\", \"Bust on pedestal with cherubs, platform, steps, adorned with pumpkins and bushes.\", \"Bust, cylindrical pedestal, cherubs, platform, steps, adorned pumpkins and bushes.\", \"Marble bust, p",
+    "scene_idx": 110
+  },
+  {
+    "chunk": "000-091",
+    "uid": "3cd780be5d71420f8d19ddb9426a3f9c",
+    "psnr": 34.34906005859375,
+    "lpips": 0.0324972160160541,
+    "caption": "[\"A predominantly dark brown spherical object with tan markings, featuring a cylindrical, light brown handle. It has three raised, circular modules with fan-like designs and two indents, resembling a futuristic or steampunk tool.\", \"Dark brown sphere with tan markings, light brown handle, three raised circles, fan designs, and two indents.\", \"Dark brown sphere with tan details, brown handle, three circles with fan designs, two indents.\", \"Brown sphere with tan details, handle, three fan-like cir",
+    "scene_idx": 111
+  },
+  {
+    "chunk": "000-024",
+    "uid": "a16421ab77124c068604160da4de8781",
+    "psnr": 32.96638107299805,
+    "lpips": 0.043600708246231,
+    "caption": "[\"A cupcake with a light brown base, red and white checkered wrapper, strawberry red frosting, whole strawberry topping, and chocolate drizzle viewed from multiple angles.\", \"Cupcake with light brown base, red and white checkered wrapper, strawberry frosting, topped with strawberry and chocolate drizzle.\", \"A cupcake with strawberry frosting, whole strawberry topping, and chocolate drizzle, in red and white checkered wrapper.\", \"Cupcake with red and white wrapping, strawberry topping, and chocol",
+    "scene_idx": 112
+  },
+  {
+    "chunk": "000-031",
+    "uid": "50c3055cc21e4b4e8d19d816aefc8e6b",
+    "psnr": 36.54877471923828,
+    "lpips": 0.0318882688879966,
+    "caption": "[\"3D model of a human heart with light to medium shades of brown and pink muscle, pale purple coronary vessels, light pink aorta, pale blue pulmonary arteries, pale pink pulmonary veins, and light pink atria and ventricles.\", \"Detailed human heart model with varying shades of brown, pink, and purple.\", \"3D heart model with brown and pink muscles, light blue arteries.\", \"Human heart model with distinct brown and pink muscle, light arteries.\", \"3D model of a human heart colored with pink and brown",
+    "scene_idx": 113
+  },
+  {
+    "chunk": "000-091",
+    "uid": "97c493d5c7a443b89229e5f7edb3ae4a",
+    "psnr": 36.435176849365234,
+    "lpips": 0.0371183231472969,
+    "caption": "[\"A detailed, elongated dragon head with multiple bony protrusions, spiral horns, deep-set eyes, pronounced jawline, sharp teeth, and several rows of smaller spikes, in bone-like beige and off-white colors with a rough, weathered texture.\", \"Elongated dragon head with bony protrusions, spiral horns, pronounced jaw, and spikes in bone-beige.\", \"Beige, elongated dragon head with bony protrusions, spiral horns, and pronounced jawline.\", \"Dragon head with spiral horns, pronounced jaw, bony protubera",
+    "scene_idx": 114
+  },
+  {
+    "chunk": "000-024",
+    "uid": "fa23435ed5774614afc36c86bbf05c73",
+    "psnr": 35.57323455810547,
+    "lpips": 0.0217320807278156,
+    "caption": "[\"The 3D object is a light blue, classic Volkswagen Beetle with a rounded body, dome-like roof, curved fenders, round headlights, small chrome-accented bumpers, two doors, rounded hubcaps, chrome trims, and minimalistic details.\", \"Light blue Volkswagen Beetle, rounded body and roof, with chrome accents.\", \"Classic Volkswagen Beetle, light blue, with chrome trims.\", \"Volkswagen Beetle in light blue, minimalistic design.\", \"Light blue Beetle, rounded body, chrome details.\", \"Classic Beetle car, c",
+    "scene_idx": 115
+  },
+  {
+    "chunk": "000-050",
+    "uid": "8eb0ee1347ee48d7a144616ea9a5f84d",
+    "psnr": 35.46598434448242,
+    "lpips": 0.0247461143881082,
+    "caption": "[\"A blue futuristic sports car with a tear-drop shape, three rear spikes on each side, red interior and hubcaps with white borders, semi-elliptical headlights, dual exhaust pipes, curved windshield, and single bucket seat.\", \"A futuristic blue sports car with tear-drop shape, rear spikes, red interior, white-bordered hubcaps, semi-elliptical headlights, dual exhaust, curved windshield, and single seat.\", \"Blue futuristic car with tear-drop shape, side spikes, red inside, white-rimmed hubcaps, ov",
+    "scene_idx": 116
+  },
+  {
+    "chunk": "000-045",
+    "uid": "b92f4c49c2ea499194652d4d9488a3c7",
+    "psnr": 36.12092590332031,
+    "lpips": 0.0345828048884868,
+    "caption": "[\"A cartoon-like yellow mailbox with a rectangular body, eyes and nose on the front, two semi-circular ear-like protrusions on top, mounted on a cylindrical pedestal, side wings, and labels on the front and left side.\", \"Yellow cartoon mailbox with eyes, nose, ear-like protrusions, cylindrical pedestal, wings, labels.\", \"Cartoon-style yellow mailbox with eyes, nose, wings, labels on pedestal.\", \"Yellow mailbox, cartoon features, wings, labels, on pedestal.\", \"Rectangular mailbox with cartoonish ",
+    "scene_idx": 117
+  },
+  {
+    "chunk": "000-020",
+    "uid": "716ce97771cb45a1aeda9ce9adf0a30e",
+    "psnr": 36.56356048583984,
+    "lpips": 0.0381224527955055,
+    "caption": "[\"A rugged, angular military armored 8x8 wheeled vehicle with significant ground clearance, forward-sloping front, irregular green-beige-brown camouflage, multiple access hatches, and fixtures for towing and attachments.\", \"Rugged angular military armored 8x8 vehicle with high ground clearance and camo.\", \"Military 8x8 vehicle with forward-sloping front and camo design.\", \"Ground clearance 8x8 vehicle with green-beige-brown camo.\", \"8x8 military vehicle with camo and access hatches.\", \"Rugged ar",
+    "scene_idx": 118
+  },
+  {
+    "chunk": "000-088",
+    "uid": "bad844e5493840c6aa9e4c965a3d69ba",
+    "psnr": 35.93766784667969,
+    "lpips": 0.0371032431721687,
+    "caption": "[\"Low-polygon 3D model of a person in beige or light gray military uniform with chest pockets, matching pants tucked into pinkish-brown boots, wearing a red or muted pink rectangular backpack, gray vest with pouches, black rifle, and a matching cap.\", \"Person in light gray military uniform and rectangular pink backpack.\", \"Low-polygon 3D model in beige military dress with backpack.\", \"3D model in dull gray military outfit and backpack.\", \"Person in uniform with red backpack and rifle.\", \"Low-pol",
+    "scene_idx": 119
+  },
+  {
+    "chunk": "000-045",
+    "uid": "dfd17c3a1837433db5c660db4b8e79e9",
+    "psnr": 35.62998962402344,
+    "lpips": 0.0175980497151613,
+    "caption": "[\"Electric guitar with asymmetric double-cutaway bright red body, dark burgundy pickguard, straight yellow neck and lighter yellow fretboard, yellow headstock, white rectangular pickups, six metallic strings, metallic bridge, and unspecified control knobs and switches.\", \"Electric guitar with red body, yellow neck/fretboard, burgundy pickguard, white pickups, metallic strings/bridge, control knobs.\", \"Red electric guitar with yellow neck, burgundy pickguard, white pickups, metallic fixtures, con",
+    "scene_idx": 120
+  },
+  {
+    "chunk": "000-050",
+    "uid": "4f7a76104fad4752889c425929f0c128",
+    "psnr": 36.11410140991211,
+    "lpips": 0.0363499708473682,
+    "caption": "[\"3D model of a human jaw showing upper and lower parts, slightly open, with details of teeth and gums. Upper teeth include incisors, canines, premolars, and molars; lower teeth are similar but smaller.\", \"3D model of a human jaw, open, displaying detailed upper and lower teeth and gums.\", \"Open model of human jaw showcasing detailed teeth and gums.\", \"Human jaw model, slightly open, with upper and lower teeth.\", \"3D depiction of slightly open human jaw with teeth.\", \"Open human jaw 3D model wit",
+    "scene_idx": 121
+  },
+  {
+    "chunk": "000-088",
+    "uid": "b1cdacebaf214b099ecaa4348a229f69",
+    "psnr": 34.390899658203125,
+    "lpips": 0.0377861335873603,
+    "caption": "[\"A small, chibi-style figure with a large head, white wavy hair, a golden halo, large gray eyes, blue star-like facial marks, a white and pink petal-themed outfit, short limbs with star marks, and a dark gray cape.\", \"Chibi-style figure with large head, white wavy hair, golden halo, and star-marked facial features.\", \"Small figure, big head, white hair, golden halo, blue star-like marks.\", \"Chibi figure, large head, white hair, and golden halo.\", \"Small figure with starry face, white hair, halo",
+    "scene_idx": 122
+  },
+  {
+    "chunk": "000-031",
+    "uid": "9d27b6d7cbd14529962dda08f049941c",
+    "psnr": 36.41822814941406,
+    "lpips": 0.0410938523709774,
+    "caption": "[\"A rectangular wooden crate with a lid, reinforced edges, and a front handle. Made of light beige wooden planks with weathered marks, the lid and sides have additional braces attached with visible bolts or screws.\", \"Rectangular crate with lid, reinforced edges, front handle, made of weathered beige wood.\", \"Rectangular crate with reinforced edges and front handle, made of weathered wood.\", \"Wooden crate with lid, front handle, and reinforced edges.\", \"Weathered wooden crate with a lid and fron",
+    "scene_idx": 123
+  },
+  {
+    "chunk": "000-020",
+    "uid": "a8dd2bac8e204a1cb8502edc76adfabc",
+    "psnr": 38.461368560791016,
+    "lpips": 0.0349249988794326,
+    "caption": "[\"Two standing anthropomorphic rabbit figurines with light brown fur, yellow and green outfit on the left rabbit, and orange and yellow outfit on the right rabbit, both with short rounded limbs, large feet, and small tails.\", \"Two standing rabbit figurines with light brown fur, colorful outfits, rounded limbs, large feet, and small tails.\", \"Anthropomorphic rabbit figures in colors green, yellow, and orange.\", \"Two bunny figures with clothes, large feet, and mini tails.\", \"Light brown rabbit fig",
+    "scene_idx": 124
+  },
+  {
+    "chunk": "000-046",
+    "uid": "0d5dd4a2a8bb489f97acd88f0e88c1ff",
+    "psnr": 33.993629455566406,
+    "lpips": 0.036258228123188,
+    "caption": "[\"Minimalist white scooter with T-shaped handlebars, cylindrical wheels, curved body for standing, square seat on vertical post, front fork encasing the wheel.\", \"White minimalist scooter with T-handlebars, cylindrical wheels, curved body, square seat.\", \"Scooter with T-handlebars, cylindrical wheels, curved standing body, square seat.\", \"White scooter with handlebars, cylindrical wheels, standing body, seat.\", \"Minimalist scooter with handlebars, wheels, body, seat.\", \"Scooter with T-handlebars",
+    "scene_idx": 125
+  },
+  {
+    "chunk": "000-031",
+    "uid": "d4d06764dca6428baf20b8b06286eaf0",
+    "psnr": 35.79286575317383,
+    "lpips": 0.0504627712070941,
+    "caption": "[\"A bronze equestrian statue of a rider in historical military attire on a rearing horse, with one arm extended forward, on a rectangular, rough-textured base.\", \"Bronze statue of historical soldier on rearing horse, one arm forward on textured base.\", \"Historical soldier on rearing horse statue, arm extended, on base.\", \"Bronze rider statue on rearing horse, one arm forward.\", \"Military attire rider on rearing horse statue.\", \"Historical soldier on poised horse statue.\", \"Bronze soldier on rear",
+    "scene_idx": 126
+  },
+  {
+    "chunk": "000-094",
+    "uid": "89ee975b5d7f4e48bada699a1f1c4506",
+    "psnr": 33.69171142578125,
+    "lpips": 0.0594404004514217,
+    "caption": "[\"A classic vase with a narrow neck, wide body, and slightly flared mouth. It has a highly detailed, irregular stippled texture and is uniformly bright cyan.\", \"Cyan vase with a narrow neck, wide body, flared mouth, and stippled texture.\", \"Vase in bright cyan with stippled texture, narrow neck and flared mouth.\", \"Bright cyan vase, narrow neck, wide body, flared mouth, stippled.\", \"Cyan vase with a stippled texture and flared mouth.\", \"Bright cyan, stippled vase with flared mouth.\", \"Cyan vase ",
+    "scene_idx": 127
+  },
+  {
+    "chunk": "000-060",
+    "uid": "4d85efed1df547988c00c6f604b7814a",
+    "psnr": 34.89064407348633,
+    "lpips": 0.0425336174666881,
+    "caption": "[\"A light gray rectangular prism building with red accents, gabled red roof with dormers and skylights, and a tall central clock tower featuring a greenish copper pyramid roof and clocks on each side.\", \"Light gray rectangular building with red accents, gabled roof, dormers, skylights and a central clock tower with a greenish copper pyramid roof.\", \"Low-rise gray structure with red roof/dormers/skylights, and a green copper pyramid roof clock tower.\", \"Gray building with red details, skylights, ",
+    "scene_idx": 128
+  },
+  {
+    "chunk": "000-094",
+    "uid": "afe5000388484ec18b9d5822d99e9749",
+    "psnr": 37.4176025390625,
+    "lpips": 0.0291915610432624,
+    "caption": "[\"A multi-layered geometric object resembling a stylized gemstone, made of square and rectangular prisms in shades of teal, turquoise, and white, transitioning from dark teal at the base to white at the top, with cubic symmetry.\", \"Geometric multi-layered gem-like object with square and rectangular prisms in teal, turquoise, and white shades.\", \"Multi-layered geometric object resembling a gem, in shades of teal transitioning to white.\", \"Square and rectangular prism gem-like object in teal and w",
+    "scene_idx": 129
+  },
+  {
+    "chunk": "000-071",
+    "uid": "3d8a3d1177424af182e0737a1afc8bb7",
+    "psnr": 37.0511360168457,
+    "lpips": 0.034103725105524,
+    "caption": "[\"Detailed 3D model of a skull with a rounded cranial cavity, pronounced jaw, large circular eye sockets, small nasal opening, visible teeth, pronounced brow ridge, and robust mandible, in off-white color with smooth texture, some rough areas.\", \"Off-white skull model with round cranial cavity, large eye sockets, and pronounced mandible.\", \"3D skull model with large eye sockets, small nasal opening, and teeth.\", \"Skull model with round cranial cavity, large eye sockets, and pronounced jaw.\", \"Of",
+    "scene_idx": 130
+  },
+  {
+    "chunk": "000-046",
+    "uid": "c155bfee6e0346429001bff7c772544f",
+    "psnr": 35.90598678588867,
+    "lpips": 0.0404762253165245,
+    "caption": "[\"A beige rectangular house with a light cream triangular roof, two square dark windows, a centered dark brown door, a porch with white columns, all surrounded by a light brown fence with an open entrance and a green base with scattered small cones.\", \"Beige house, cream roof, two windows, brown door, porch, white columns, brown fence, green base with cones.\", \"Beige house with cream roof, porch, brown door and windows, surrounded by a fence.\", \"Beige house, cream roof, porch, brown door and win",
+    "scene_idx": 131
+  },
+  {
+    "chunk": "000-091",
+    "uid": "850b54b420974ff3a518243b72892e5b",
+    "psnr": 34.90521240234375,
+    "lpips": 0.0398386530578136,
+    "caption": "[\"A blocky humanoid with bright pink jagged hair, red arms, and dark sunglasses; aggressive green humanoids with silver weapons and small black slit eyes; a round light pink pig-like character; and a brown barrel with white stripes.\", \"Blocky humanoid with pink jagged hair, red arms, sunglasses, aggressive green humanoids with weapons, a pink pig-like creature, and striped barrel.\", \"Blocky humanoid with pink hair, red arms, sunglasses, green attackers, a pink pig, and striped barrel.\", \"Humanoi",
+    "scene_idx": 132
+  },
+  {
+    "chunk": "000-050",
+    "uid": "bbc0fd6da8e145579ad014222d865bc7",
+    "psnr": 37.15843963623047,
+    "lpips": 0.0436462126672267,
+    "caption": "[\"A humanoid figure in an \\\"A\\\" pose with arms extended horizontally, wearing a medium-gray fitted shirt with collar and buttons, darker gray slim-fit pants with a black belt, light gray short hair, and simple light gray shoes.\", \"Humanoid figure in \\\"A\\\" pose wearing medium-gray fitted shirt and darker gray slim pants, with light gray hair and shoes.\", \"Humanoid figure with arms extended in \\\"A\\\" pose, wearing fitted gray outfit and light gray hair and shoes.\", \"Figure in \\\"A\\\" pose, wearing me",
+    "scene_idx": 133
+  },
+  {
+    "chunk": "000-031",
+    "uid": "5106ac2df7ea4de7947619e118f7a393",
+    "psnr": 39.28859329223633,
+    "lpips": 0.0360208861529827,
+    "caption": "[\"Grayscale 3D model of a person standing with feet apart, hands on hips, head tilted slightly up and to the side, short styled hair, wearing a zip-up jacket over a shirt, fitted pants, and casual shoes.\", \"Person standing, hands on hips, head tilted, wearing a zip-up jacket.\", \"Person standing with hands on hips, wearing a zip-up jacket.\", \"Standing model with hands on hips and a zip-up jacket.\", \"3D model standing, hands on hips, wearing a jacket.\", \"Model standing with hands on hips in a jack",
+    "scene_idx": 134
+  },
+  {
+    "chunk": "000-030",
+    "uid": "0f8e82a73ee8419da4cf4889d00c9996",
+    "psnr": 36.8897590637207,
+    "lpips": 0.0264369361102581,
+    "caption": "[\"Stylized cartoon-like child with a large spherical head, blonde blocky hair, rectangular torso in a yellow shirt with blue sleeves, short cylindrical arms and legs, purple shorts, blue socks, and white shoes. Standing upright with arms at sides.\", \"Child cartoon figure, spherical head, blocky blonde hair, yellow-blue shirt, purple shorts, blue socks, white shoes.\", \"Cartoon child with spherical head, blocky hair, colorful attire, blue socks, white shoes.\", \"Stylized kid with large head, blonde",
+    "scene_idx": 135
+  },
+  {
+    "chunk": "000-045",
+    "uid": "83bcb308c4434646946b7ed08c154f3c",
+    "psnr": 35.24809646606445,
+    "lpips": 0.0336806252598762,
+    "caption": "[\"A rusted, mid-20th century sedan with a boxy design, faded pale blue and patches of pink/red paint, four grimy windows, simple front grill with nonfunctional circular headlights, small rectangular tail lights, and a yellow license plate \\\"3ZL-PM\\\".\", \"Rusted mid-20th century sedan, faded blue with pink patches, nonfunctional headlights, and yellow license plate \\\"3ZL-PM\\\".\", \"Weathered 20th-century boxy sedan with faded paint, grimy windows, and outdated license plate.\", \"Decrepit, blue and pi",
+    "scene_idx": 136
+  },
+  {
+    "chunk": "000-050",
+    "uid": "75c71261aeff4940a4498217c1c9b0ec",
+    "psnr": 36.47744369506836,
+    "lpips": 0.0382521674036979,
+    "caption": "[\"A small humanoid figurine with a pale green head and pointed ears, dressed in a beige cloak, standing on a green base, holds a stick, and has a grey rectangular object with white text nearby.\", \"Small humanoid figurine, green head, pointed ears, beige cloak, green base, holding stick with grey rectangular object nearby.\", \"Small green-headed figurine in beige, holding stick by grey rectangle.\", \"Humanoid figurine with green head, beige cloak, holds stick.\", \"Green-head figurine in cloak, holdi",
+    "scene_idx": 137
+  },
+  {
+    "chunk": "000-071",
+    "uid": "1d728f7b83ff48e9a6201d3538ac5be9",
+    "psnr": 37.41701126098633,
+    "lpips": 0.0158627331256866,
+    "caption": "[\"Stylized tribal axe with a light brown wooden handle, featuring three red bands and a roughly hewn dark grey stone blade. The handle has a slight bend near the bottom, and the blade is attached with blue cloth wrapping.\", \"Tribal axe with light brown handle, three red bands, dark grey stone blade and blue wrapped attachment.\", \"Wooden-handled tribal axe with red bands, stone blade, and blue cloth.\", \"Axe with brown handle, red bands, grey blade and blue wrap.\", \"Tribal axe with red-banded hand",
+    "scene_idx": 138
+  },
+  {
+    "chunk": "000-060",
+    "uid": "2042be1818cb482ca9124e03bd4114a2",
+    "psnr": 34.78706359863281,
+    "lpips": 0.0437534302473068,
+    "caption": "[\"A rectangular base platform with a flat area partially covered by slightly wavy water, multiple large jagged rocks of varying sizes, scattered coniferous trees, dark brown base, bright blue water, light brown rocks, and green trees, all in a low-poly texture.\", \"Rectangular base and wavy water, jagged rocks, coniferous trees in low-poly texture.\", \"Platform with wavy water, large rocks, scattered green trees in low-poly.\", \"Wavy water on base, jagged rocks and coniferous trees in low-poly.\", \"",
+    "scene_idx": 139
+  },
+  {
+    "chunk": "000-030",
+    "uid": "04686b4c3c774880b37274b18f232559",
+    "psnr": 36.49898147583008,
+    "lpips": 0.0395355075597763,
+    "caption": "[\"A two-story building model with a gable roof, gray color, three rectangular windows on upper floors, three arched doorways on the front, one small window on each side, no windows or doors on the back.\", \"Two-story gray model building with gable roof and multiple distinct windows and doors.\", \"Two-story gray building with gable roof, windows, and doors.\", \"Gray two-story model with gable roof, doors, and windows.\", \"Grey building model with varied windows and doors.\", \"Gray two-story structure ",
+    "scene_idx": 140
+  },
+  {
+    "chunk": "000-050",
+    "uid": "813647cb02614fa3bcd6c3401bd69f02",
+    "psnr": 35.27159881591797,
+    "lpips": 0.023339819163084,
+    "caption": "[\"A teal, low-poly pickup truck with a two-door cab, rectangular bed, horizontal-slat grille, rectangular headlights and tail-lights, dark blue windows, gray wheels and bumpers, and a flat rear tailgate.\", \"Teal low-poly pickup truck with two-door cab, rectangular features, gray wheels.\", \"Teal pickup truck, two-door cab, rectangular bed, horizontal-slat grille.\", \"Low-poly teal truck with rectangular headlights and tail-lights.\", \"Teal, low-poly truck with dark blue windows, gray wheels.\", \"Low",
+    "scene_idx": 141
+  },
+  {
+    "chunk": "000-030",
+    "uid": "e383092b6a0047ae898321b579690649",
+    "psnr": 37.16320037841797,
+    "lpips": 0.0334635153412818,
+    "caption": "[\"A beige, multi-leveled tower on a circular platform with entrances and stairs, featuring evenly distributed windows, a cylindrical upper section with an antenna-like extension, and a dark gray domed lantern room.\", \"Beige multi-leveled tower with entrances, stairs, windows, antenna, and domed lantern room on circular platform.\", \"Beige tower with multiple levels, antenna, and domed lantern on a platform.\", \"Tower with multiple levels, antenna, and lantern on a circular platform.\", \"Beige tower",
+    "scene_idx": 142
+  },
+  {
+    "chunk": "000-024",
+    "uid": "7ad9b00f50bf4403ba9cdc48c2d12610",
+    "psnr": 33.99248123168945,
+    "lpips": 0.0310507025569677,
+    "caption": "[\"A female figure in mid-run with hair in a bun, wearing a fitted dress with puffed sleeves and ankle boots, holding a knife in the right hand, right leg bent and lifted, left leg extended backward. White color, no texture.\", \"Woman running, hair in bun, puffed sleeve dress, holding knife, white.\", \"Running woman with bun hair, wearing a dress, knife in hand.\", \"Woman in dress, hair in bun, running with knife.\", \"Woman running with knife, wearing a dress.\", \"Woman with bun and dress, running wit",
+    "scene_idx": 143
+  },
+  {
+    "chunk": "000-071",
+    "uid": "9897e0b422c94a1497261d3f4fede5c7",
+    "psnr": 35.84864807128906,
+    "lpips": 0.0258670561015605,
+    "caption": "[\"Red convertible sports car with aerodynamic curves, four wheels with black rims, sleek LED headlights, compact red tail lights, Mazda emblems, two white bucket seats, black dashboard with controls, open-top design, dual exhaust pipes, and a central license plate area.\", \"Red convertible sports car with sleek LED headlights and white bucket seats.\", \"Red convertible with aerodynamic curves and LED headlights.\", \"Sports car with dual exhaust pipes and Mazda emblems.\", \"Red convertible with white",
+    "scene_idx": 144
+  },
+  {
+    "chunk": "000-031",
+    "uid": "a7f28b037e624880beaa3e5259ea31cc",
+    "psnr": 32.14411926269531,
+    "lpips": 0.0450604334473609,
+    "caption": "[\"A stylized, colorful cupcake with vivid pink icing dripping down, adorned with multicolored sprinkles. The cylindrical body is light brown and textured, and the ridged wrapper is a muted teal, offering a playful, cartoonish aesthetic.\", \"A vivid pink, stylized cupcake with multicolored sprinkles and teal, ridged wrapper.\", \"A cupcake with bright pink icing, multicolored sprinkles and a teal wrapper.\", \"Colorful cupcake with pink icing, sprinkles, and teal wrapper.\", \"Bright, decorated cupcake ",
+    "scene_idx": 145
+  },
+  {
+    "chunk": "000-071",
+    "uid": "486e1a8219904a0cbbc6c5a91ed045be",
+    "psnr": 37.20302200317383,
+    "lpips": 0.0457071475684642,
+    "caption": "[\"Green muscular humanoid with broad head and torso, large muscular arms, hands, and legs showing prominent veins, dark hair, vivid green skin, dark blue tattered shorts, and a slightly hunched forward posture.\", \"Green humanoid with broad head, muscular body, dark hair, and tattered shorts.\", \"Broad-headed, muscular green humanoid wears tattered blue shorts.\", \"Muscular, green humanoid with dark hair and blue shorts.\", \"Green humanoid with prominent muscles and tattered shorts.\", \"Broad-headed ",
+    "scene_idx": 146
+  },
+  {
+    "chunk": "000-024",
+    "uid": "d1e1ff9f8d5947a0b6287388e61a1b47",
+    "psnr": 35.859615325927734,
+    "lpips": 0.0340096019208431,
+    "caption": "[\"A spherical head with black hexagonal eyes and a curved mouth, light green dome-shaped hat with propeller, pink cylindrical hoodie body with visible pocket and hood, matching pink cylindrical arms, and light gray cylindrical legs with rounded feet.\", \"Green hat with propeller on sphere head with hexagonal eyes, pink hoodie body, gray cylindrical legs.\", \"Spherical head, hexagonal eyes, propeller hat, pink hoodie and gray cylindrical legs.\", \"Propeller hat on sphere head, pink hoodie body, gray",
+    "scene_idx": 147
+  },
+  {
+    "chunk": "000-060",
+    "uid": "09db6473c961476e96b500a4c502b064",
+    "psnr": 35.08430099487305,
+    "lpips": 0.0425847582519054,
+    "caption": "[\"A stylized sailboat with a polygonal hull, three masts with rectangular sails, six cannons, and a small triangular flag at the stern. The hull and deck are brown, sails are beige, and cannons are grey.\", \"Stylized sailboat with polygonal hull, three masts, rectangular beige sails, six grey cannons, small stern flag.\", \"Polygonal-hull sailboat with three masts, rectangular sails, six cannons, and stern flag.\", \"Three-masted sailboat with rectangular sails, six cannons, and a stern flag.\", \"Poly",
+    "scene_idx": 148
+  },
+  {
+    "chunk": "000-020",
+    "uid": "628ac8a956554f4aa59e32338041d85c",
+    "psnr": 33.75408935546875,
+    "lpips": 0.0361921451985836,
+    "caption": "[\"A vibrant, eclectic 3D character with blond hair in a topknot, painted white face with red markings, pointy ears, elaborate multicolored outfit, fan-like shoulder and back designs, different colored pants, flowing cape with geometric designs, and white pointed boots.\", \"Vibrant 3D character, blond topknot, white face, red markings, pointy ears, multicolored outfit, fancy shoulders, geometric cape, white boots.\", \"Eclectic 3D character, blond topknot, painted face, pointy ears, multicolored out",
+    "scene_idx": 149
+  },
+  {
+    "chunk": "000-050",
+    "uid": "f584383edaaa439da9a4c2b202a0afc0",
+    "psnr": 33.986106872558594,
+    "lpips": 0.036177571862936,
+    "caption": "[\"A whimsical character resembling a heart playing card with a heart-shaped red head featuring two black oval eyes, a white rectangular card body with a red heart and crown, a checkered back, and red cylindrical legs.\", \"A whimsical character resembling a heart playing card with a heart-shaped red head, oval eyes, a rectangular body, checkered back, and red cylindrical legs.\", \"A whimsical character with a heart-shaped head, card body, checkered back, and cylindrical legs.\", \"Heart-shaped card c",
+    "scene_idx": 150
+  },
+  {
+    "chunk": "000-045",
+    "uid": "82cdc4988e9f4ca792907fca5b402b2b",
+    "psnr": 34.899452209472656,
+    "lpips": 0.0301195755600929,
+    "caption": "[\"Retro gaming console inspired by the Nintendo Famicom, off-white with red accents, includes a cartridge slot, power and reset buttons, yellow, blue, and green cartridges, and two matching red and off-white controllers with D-pads and circular buttons.\", \"Retro, off-white Nintendo Famicom-inspired console with red accents, multiple cartridges, and two matching controllers.\", \"Nintendo Famicom-inspired console, red accents, cartridges, and matching controllers.\", \"Famicom-inspired gaming console",
+    "scene_idx": 151
+  },
+  {
+    "chunk": "000-060",
+    "uid": "4d32377790044e12b31f4363f1bab859",
+    "psnr": 34.61832046508789,
+    "lpips": 0.0433740764856338,
+    "caption": "[\"A pink Torii gate with two cylindrical main pillars, an upper and lower rectangular horizontal bar, a central vertical tie bar, and a rectangular gray roof-like cap with upward-curving ends, and gray cylindrical connecting elements.\", \"A pink Torii gate with cylindrical pillars, horizontal bars, tie bar, and curving gray roof-like cap.\", \"Pink Torii gate with rectangular bars, tie bar, and curved gray cap.\", \"Pink gate with pillars, bars, and curved gray roof.\", \"Gate with cylindrical pillars,",
+    "scene_idx": 152
+  },
+  {
+    "chunk": "000-045",
+    "uid": "ed642a163285414287b2ea722a47061e",
+    "psnr": 36.14251708984375,
+    "lpips": 0.030422456562519,
+    "caption": "[\"White hammer with a rectangular prism head and cylindrical handle, both uniformly white. The head is horizontally oriented with flat, parallel faces, while the handle is centrally and perpendicularly attached to the head.\", \"White hammer, rectangular prism head, cylindrical handle, centrally and perpendicularly attached.\", \"White hammer, rectangular head, cylindrical handle, perpendicular attachment.\", \"Hammer with rectangular head and cylindrical handle.\", \"White hammer with rectangular prism",
+    "scene_idx": 153
+  },
+  {
+    "chunk": "000-024",
+    "uid": "24fd3a359553490b9e7ae2ac5667f241",
+    "psnr": 34.996543884277344,
+    "lpips": 0.0344654805958271,
+    "caption": "[\"A retro-style bar stool with a red leather-like round seat and integrated backrest with armrests, a single black cylindrical metal support rod with a height adjustment lever, and a metallic silver circular base.\", \"Retro-style bar stool with a red seat, backrest, armrests, and adjustable height.\", \"Red leather-like bar stool with backrest, armrests and height adjustment.\", \"Retro bar stool with red seat, black rod, and silver base.\", \"Bar stool combining red seat, backrest, armrests and adjust",
+    "scene_idx": 154
+  },
+  {
+    "chunk": "000-050",
+    "uid": "b57fa59a8e98488a8cc07d26388b143b",
+    "psnr": 37.13396453857422,
+    "lpips": 0.0251955743879079,
+    "caption": "[\"A spherical soccer ball composed of black pentagonal and white hexagonal panels in a truncated icosahedron pattern with a smooth, matte finish.\", \"A soccer ball with black pentagons, white hexagons in a truncated icosahedron pattern and a matte finish.\", \"A ball with pentagonal and hexagonal panels in truncated icosahedron pattern.\", \"A black and white soccer ball in a truncated icosahedron pattern.\", \"A soccer ball with black pentagons and white hexagons.\", \"A ball with pentagons and hexagons",
+    "scene_idx": 155
+  },
+  {
+    "chunk": "000-030",
+    "uid": "ef8c091fbe074722a24e3eb35faf40be",
+    "psnr": 35.573184967041016,
+    "lpips": 0.031050993129611,
+    "caption": "[\"Athletic humanoid character in a light purple full-body suit with black, white, and red details, long brown ponytail with blue hairband, number \\\"5\\\" on the back, standing in a T-pose.\", \"Humanoid athlete in light purple suit, black, white, and red details, brown ponytail, blue hairband, and number 5.\", \"Athletic humanoid in purple suit, black, white, red details, brown ponytail, blue hairband, and number 5.\", \"Athletic character in purple suit, additional colors, brown ponytail, blue band, nu",
+    "scene_idx": 156
+  },
+  {
+    "chunk": "000-091",
+    "uid": "12bad706c59e4bd4ade1ecec6b9d61b7",
+    "psnr": 32.14371490478516,
+    "lpips": 0.0404152013361454,
+    "caption": "[\"A single-story home with rooms including a kitchen with island, bright living room, study with bookshelves, bedrooms, bathrooms, and hallways. Light-colored walls, hardwood floors, wooden furnishings, and stainless steel appliances are key features.\", \"Single-story home with kitchen, living room, study, bedrooms, bathrooms, hallways, light d\\u00e9cor, hardwood floors, wooden furnishings, steel appliances.\", \"Home with kitchen, living room, study, bedrooms, bathrooms, light d\\u00e9cor, hardwood",
+    "scene_idx": 157
+  },
+  {
+    "chunk": "000-031",
+    "uid": "9e12b344dff842958eb9f25a980bf22d",
+    "psnr": 36.38357925415039,
+    "lpips": 0.0264281369745731,
+    "caption": "[\"Gray station wagon with white wheels, black windows, and flat roof with black rails. Front has rectangular grille and headlights with blue emblem. Rear has red brake lights and exhaust pipes.\", \"Gray station wagon with white wheels, black windows, flat roof, and black rails.\", \"Gray station wagon, white wheels, black windows, flat roof with rails.\", \"Gray station wagon with white wheels, black windows, and black roof rails.\", \"Station wagon, white wheels, black windows, black roof rails.\", \"Gr",
+    "scene_idx": 158
+  },
+  {
+    "chunk": "000-060",
+    "uid": "cc1274df0f0845df8da7af3fe3053f57",
+    "psnr": 35.244720458984375,
+    "lpips": 0.0345017872750759,
+    "caption": "[\"A cartoonish, single-engine propeller aircraft with a compact light grey fuselage and yellow highlights, flat, detailed grey wings with patches of green, blue, and white, exposed grey engine, open cockpit, black wheels, and a pink-blue logo on the tail.\", \"Cartoonish single-engine plane with grey fuselage, yellow highlights, detailed wings, open cockpit, black wheels, pink-blue tail logo.\", \"Single-engine airplane with cartoonish design, multi-colored wings, open cockpit, and branded tail.\", \"",
+    "scene_idx": 159
+  },
+  {
+    "chunk": "000-024",
+    "uid": "68ed30f36d1a43fa9c4daea6b538a811",
+    "psnr": 34.01342010498047,
+    "lpips": 0.0315742269158363,
+    "caption": "[\"Stylized fish character with a turquoise bulbous head, protruding eyes, pastel party hat, slender humanoid torso in a teal dress with gold hearts, long light blue-grey arms, and a long, dark blue skirt with hearts and black splotches.\", \"Fish character with a turquoise head, eyes, party hat, teal dress, long arms, and blue skirt with hearts.\", \"Turquoise-headed fish in teal dress with pastel hat, long light arms, and heart-adorned blue skirt.\", \"Fish character with turquoise head, teal dress, ",
+    "scene_idx": 160
+  },
+  {
+    "chunk": "000-050",
+    "uid": "4acb1491549f4543a0433e58dd397d96",
+    "psnr": 36.210636138916016,
+    "lpips": 0.0378092713654041,
+    "caption": "[\"A rounded, Asian pear-like object with a light yellowish-golden hue, small white speckled dots, a slightly flattened top and bottom, a short brown stem, and a smooth texture.\", \"A rounded, Asian pear-like object with yellowish-gold hue, white dots, flattened top, bottom, short stem, and smooth texture.\", \"A pear-shaped object with light golden color, white spots, flat top and bottom, and short brown stem.\", \"A rounded object similar to an Asian pear with a light golden color, white specks, and",
+    "scene_idx": 161
+  },
+  {
+    "chunk": "000-071",
+    "uid": "593fe31350194f4f8b869689c5fb502c",
+    "psnr": 35.40233612060547,
+    "lpips": 0.0421937964856624,
+    "caption": "[\"Low-poly model of \\\"Baby Yoda\\\" from \\\"The Mandalorian\\\", sitting inside an egg-shaped, light gray floating crib with blue and gray circular mechanical elements. Character has a light green head with large ears, black eyes, and a brown robe.\", \"\\\"Baby Yoda\\\" from \\\"The Mandalorian\\\" in egg-shaped floating crib, green head, large ears, black eyes, brown robe.\", \"\\\"Baby Yoda\\\" in gray egg-shaped floating crib, with green head, large ears, and brown robe.\", \"\\\"Baby Yoda\\\" model in floating egg-cr",
+    "scene_idx": 162
+  },
+  {
+    "chunk": "000-020",
+    "uid": "2843c07b384f4369af560ca5c4bb0162",
+    "psnr": 35.50393295288086,
+    "lpips": 0.035283513367176,
+    "caption": "[\"Rectangular modular building with gabled roof, skylights, brown wooden walls, lighter brown doors, dark blue curtains on side entries, and grey concrete floors in front of doors. Rear section has an extension with small skylights.\", \"Rectangular building with gabled roof, skylights, brown walls, lighter doors, blue curtains, and concrete floors. Rear has extension with skylights.\", \"Modular building with gabled roof, skylights, brown walls, doors, blue curtains, and concrete floors. Rear has s",
+    "scene_idx": 163
+  },
+  {
+    "chunk": "000-046",
+    "uid": "5b91d326021c4f07acdfd08f38f3d6da",
+    "psnr": 36.13484191894531,
+    "lpips": 0.027819974347949,
+    "caption": "[\"A muscular human male figure with a V-shaped torso, pale blue skin, dark blue textured hair, and dark blue knee-length swimming shorts with a dotted pattern. The figure wears matching fingerless gloves and is depicted barefoot.\", \"Muscular male figure with V-torso, blue skin, blue hair, shorts, and matching gloves.\", \"Muscular figure with blue skin, blue hair, shorts, and gloves.\", \"Man with V-torso, blue skin, blue hair, shorts, and gloves.\", \"Muscular figure, blue skin, blue hair, shorts, an",
+    "scene_idx": 164
+  },
+  {
+    "chunk": "000-046",
+    "uid": "970967e5858346f29863ac2a5cedc75b",
+    "psnr": 36.1262092590332,
+    "lpips": 0.0302071701735258,
+    "caption": "[\"A realistic 3D model of a standing person with light blonde hair, wearing a white short-sleeved shirt under a blue vest, white slim-fit pants slightly rolled above the ankles, and brown slip-on shoes.\", \"A person with light blonde hair and blue vest over white shirt standing.\", \"Blonde person standing in a blue vest and white shirt.\", \"Standing person with blonde hair, blue vest, white shirt.\", \"Light blonde person in blue vest standing.\", \"Blonde individual in blue vest standing.\", \"Person wi",
+    "scene_idx": 165
+  },
+  {
+    "chunk": "000-045",
+    "uid": "90659e30bb6c45b19c69f43d76fde206",
+    "psnr": 33.599456787109375,
+    "lpips": 0.0460645705461502,
+    "caption": "[\"A stylized robot with a hexagonal prism head, yellow eyes, and mouth, thick cylindrical black neck, spherical body with a truncated cone, dark gray color, cyan/turquoise accents, cylindrical arms with truncated conical forearms, and a rounded half-sphere base.\", \"Stylized robot with hexagonal prism head, yellow eyes, thick cylindrical neck, rounded body, gray with cyan accents, truncated limbs.\", \"Robot with head as hexagonal prism, cylindrical neck, spherical body, truncated conical limbs, ye",
+    "scene_idx": 166
+  },
+  {
+    "chunk": "000-071",
+    "uid": "2eba66dcf9eb42a98f192230620ab52a",
+    "psnr": 35.86533737182617,
+    "lpips": 0.0286237802356481,
+    "caption": "[\"A humanoid figure in a dynamic standing pose, wearing a blue soccer uniform, with a large white plus sign on the jersey, number \\\"10\\\" and \\\"NOMBRE\\\" on the back, white knee-high socks, and no shoes.\", \"Humanoid figure in dynamic pose, blue soccer uniform, white plus sign, \\\"10\\\", \\\"NOMBRE\\\", knee-high socks, barefoot.\", \"Dynamic standing humanoid, wearing blue soccer uniform with white plus, \\\"10\\\", \\\"NOMBRE\\\", socks, barefoot.\", \"Standup humanoid in blue soccer uniform, plus sign, \\\"10\\\", \\\"",
+    "scene_idx": 167
+  },
+  {
+    "chunk": "000-071",
+    "uid": "657ba69ddacf4f689a7f33a92df7058a",
+    "psnr": 34.0965461730957,
+    "lpips": 0.0391831211745739,
+    "caption": "[\"Cylindrical metallic silver microphone with a dark blue band, perforated grille, rotatable joint, small cylindrical arms for mounting, circular base, and a thin beige cable extending from the bottom.\", \"Metallic silver microphone with dark blue band, rotatable joint, base, and beige cable.\", \"Silver microphone with blue band, rotatable joint, base, and cable.\", \"Microphone with blue band, rotatable joint, and cable.\", \"Blue banded silver microphone with joint and cable.\", \"Silver microphone wi",
+    "scene_idx": 168
+  },
+  {
+    "chunk": "000-046",
+    "uid": "f45ac2100d2342fa8ab39d38d0f874ba",
+    "psnr": 36.5545654296875,
+    "lpips": 0.0351208336651325,
+    "caption": "[\"An oval, textured hand grenade with a blue lower section, yellow upper section, and a rusty, silver safety lever and ring.\", \"Oval, textured hand grenade with blue lower, yellow upper, rusty silver lever and ring.\", \"Textured grenade with blue base, yellow top, rusty lever and ring.\", \"Oval grenade with colored sections and rusty lever-ringing.\", \"Hand grenade with blue, yellow parts and rusty ring.\", \"Oval grenade with colourful body and rusty lever.\", \"Textured grenade with colored parts and",
+    "scene_idx": 169
+  },
+  {
+    "chunk": "000-024",
+    "uid": "14cc6e648b2c4c03b8a46b952463d56c",
+    "psnr": 34.22811508178711,
+    "lpips": 0.0416588596999645,
+    "caption": "[\"Octagonal white ceramic bowl containing elongated yellow cylinders, green-topped yellow polyhedrons, and small irregular yellow chunks, all with smooth surfaces.\", \"Octagonal white ceramic bowl filled with various yellow-shaped objects\", \"White bowl containing diversified yellow shapes with smooth surfaces\", \"White octagonal bowl with varied yellow contents\", \"Ceramic bowl housing multiple yellow figures\", \"Assorted yellow shapes in white bowl\", \"Octagonal bowl with yellow contents\", \"Yellow s",
+    "scene_idx": 170
+  },
+  {
+    "chunk": "000-020",
+    "uid": "bb2aa308691444f9b3b4312270b6793f",
+    "psnr": 35.43920135498047,
+    "lpips": 0.0369196273386478,
+    "caption": "[\"Stylized mushrooms with turquoise and cyan caps, purple stems, and entwined light purple tendrils inside a spherical container, surrounded by sharp-edged crystals in cyan, turquoise, purple, and green, with scattered glowing, semi-transparent particles.\", \"Mushrooms with turquoise caps, purple stems in a sphere, amid multi-colored crystals.\", \"Mushrooms and multicolored crystals inside a spherical container.\", \"Turquoise capped mushrooms amid colorful crystals in sphere.\", \"Mushrooms with purp",
+    "scene_idx": 171
+  },
+  {
+    "chunk": "000-020",
+    "uid": "aa5a50fd70454864b77a148d844f22dd",
+    "psnr": 35.53220748901367,
+    "lpips": 0.0406556390225887,
+    "caption": "[\"A small desert village scene with a rectangular multi-level tower with battlements and a purple flag, a beige house with a flat roof, a wooden well with a roof, a large tree, a smaller tree, and light gray pathways.\", \"Desert village featuring multi-level tower, beige house, two trees, well, and light grey pathways.\", \"Desert scene with a tower, house, well, two trees, and pathways.\", \"Rectangular tower, beige house, well, trees, and pathways in desert.\", \"Desert layout with tower, house, well",
+    "scene_idx": 172
+  },
+  {
+    "chunk": "000-060",
+    "uid": "296e93b26e944102abf8f547a6fd68e3",
+    "psnr": 37.56389617919922,
+    "lpips": 0.0222197640687227,
+    "caption": "[\"Circular acorn cap with rough, convex exterior and small central stem; interior is smooth and concave. Cap has textured, shingle-like scales, light brown to beige with darker edges, and a stem that is dark brown with light gray patches.\", \"Circular acorn cap, rough exterior, small stem, smooth interior, with brown textured scales.\", \"Circular acorn cap with rough exterior, small stem, and brown scales.\", \"Acorn cap with rough exterior, small stem, and textured scales.\", \"Circular acorn cap wit",
+    "scene_idx": 173
+  },
+  {
+    "chunk": "000-046",
+    "uid": "ac7e8338abdf4557ba2a3cdb44bb96de",
+    "psnr": 34.79694366455078,
+    "lpips": 0.0485269948840141,
+    "caption": "[\"A 3D model with two stacked cylindrical sections; the base is wider and stable, the upper is narrower and taller with a bright yellow band at the bottom; both sections share a soft pink color.\", \"Two stacked cylindrical sections, wider base, narrower top, pink, yellow band.\", \"Stacked cylinders with wider base, narrow top, pink, yellow band.\", \"Wider base, narrower top cylinders, pink with yellow band.\", \"Pink stacked cylinders, wider base, yellow band.\", \"Stacked cylinders, wide base, pink, y",
+    "scene_idx": 174
+  },
+  {
+    "chunk": "000-031",
+    "uid": "5ced182f5f13429283b996c730e1c5d7",
+    "psnr": 35.15479278564453,
+    "lpips": 0.0424949936568737,
+    "caption": "[\"A rectangular room with a dome-like beige ceiling featuring gold and colorful frescoes, white or cream walls adorned with gold trimmings, framed paintings, red fabric chairs, red-curtained windows, and a red base or floor.\", \"Rectangular room with dome-beige ceiling, gold frescoes, white walls, red chairs and floor.\", \"Room with dome ceiling, frescoes, white walls, gold trim, red furniture.\", \"Dome-ceiling room, gold frescoes, white walls, red furniture.\", \"Beige domed room with frescoes, gold",
+    "scene_idx": 175
+  },
+  {
+    "chunk": "000-045",
+    "uid": "a963d45e21924002922d1596c040912c",
+    "psnr": 39.00308609008789,
+    "lpips": 0.0308482982218265,
+    "caption": "[\"A blocky, humanoid creature in a pixelated, voxel style with a cubic head, sunken eyes, protruding pink tongue, decayed gray body with green patches, skeletal torso, thin arms, and legs, resembling a moss-covered zombie.\", \"Pixelated, blocky humanoid with cubic head, sunken eyes, pink tongue, decayed body, skeletal torso, and moss-green patches.\", \"Voxel-style humanoid with cubic head, sunken eyes, decayed body, skeletal torso, thin limbs, and green accents.\", \"Blocky creature with features re",
+    "scene_idx": 176
+  },
+  {
+    "chunk": "000-050",
+    "uid": "33de4958e2d040d0884a39e2f4a0f628",
+    "psnr": 34.10813903808594,
+    "lpips": 0.0489387102425098,
+    "caption": "[\"A terraced circular platform predominantly white with a stepped edge, featuring white blocks with green hints, a blue water stream effect, a red and yellow arch near the edge, and green paths connecting the structures.\", \"White terraced platform with stepped edge, blue stream, red-yellow arch, connected green paths.\", \"Platform with white blocks, blue stream, colorful arch, and green paths.\", \"Steps, blue stream, arch, paths within white platform.\", \"Stepping platform, water stream, arch, and ",
+    "scene_idx": 177
+  },
+  {
+    "chunk": "000-071",
+    "uid": "547d94f9af2c47248020bdac0bef4255",
+    "psnr": 37.7076416015625,
+    "lpips": 0.0307824481278657,
+    "caption": "[\"A mannequin in traditional Southeast Asian attire: black cylindrical headgear, black long-sleeved knee-length shirt with a high collar, pocket, and three yellow buttons, grey waistcloth with white and gold patterns, black full-length pants, and black closed shoes.\", \"Mannequin in Southeast Asian attire with black headgear, long-sleeved shirt, grey waistcloth, and black pants.\", \"Mannequin in traditional Southeast Asian clothes, black headgear, grey waistcloth.\", \"Southeast Asian dressed manneq",
+    "scene_idx": 178
+  },
+  {
+    "chunk": "000-060",
+    "uid": "1dc031a3a6634cd7a51aef69cfdd2a46",
+    "psnr": 35.405296325683594,
+    "lpips": 0.0421635061502456,
+    "caption": "[\"Four rifles: Top - black with long thin barrel, vertical grip, scope rail; Second - green/black, ergonomic stock, segmented barrel, mounted scope; Third - brown wood stock, thin barrel, banana magazine; Bottom - chunky tactical black/yellow, belt-fed, heavy bipod.\", \"Four rifles with distinct features: two with mounted scopes, one with a banana magazine, one belt-fed.\", \"Four distinct rifles: black, green, brown, black/yellow, with added accessories.\", \"Four uniquely accessorized rifles in dif",
+    "scene_idx": 179
+  },
+  {
+    "chunk": "000-030",
+    "uid": "40570e04d85642c886b0ff64ca9b44dd",
+    "psnr": 36.53813552856445,
+    "lpips": 0.038065992295742,
+    "caption": "[\"SUV with dark metallic green, boxy design like Mercedes-Benz G-Class. Rectangular with rounded edges, flat roof, rectangular sunroof, large curved windshield, tinted windows, silver grille, circular headlights, black bumper, four doors, large tires, and spare tire on rear door.\", \"Dark green SUV with flat roof, rectangular sunroof, large tires, and spare tire.\", \"Boxy SUV with rounded edges, large tires, and rectangular sunroof.\", \"Green Mercedes-like SUV with large tires and a spare tire.\", \"",
+    "scene_idx": 180
+  },
+  {
+    "chunk": "000-046",
+    "uid": "3859027fc94b4f40a711eaf4e34e3f60",
+    "psnr": 37.44239044189453,
+    "lpips": 0.027096165344119,
+    "caption": "[\"A human figure with brown short, wavy hair in dynamic running poses, wearing a fitted purple long-sleeve shirt with gradient, dark purple leggings, and white sneakers; natural skin tone; detailed muscle tone in limbs, suggesting realistic movement.\", \"Human figure with brown wavy hair, running, in purple outfit and white sneakers, showing muscle tone.\", \"Running human figure with brown wavy hair, purple outfit, white sneakers, detailed muscle tone.\", \"Brown-haired human figure running, wearing",
+    "scene_idx": 181
+  },
+  {
+    "chunk": "000-030",
+    "uid": "5fcaa4b7f3024fc2bfd81ea5481572f9",
+    "psnr": 36.33847427368164,
+    "lpips": 0.0270022489130496,
+    "caption": "[\"Stylized humanoid figure with a pink head, arms, and neck. Wearing a red checkered shirt with black details and letters \\\"7,\\\" \\\"SE,\\\" \\\"PL.\\\" Red straight-cut pants and shoes. Arms hang naturally, legs slightly apart, and shirt sleeves rolled up.\", \"Pink humanoid figure wearing a red checkered shirt with black details, red pants and shoes.\", \"Humanoid with pink head and limbs in red checkered outfit and shoes.\", \"Pink figure in red checkered outfit with black details.\", \"Stylized humanoid in ",
+    "scene_idx": 182
+  },
+  {
+    "chunk": "000-046",
+    "uid": "b48417e25b164bb2aada04c204717ec7",
+    "psnr": 34.40795135498047,
+    "lpips": 0.0359127111732959,
+    "caption": "[\"Cartoonish humanoid character with white hair in buns, yellow star-shaped eyes, yellow outfit with white collar, white arms with mitten hands, yellow legs, purple ankle boots, and a white flower on the head.\", \"Cartoonish character with white hair buns, yellow star eyes, yellow outfit, white collar, mitten hands, purple boots, white flower.\", \"White-bunned, star-eyed humanoid cartoon, with yellow outfit, mitten hands, purple boots, and a white head flower.\", \"Humanoid cartoon figure with star ",
+    "scene_idx": 183
+  },
+  {
+    "chunk": "000-088",
+    "uid": "6f8d9b178c4342d785bf6d1012d15817",
+    "psnr": 37.46082305908203,
+    "lpips": 0.0228915307670831,
+    "caption": "[\"A stylized cartoon-like green dinosaur with a triangular head, large pink eyes, slightly open mouth with small teeth, robust body with arched back, short sturdy legs, tail tapering to a point, smooth texture with back ridges.\", \"Green dinosaur with triangular head, big pink eyes, small teeth, sturdy legs.\", \"Cartoon-like green dinosaur with large eyes and tiny teeth.\", \"Stylized green dinosaur with pink eyes and arched back.\", \"Green dinosaur with prominent eyes and sturdy legs.\", \"Robust, gre",
+    "scene_idx": 184
+  },
+  {
+    "chunk": "000-071",
+    "uid": "37271436312745c1ae375a4c4f874355",
+    "psnr": 37.54633331298828,
+    "lpips": 0.0242234654724597,
+    "caption": "[\"A spherical object representing Jupiter with beige, pale yellow, and white hues, horizontal equatorial bands, pale blue poles, swirling storm patterns, and a smooth, softly glowing surface.\", \"Jupiter represented by a sphere with beige, pale yellow, and white hues, horizontal bands, blue poles, and storm patterns.\", \"Spherical object depicting Jupiter with beige, yellow hues, equatorial bands, blue poles, and swirling patterns.\", \"A spherical Jupiter model with colored bands, blue poles, and s",
+    "scene_idx": 185
+  },
+  {
+    "chunk": "000-045",
+    "uid": "2ad031865d9c4f2b8afe3d51f2514c2e",
+    "psnr": 36.99304962158203,
+    "lpips": 0.03171032294631,
+    "caption": "[\"A black, open-top, convertible car with two gray seats, red and blue police lights on the front hood and rear, small yellow front corner lights, white rear lights, and minimalistic black tires with gray hubs.\", \"Black open-top convertible, gray seats, police lights front and rear, small yellow and white lights, black tires.\", \"Convertible car with gray seats, police lights, yellow corner lights, and black tires.\", \"Open-top car with gray seats, police lights and varying lights.\", \"Convertible ",
+    "scene_idx": 186
+  },
+  {
+    "chunk": "000-088",
+    "uid": "76ad082886ae4a5fbf18d20e1af05f9f",
+    "psnr": 34.17732620239258,
+    "lpips": 0.0292710363864898,
+    "caption": "[\"Stylized humanoid figure wearing a yellow and blue soccer uniform, with arms in a \\\"T\\\" pose, short blonde hair in a ponytail, blue shorts, knee-high yellow socks, and white athletic shoes.\", \"Humanoid figure in yellow/blue soccer uniform, \\\"T\\\" pose arms, blonde ponytail, blue shorts, yellow socks, white shoes.\", \"Stylized figure in a soccer uniform, with blonde ponytail, T-pose, and wearing white athletic shoes.\", \"Yellow/blue clad figure with T-posed arms, ponytailed blonde hair, in white a",
+    "scene_idx": 187
+  },
+  {
+    "chunk": "000-031",
+    "uid": "a1bdfa82abf0466aa454a4940d1d3d24",
+    "psnr": 36.55556106567383,
+    "lpips": 0.0313318260014057,
+    "caption": "[\"Medieval battle axe with a single-edged, trapezoidal, convex blade marked by wear and faint red accents. The dark grey cylindrical handle features three red bands and a cross-like end piece, secured by metal casting.\", \"Medieval battle axe, single-edged trapezoidal blade, red accents, dark handle with three red bands, cross end piece.\", \"Single-edged medieval axe, trapezoidal blade, red accents, handle with three red markings, cross end.\", \"Single-edged trapezoidal bladed axe, red accents, han",
+    "scene_idx": 188
+  },
+  {
+    "chunk": "000-030",
+    "uid": "ee3fc692e3c14f73a39fe89e5bc1ee19",
+    "psnr": 37.876094818115234,
+    "lpips": 0.0220520701259374,
+    "caption": "[\"A rustic wooden log cabin with an L-shaped structure, intersecting gabled roofs of weathered gray shingles, wooden walls with distinct log ends, a door, and a small window with brown shutters on the front right section, on a stone foundation.\", \"Rustic log cabin, L-shaped, with gabled roofs and a stone foundation.\", \"Log cabin with gabled roofs, wooden walls, and stone foundation.\", \"Rustic cabin with intersecting roofs and a small window.\", \"Weathered cabin with distinct log ends and stone fo",
+    "scene_idx": 189
+  },
+  {
+    "chunk": "000-046",
+    "uid": "bc28ca3013fe4ee0a0eed3afa99a35c2",
+    "psnr": 32.60863494873047,
+    "lpips": 0.0550955422222614,
+    "caption": "[\"A rectangular white building with blue trim, flat roof with small blue pyramid, front entrance with blue overhang and pillars, blue-framed windows, \\\"AMBULANCE\\\" sign above entrance, red cross on side, parking with white lines, light brown wooden fence, red and white barrier gate.\", \"Rectangular white building, blue trim, flat roof, blue pyramid, entrance, \\\"AMBULANCE\\\" sign, parking, wooden fence, barrier gate.\", \"White blue-trimmed building, flat roof, blue pyramid, blue-framed entrance, \\\"A",
+    "scene_idx": 190
+  },
+  {
+    "chunk": "000-024",
+    "uid": "019d530a057847a6afbb72cd379f84d5",
+    "psnr": 35.65231704711914,
+    "lpips": 0.0340252108871936,
+    "caption": "[\"A rectangular room with angled sides, deep blue walls, beige checkered floor; features light gray circular table and chairs, long rectangular counter with beige top, stools, shelves, sink, devices, gray-blue stairs, and wall decorations.\", \"Rectangular room with blue walls, checkered floor, gray table, chairs, counter, stools, stairs and wall decorations.\", \"Blue-walled room with checkered floor, furniture, gray stairs, and wall decor.\", \"Blue room with checkered floor, furniture, stairs, and ",
+    "scene_idx": 191
+  },
+  {
+    "chunk": "000-088",
+    "uid": "9514c1b5b63d456ca3f8f1eb1517b3ac",
+    "psnr": 35.1009521484375,
+    "lpips": 0.0356896854937076,
+    "caption": "[\"A realistic human figure wearing a school uniform: tailored blazer with single-button closure, shirt with bow at the neck, pleated short skirt above the knee, relaxed arms, naturally positioned hands, straight legs, school loafers, short wavy hair above shoulders, monochromatic.\", \"Realistic human figure in school uniform with short wavy hair.\", \"Human figure in single-button blazer, bow shirt, short pleated skirt.\", \"Student figure, blazer, skirt, bow shirt, school loafers.\", \"Relaxed human f",
+    "scene_idx": 192
+  },
+  {
+    "chunk": "000-091",
+    "uid": "16b20684230044d5b3c6ea5e8f9e9a4d",
+    "psnr": 36.83697891235352,
+    "lpips": 0.0406335406005382,
+    "caption": "[\"A weathered public payphone structure: a rectangular metal cabinet on a concrete base, front panel gray with stickers, side panels worn with decals, missing handset with visible cabling, dark brown rectangular pole with rust, and MCI branding.\", \"Weathered public payphone, gray front, worn sides, missing handset, rusty pole, MCI branding.\", \"Old public payphone, faded decals, missing handset, worn rusty pole, MCI logo.\", \"Aged payphone with faded stickers, missing handset, rusted pole, MCI sta",
+    "scene_idx": 193
+  },
+  {
+    "chunk": "000-031",
+    "uid": "ece7b2c7acb246f494653ee12135d086",
+    "psnr": 36.586368560791016,
+    "lpips": 0.0465728305280208,
+    "caption": "[\"A Halloween-themed mask resembling an off-white skull with deep red eye sockets, recessed features, an open mouth with defined teeth, and bordered by tattered, dark fabric simulating a hood. The mask shows aged texture with cracks and weathered fabric edges.\", \"Off-white skull Halloween mask with deep red eye sockets and tattered hood.\", \"Skull mask with red eyes, tattered hood, and aged texture.\", \"Halloween mask looks like weathered skull with tattered hood.\", \"Mask with skull design, red ey",
+    "scene_idx": 194
+  },
+  {
+    "chunk": "000-091",
+    "uid": "6ee9060398fd42068408e4d61b382649",
+    "psnr": 32.87928009033203,
+    "lpips": 0.0509757958352565,
+    "caption": "[\"A food-inspired racecar with a cylindrical caramel body, pink icing swirl on top, red cherries, dark brown sandwich cookie wheels, front silver grill, and two black exhaust pipes at the back.\", \"Cylindrical caramel racecar with pink icing, cherries, cookie wheels, and exhaust pipes.\", \"Candy-inspired car using caramel body, icing, cherries, and cookie wheels.\", \"Caramel racecar with icing top, cherry and cookie wheel accents.\", \"Food-themed car with candy-like elements and cookie wheels.\", \"Sw",
+    "scene_idx": 195
+  },
+  {
+    "chunk": "000-094",
+    "uid": "99e08fa2604e4bb88efe795e02c5ffeb",
+    "psnr": 34.72002410888672,
+    "lpips": 0.0493543222546577,
+    "caption": "[\"A futuristic, streamlined motorcycle with a sleek, aerodynamic shape, black glossy finish, and cyan glowing accents. It features two large, hollow, self-illuminating wheels and a low profile with extending fin-like projections emitting cyan light at the rear.\", \"Futuristic black motorcycle with self-illuminating wheels and cyan glowing accents with rear fin-like projections.\", \"Streamlined motorcycle with illuminating wheels, black finish, and cyan glow.\", \"Futuristic black motorcycle, cyan ac",
+    "scene_idx": 196
+  },
+  {
+    "chunk": "000-045",
+    "uid": "aa879af1bfd64f5fb2b5e287fa3a374f",
+    "psnr": 34.97214889526367,
+    "lpips": 0.0440644770860672,
+    "caption": "[\"A detailed 3D model of a white SUV with a rectangular body, four doors, tinted windows, vertical slat grille, integrated headlights, smooth roof, roof rails, robust rear with wrap-around tail lights, and large, multi-spoke wheels.\", \"White SUV with rectangular body, four doors, tinted windows, and roof rails.\", \"Rectangular white SUV with tinted windows, headlights, and large wheels.\", \"4-door white SUV with smooth roof and large wheels.\", \"White SUV with vertical grille, tinted windows, and r",
+    "scene_idx": 197
+  },
+  {
+    "chunk": "000-088",
+    "uid": "8dd0d3d040d64126a9ab2d237a816436",
+    "psnr": 37.18148422241211,
+    "lpips": 0.0294250044971704,
+    "caption": "[\"A medium-build cowboy figure with a brown cowboy hat, a yellow poncho with red stripes, a beige shirt, light beige pants, dark brown gloves, standard brown cowboy boots, a dark brown belt with a holster and revolver, and a light tan scarf.\", \"Medium-build cowboy with brown hat, yellow poncho, beige shirt, light pants, dark gloves, boots, belt, holster, revolver, and tan scarf.\", \"Cowboy with brown hat, yellow poncho, beige clothing, brown accessories, and tan scarf.\", \"Cowboy in beige, yellow ",
+    "scene_idx": 198
+  },
+  {
+    "chunk": "000-024",
+    "uid": "3e26038399cd423490bc8d76aba7c1de",
+    "psnr": 34.76674270629883,
+    "lpips": 0.0272548981010913,
+    "caption": "[\"A large rectangular complex with multiple rectangular and square buildings, primarily white walls with red and blue rooftops, surrounded by green fields and lawns, connected by light gray pathways, and featuring scattered trees, a cylindrical tower, and parking areas.\", \"Large rectangular complex, multiple buildings, white walls, red/blue rooftops, green lawns, gray pathways, trees, tower, and parking areas.\", \"Rectangular complex with multiple buildings, colorful rooftops, surrounded by green",
+    "scene_idx": 199
+  }
+]
