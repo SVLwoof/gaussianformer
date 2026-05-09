@@ -5,12 +5,12 @@
 #SBATCH --output=runs/train_phase2_%j.out
 #SBATCH --job-name=gformer_phase2
 #SBATCH --mail-type=END,FAIL,BEGIN
-#SBATCH --mail-user=your-email@example.com
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:1
 
 module load nvidia
 module load cuda
-cd /path/to/gaussianformer
+cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
 export PYTHONUNBUFFERED=1

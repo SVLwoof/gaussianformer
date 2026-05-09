@@ -5,7 +5,7 @@
 #SBATCH --output=runs/train_phase2_v6_%j.out
 #SBATCH --job-name=gformer_phase2_v6
 #SBATCH --mail-type=END,FAIL,BEGIN
-#SBATCH --mail-user=your-email@example.com
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:1
 
 # v6 = v4's simple log-HDR loss on the bumped-N (5000 vs 3000) dataset.
@@ -16,7 +16,7 @@
 
 module load nvidia
 module load cuda
-cd /path/to/gaussianformer
+cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
 

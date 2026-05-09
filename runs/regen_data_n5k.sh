@@ -5,7 +5,7 @@
 #SBATCH --output=runs/regen_data_n5k_%j.out
 #SBATCH --job-name=regen_n5k
 #SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=your-email@example.com
+# #SBATCH --mail-user=your-email@example.com
 #SBATCH --gres=gg:g4:1
 
 # Regenerate the v2 dataset with max_gaussians=5000 (up from 3000) into a
@@ -14,7 +14,7 @@
 
 module load nvidia
 module load cuda
-cd /path/to/gaussianformer
+cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
 

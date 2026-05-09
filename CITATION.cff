@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "Cite as below if you find this repository is helpful to your project"
-url: "https://github.com/microsoft/renderformer"
+url: "https://github.com/SVLwoof/gaussianformer"
 preferred-citation:
   type: conference-paper
   authors:

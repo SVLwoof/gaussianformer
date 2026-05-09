@@ -112,7 +112,7 @@ The HDF5 fields for a Gaussian scene:
 Training was done in two phases:
 
 1. **Phase A — Objaverse_Splats pretrain (V9).** Single-object 3DGS scans from
-   [Objaverse_Splats](https://huggingface.co/datasets/zerogu/Objaverse_Splats)
+   [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats)
    (2,667 train / 183 val), pure log-HDR L1 loss, 60 epochs on 3 GPUs.
 
    ```bash
@@ -207,7 +207,7 @@ tooling, and inference code form the backbone of this project. Asset
 attributions for the example meshes are listed in the
 [upstream README](https://github.com/microsoft/renderformer#acknowledgements).
 
-Training data is the [Objaverse_Splats](https://huggingface.co/datasets/zerogu/Objaverse_Splats)
+Training data is the [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats)
 subset of [Objaverse](https://objaverse.allenai.org/). Importance-based
 Gaussian pruning follows
 [LightGaussian](https://github.com/VITA-Group/LightGaussian).
