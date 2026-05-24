@@ -889,3 +889,403 @@ Train LPIPS dropped 40% (0.021 → 0.013). **Val LPIPS flat at ~0.033 throughout
 V9 ep60 holds best PSNR across all N. V10b PSNR regresses 0.1–0.4 dB vs V9 ep60, consistent with LPIPS optimizing a perceptual proxy rather than pixel fidelity. The slight PSNR cost is the expected trade for perceptual sharpness; visual inspection (user-confirmed at ep2) showed better-defined shapes and reduced smoothing.
 
 **Eval invocation pattern (V10b).** `sbatch --export=ALL,EP=<N> runs/eval_v10b_tomatoes.sh`. Outputs at `data_external/tomatoes/renders/gaussianformer_n{N}_v10b_ep<N>/` and `overview_3way_n{N}_v10b_ep<N>.png`. Logs at `runs/eval_v10b_ep<N>.log`.
+
+## V11 — Per-field NeRF input encoding (started 2026-05-19)
+
+**Goal.** Replace V10b's monolithic `Linear(14, 768)` Gaussian encoder with a per-field decomposition: NeRFEncoding on position (12 freqs) and `log(scale)` (6 freqs), plain linear for rotation/color/opacity, summed additively into the `gaussian_token`. Motivation: address V4–V10b's chronic blurriness and PSNR plateau by giving the transformer explicit high-frequency spatial features instead of relying solely on RoPE on the attention side.
+
+**Architecture diff (vs V10b).**
+- New `pe_type='nerf_perfield'` in `GaussianFormerConfig`.
+- 5 per-field `Linear → RMSNorm(768)` projections (`pos_proj`, `scale_proj`, `rotation_proj`, `color_proj`, `opacity_proj`) replacing the monolithic encoder.
+- `pos_pe = NeRFEncoding(3, num_freqs=12, include_input=True)` → 75-D → 768.
+- `scale_pe = NeRFEncoding(3, num_freqs=6, include_input=True)`, applied to `log(scale + 1e-6)` → 39-D → 768.
+- View-transformer reuses the existing `nerf` PE path (NeRF on ray camera origin → 768; added to ray tokens).
+- 19 new "Gaussian-specific" params total: 10 weights+biases for the 5 projections, 5 norms, 3 view-side NeRF params, `gaussian_token`.
+
+**Init.** Fresh from `microsoft/renderformer-v1-base` via `training/weight_transfer.transfer_weights` (not V10b — the encoder is structurally different and cannot be partially loaded). The 12-layer transformer, view-transformer, DPT decoder, and `reg_tokens` copy from RF; the 19 Gaussian-specific params init random. `weight_transfer.py` now derives "Gaussian-specific" dynamically from the RF state-dict (set difference) instead of a hardcoded list, so it's robust as the encoder evolves.
+
+**Loss.** Log-HDR L1 only (LPIPS=0) — clean baseline isolating the architectural change. LPIPS fine-tune (V11b) deferred until V11 converges, mirroring the V9→V10b sequencing.
+
+**Sanity (job 30616892, 2026-05-19).** Forward `(1, 2, 3, 32, 32)` on CUDA with bf16 autocast; grads flow into every per-field projection; `gaussian_specific_param_names()` identifies the 19 new params; `freeze_backbone` trainable count matches. Side fixes that landed: `tmp/__init__.py` for module discovery, `SLURM_SUBMIT_DIR` for sbatch cwd, `uv run --frozen` to skip dependency resolution, numpy publish-time allowlist in `~/.config/uv/uv.toml` (needed because of the global `exclude-newer = "7 days"` supply-chain hardening).
+
+**Pre-launch optimization.** V10b at bs=4 sat at 40.6/46 GB, but training H5 scenes are small (500–2,600 Gaussians; inference runs 5k–30k), so most batches' `max_N_in_batch` is well under the worst case → headroom likely. Probing `bs ∈ {4, 5, 6, 8}` via 4 parallel sbatch jobs (`runs/probe_v11_bs{4,5,6,8}.sh`, 4 GPUs each, `--max_samples 32`, 1 phase-2 epoch, `--skip_phase1`). Each has an `nvidia-smi -l 10` sidecar logging peak `memory.used`. Decision rule: largest bs whose peak stays under ~44 GB on all 4 ranks. Data unchanged from V10b (`data_v9/h5s` + `data_v9/renders`) so V11 vs V10b is an apples-to-apples comparison of the encoder. Denser-N training data deferred to a future V12 experiment.
+
+**Probe results (jobs 30617186-89, 2026-05-19, max_samples=32, 1 phase-2 epoch each).**
+
+| bs | result | probe peak VRAM (GPUs 0–3) | notes |
+|---|---|---|---|
+| 4 | COMPLETED 0:0 | 33.2 GB | Elapsed 5:18. Reference probe point. |
+| 5 | COMPLETED 0:0 | 35.9 GB | Elapsed 5:19. Δ vs bs=4 = +2.7 GB. |
+| 6 | COMPLETED 0:0 | smi missed peak (271 MiB readings only) | Elapsed 2:10, training itself 7.7s — cudnn/flash-attn cache warm from bs=4/5, smi 10s polling never sampled during the active step. |
+| 8 | FAILED 1:0 | OOM on rank 2 | `Tried to allocate 96 MiB. GPU 2 has total 47.40 GiB of which 7.19 MiB is free.` |
+
+**Backend confirmed:** `attention backend: flash_attn` printed at startup on every probe — flash-attn imports cleanly under the venv (`uv run --frozen`), no SDPA fallback.
+
+**Decision: bs=5 for V11.** V10b at bs=4 sat at 40.6 GB in production but our probe at bs=4 (small-data) saw only 33.2 GB — a ~7.4 GB probe-to-production gap from outlier high-N batches. Linear-extrapolating the same gap: bs=5 production peak ~43 GB (≥3 GB headroom on 46 GB cards), bs=6 production peak ~46 GB (OOM risk), bs=8 confirmed OOM even on small data. bs=5 gives a 25% throughput bump over V10b (global bs 20 vs 16) with verified headroom.
+
+**Launch.** `runs/train_v11_perfield.sh` set to `--batch_size 5`, phase1=5 + phase2=100 epochs, log-L1 only, 4×g4 / 168 h walltime.
+
+**Launch attempts (2026-05-19).** Three sbatch tries before V11 stabilized:
+- Job `30617444` — cwd fail (`$(dirname "$0")/..` resolved to SLURM staging dir). Cancelled.
+- Job `30617456` — uv resolver hit numpy publish-time exclusion (script lacked `--frozen`). Cancelled.
+- Job `30617463` — DDP `find_unused_parameters` crash in Phase 1 (FAILED 5:14): Phase 1 freezes most of the 195M backbone *after* DDP wraps, so DDP's reducer saw params it expected grads for that never produced any. This had been latent — V9/V10/V10b all used `--skip_phase1 --resume`, so a real Phase 1 step + DDP was never exercised on this codepath. Fix: pass `find_unused_parameters=True` at DDP construction (`training/train.py`); small per-step overhead, no behavioral regression. Root-causing the specific unused param deferred — `find_unused_parameters=True` is the documented escape hatch and Phase 1 is only 5 epochs.
+
+**V11 RUNNING.** Job `30617577`, launched 2026-05-19 ~14:48. `attention backend: flash_attn` and Phase 1 trainables (19) confirmed printed; awaiting first epoch loss. Persistent monitor `b6h2tgc2b` armed for state/epoch/error events.
+
+### Eval-suite refactor (in-flight; CPU work complete, GPU steps queued)
+
+For V11 vs V10b we wanted comparisons across multiple diverse scenes, not just tomatoes. The eval pipeline (`data_external/run_tomatoes.py`) was scene-specific — refactored into a parameterized version, and 3 additional Objaverse_Splats val scenes added to the registry.
+
+- `data_external/scene_configs.py` (new) — `SceneConfig` dataclass + `SCENES` registry with `tomatoes`, `house` (UID `4272ba78...`, chunk `000-031`), `dragon` (UID `7cddac29...`, chunk `000-045`), `cartoon` (UID `235e2e4c...`, chunk `000-091`). Picked from `data_v9/object_list_val.json` for diversity vs tomatoes' single-organic profile: structured multi-object (house), thin/specular geometry (dragon), stylized OOD-leaning (cartoon).
+- `data_external/run_scene.py` (new) — generalized pipeline. Takes `--scene <name>` from the registry; everything else (norm, scoring, pruning, render, metrics, overview grids) is scene-agnostic. Scene-specific bits (norm_scale vs norm_target_aabb, X-flip, orbit camera) live in `SceneConfig`.
+- `data_external/run_tomatoes.py` — 4-line shim preserving `python -m data_external.run_tomatoes` so existing `runs/eval_v10b_tomatoes.sh` still works.
+- `data_external/prep_objaverse_scene.py` (new) — `--scene <name>` downloads PLY by UID from the HF chunk zip + renders the 14-view gsplat-full reference. Supports `--download-only` for CPU-side prep.
+- `runs/prep_eval_v11_scenes.sh` (new) — one-shot 1-GPU sbatch prepping all 3 new scenes.
+- `runs/eval_v11_scene.sh` (new) — per-checkpoint per-scene eval template: `sbatch --export=ALL,SCENE=<name>,EP=<n> runs/eval_v11_scene.sh`.
+
+**Done so far:** 3 PLYs downloaded CPU-side to `data_external/{house,dragon,cartoon}/raw.ply` (3.4 MB each, 50k Gaussians).
+
+**Pending GPU work:** `sbatch runs/prep_eval_v11_scenes.sh` (renders gsplat-full references; queues behind V11) → then `runs/eval_v11_scene.sh` per (scene, ckpt) once V11 has checkpoints.
+
+### V11 Phase 1 results (job 30617577, 2026-05-19)
+
+Phase 1 ran clean across all 5 epochs (~2235 s/epoch at bs=5 / 4 GPUs / flash-attn). Loss curve was smooth and monotone:
+
+| Phase 1 epoch | train avg | val | lr (cosine end) |
+|---|---|---|---|
+| 1 | 0.013833 | – | 9.05e-04 |
+| 2 | 0.010068 | – | 6.58e-04 |
+| 3 | 0.008688 | – | 3.52e-04 |
+| 4 | 0.008512 | – | 1.05e-04 |
+| 5 | 0.008389 | 0.008683 | 1.00e-05 |
+
+Step-level binning showed the actual descent: 0.015 → 0.013 in ep 1, 0.013 → 0.009 in ep 2, ~0.008 by mid-ep 3, fully flat through ep 4–5. The "good learning" happened in ep 1–2; ep 4–5 were pure over-specialization. `phase1_epoch_5.pt` (781 MB, encoder-only) saved as the fallback.
+
+### V11 Phase 2 plateau (low-LR, 2026-05-19)
+
+Phase 2 began with the V9/V10b fine-tune recipe (lr=5e-5, cosine over 100 epochs). All 5 trained epochs flat-to-rising:
+
+| Phase 2 epoch | train | val | lr |
+|---|---|---|---|
+| 1 | 0.014307 | – | 5.00e-05 |
+| 2 | 0.013833 | – | 5.00e-05 |
+| 3 | 0.013835 | – | 4.99e-05 |
+| 4 | 0.013834 | – | 4.98e-05 |
+| 5 | 0.013888 | **0.014490** | 4.97e-05 |
+
+Notably, Phase 2 ep 5 val (0.014490) is **66% worse than Phase 1 ep 5 val (0.008683)** — the unfreezing actively degraded the model. Cancelled at end of ep 5.
+
+### V11 phase1_ep5 eval on tomatoes (job 30619102, 2026-05-19)
+
+To anchor the diagnosis, ran `data_external.run_scene` on `phase1_epoch_5.pt` (the best V11 ckpt — encoder trained, backbone at RenderFormer init). Side bug surfaced: `run_scene.py` hardcoded `GaussianFormerConfig()` with default `pe_type='rope'`, causing `load_state_dict` to reject the per-field state. Fixed by threading `--pe_type` and `--scale_pe_num_freqs` through to both the script and the SLURM wrapper.
+
+| N | V11 phase1_ep5 (vs full) | V10b ep26 (vs full) | Δ |
+|---|---|---|---|
+| 5000 | 23.07 dB | 25.80 dB | −2.7 |
+| 10000 | 23.24 dB | 26.70 dB | −3.5 |
+| 20000 | 22.87 dB | 27.41 dB | −4.5 |
+| 30000 | 22.56 dB | 27.81 dB | −5.3 |
+
+Confirms: the per-field encoder learned a *useful but partial* mapping (23 dB > random), but the unchanged RenderFormer backbone can't fully decode it. The V11-vs-V10b comparison is meaningless until Phase 2 actually works.
+
+### V11 Phase 2 hi-LR retry (job 30619107, started 2026-05-19 ~23:10)
+
+Hypothesis: lr=5e-5 was too low to pull the backbone out of its RenderFormer init given the new input distribution. Restarted Phase 2 from `phase1_epoch_5.pt` (skip Phase 1) with `--phase2_lr 2e-4` (4× higher), output to `checkpoints_v11_hi_lr/`. Live trajectory:
+
+| Phase 2 epoch | low-LR (5e-5) | hi-LR (2e-4) |
+|---|---|---|
+| 1 | 0.014307 | 0.019580 |
+| 2 | 0.013833 | 0.014827 |
+| 3 | 0.013835 | 0.014827 |
+| 4 | 0.013834 | (in flight) |
+
+ep 1 spiked (cold start at hi-LR), ep 2–3 plateaued ~0.0010 *above* the low-LR plateau. Hi-LR disturbed the backbone more than low-LR but didn't reach a better basin. Verdict pending ep 4: <0.014 = continue, ≥0.014 = abort + pivot to short-Phase-1.
+
+### Diagnosis: freeze-then-unfreeze trap
+
+Two failed Phase 2 attempts at different LRs both plateau (low at 0.0138, hi at 0.0148). The encoder dropped Phase 1 loss to 0.0084 (it learned something), but unfreezing the backbone consistently fails to find a better minimum. This isn't an LR problem — it's a **freeze-then-unfreeze trap**: during the 5-epoch Phase 1 the encoder over-specialized to a frozen RenderFormer-init backbone, putting joint optimization into a saddle that gradient descent (at any LR we tried) can't escape.
+
+### Short-Phase-1 recipe (queued, ready to launch on wake)
+
+`runs/train_v11_perfield_short_phase1.sh`:
+- **Phase 1**: `--phase1_lr 3e-4` (3× lower than V11's 1e-3), `--phase1_epochs 2` (cut before the plateau — ep 2 was the elbow in the descent).
+- **Phase 2**: `--phase2_lr 5e-5`, `--phase2_epochs 100` (V9 recipe).
+- Init from `renderformer-v1-base` (no `--resume`), per-field arch unchanged, bs=5 / 4×g4.
+- Output to `checkpoints_v11_short_p1/`.
+
+Side patch in `training/train.py`: the final epoch of each phase now always saves a ckpt, even off the `save_interval` cadence — otherwise `phase1_epochs=2` with `save_interval=5` would leave no Phase 1 ckpt.
+
+**Decision tree (autonomous overnight):**
+- Hi-LR ep 4 lands <0.014 → gamble alive, let it continue.
+- Hi-LR ep 4 lands ≥0.014 or crashes → wait for wake; ready commands: `scancel 30619107 && sbatch runs/train_v11_perfield_short_phase1.sh`.
+
+### Hi-LR aborted; short-Phase-1 also plateaued (2026-05-20)
+
+Hi-LR run (30619107): ep 2/3/4 all 0.014827 — plateau confirmed, cancelled. Short-Phase-1 run (`30619669`, `runs/train_v11_perfield_short_phase1.sh`): Phase 1 (2 ep, lr=3e-4) trained clean (0.0138 → 0.0126, `phase1_epoch_2.pt` saved). Phase 2 then plateaued **identically to the original V11**:
+
+| P2 epoch | reported avg | step-mean |
+|---|---|---|
+| 1 | 0.013833 | 0.013412 |
+| 2 | 0.013833 | 0.013406 |
+| 3 | 0.013832 | 0.013678 |
+| 4 | 0.013851 | – |
+| 5 | 0.013864 (val 0.014475) | – |
+| 6 | 0.013830 | 0.014018 |
+| 7 | 0.013830 | 0.013333 |
+| 8 | 0.013839 | – |
+
+Step-level means confirm a real plateau (not a logging artifact). Three Phase 2 configs now all stuck ~0.0138. The freeze-then-unfreeze-trap hypothesis is **disproven** — short Phase 1 was designed to avoid it and plateaued at the exact same place.
+
+### ~~Hypothesis: DDP bucket bug in the in-process phase transition~~ (SUPERSEDED — wrong)
+
+> This section is kept as an investigation record. It was **disproven** by the
+> `train_v11_phase2_resume.sh` run below and is not the real cause.
+
+Initial hypothesis: `train.py` wraps the model in `DDP(..., find_unused_parameters=True)` then calls `freeze_backbone`, so Phase 2's `unfreeze_all` re-enables backbone params that DDP never synced → replicas drift → plateau. The `--skip_phase1 --resume` recipe was proposed as the fix.
+
+**Why it was wrong:** the `runs/train_v11_phase2_resume.sh` run (job `30619869`) used exactly `--skip_phase1 --resume` — DDP constructed once with all params trainable, no freeze/unfreeze — and **plateaued identically** (ep 1 0.013841, ep 2 0.013833). That codepath has no DDP bucket issue, so the bucket bug cannot be the cause.
+
+### Root cause (confirmed): scale fed to NeRF encoding ~14× out of range
+
+Checked V9's *actual* Phase 2 trajectory: ep 1 = **0.003839**, descending smoothly to 0.000877 by ep 50. V11 plateaus at 0.0138 — ~4× worse than where V9 *started*. So V11 was never "slow", it was broken; and the only thing differing from V9 is the encoder.
+
+The bug, verified on `data_v9/h5s/scene_0000.h5`: `construct_sequence` computes `log_scale = log(scale)`. Real scales are `[1e-6, 0.11]` → `log_scale ∈ [-13.8, -2.2]`, range 11.6 wide. `NeRFEncoding` requires inputs in ~`[0,1]` (per its own docstring) so the lowest band is smooth. At this range **even band 0 (freq 1) spans 1.8 periods** — `sin(log_scale)` is non-monotonic, non-injective. All 36 sinusoidal dims of the 39-D scale encoding are aliased oscillation; only the 3 raw `include_input` dims carry usable scale. The model effectively cannot read Gaussian scale — and scale is the splat footprint, so the renderer defaults to an average blur and plateaus. This explains both the chronic blurriness *and* the flat loss.
+
+Position is fine by contrast (range `[-0.45, 0.29]`, band 0 spans 0.1 periods — textbook NeRF).
+
+Secondary: `token = gaussian_token + Σ RMSNorm(proj_i)` over 5 fields → token RMS ≈ √6, vs √2 for the working `rope` path; the pretrained backbone's residual stream is balanced for √2.
+
+### Fix applied: per-field encoder rewrite (2026-05-20)
+
+`gaussianformer/models/gaussianformer.py`, `nerf_perfield` branch:
+- **Scale no longer NeRF-encoded** — `scale_proj` is now `Linear(3, 768)` on raw `log_scale`; `scale_pe` removed. (Position keeps NeRF.)
+- **Single final norm** — the 5 per-field RMSNorms replaced by one `gaussian_norm` on the summed projections.
+
+Verified on CPU with realistic data ranges: fixed `nerf_perfield` token RMS = 1.41, matching the `rope` path's 1.40 (was ~2.45). `tmp/sanity_perfield.py` updated for the new param names. `scale_pe_num_freqs` config field is now unused (left in place; harmless).
+
+### v11b run: scale fix did NOT move the plateau (job 30620114, 2026-05-20)
+
+Launched the scale-fixed encoder (`runs/train_v11b_perfield_fixed.sh`). GPU sanity passed. Phase 1 (2 ep, lr 3e-4) → 0.0138. Phase 2: ep 1 = 0.013838, ep 2 = 0.013848 — same plateau. Killed at ep 2.
+
+Five Phase 2 runs now plateau at 0.0138 to three sig figs (4× LR range, 2 Phase-1 schedules, broken *and* fixed encoder). That degree of reproducibility means the floor is **not** an optimization plateau and **not** the input encoder — it is a fixed component of the model that is broken identically every time.
+
+### Root cause (confirmed, structural): RoPE was disabled for `nerf_perfield`
+
+The `renderformer-v1-base` backbone is RoPE-pretrained (`RenderFormerConfig.pe_type` defaults to `'rope'`; V9/V10b set `rope_dim=12` and worked, which only succeeds against a RoPE-trained backbone). `transfer_weights` copies that backbone's RoPE-trained attention weights into GaussianFormer.
+
+But the `nerf_perfield` path left `rope_dim = None` in **both** transformers — `gaussianformer.py` (view-independent) and `view_transformer.py` (view-dependent). `attention.py`: `rope_dim=None` → no RoPE applied. So every V11 run ran RoPE-trained attention weights **without RoPE** — Q/K never rotated by position, attention patterns meaningless, the entire scene encoder + view decoder compromised. This is input-encoder-independent → explains the identical 0.0138 floor across all 5 runs.
+
+The V11 design assumed the per-field NeRF position encoding *replaces* RoPE. It can't — you cannot drop RoPE from a RoPE-pretrained backbone. NeRF encoding must be additive to RoPE.
+
+**Fix:** `nerf_perfield` now sets `rope_dim = pos_pe_num_freqs` in both `gaussianformer.py` and `view_transformer.py`. Verified on CPU: `nerf_perfield` now has both `rope_emb` buffers identical to the `rope` path; names shared with RenderFormer rose 275 → 277 (the 2 rope buffers align); the 15 GF-only params are exactly the per-field encoder. (The `pe_type='nerf'` path has the same latent bug — left as-is, never used.)
+
+Net: three fixes in the `nerf_perfield` path — (1) RoPE re-enabled [primary], (2) scale plain-linear not aliased-NeRF, (3) single final token norm.
+
+Next: `runs/train_v11c_perfield.sh` → `checkpoints_v11c/`. Verdict at Phase 2 ep 1 — descent toward V9's ~0.004 confirms the fix; another 0.0138 freeze means deeper instrumentation.
+
+### v11c: RoPE fix helped Phase 1 but Phase 2 still plateaued (job 30620496)
+
+v11c (RoPE fixed) Phase 1 reached **0.0063** — the first time any V11 run broke below 0.0138 at any stage, proving the RoPE fix did something real (the frozen backbone now functions). But Phase 2: ep 1 = 0.014143, ep 2 = 0.013833 — back at the plateau. Killed at ep 2.
+
+### Rendering v11c phase1_ep2: a featureless grey blob
+
+Rendered `checkpoints_v11c/phase1_epoch_2.pt` (the 0.0063 model) on tomatoes. PSNR vs full: 21.9 / 19.4 / 16.9 / 15.6 dB at N = 5k/10k/20k/30k — and **degrading hard with N**. The image: a featureless grey-white blob — no color, no structure, correct rough position and extent, and the blob grows with N. The "0.0063 Phase 1" was never good: L1 is computed in log-space on ~90%-black images, so a correctly-placed grey blob lands at ~0.006. **The loss number cannot distinguish a blob from real content — only the render can.**
+
+### Instrumenting the encoder: scale drowned every other field (self-inflicted)
+
+`tmp/instrument_encoder.py` measured per-field embedding RMS on a real batch through the v11c encoder:
+
+| field | emb RMS | token Δ if removed |
+|---|---|---|
+| pos | 0.56 | 15% |
+| **scale** | **3.77** | **117%** |
+| rotation | 0.42 | 11% |
+| color | 0.47 | 13% |
+| opacity | 0.60 | 16% |
+
+`scale_emb` was ~7× every other field; the summed token was almost purely scale. Cause: the v11b "fixes" — replacing aliased scale-NeRF with a plain `Linear` on *raw* `log_scale` (input magnitude ~10 vs ~1 for other fields) made `scale_emb` hot, and removing the per-field RMSNorms (the safeguard that kept fields balanced) let it dominate unchecked. **Fix:** restored per-field RMSNorm on all 5 projections + kept the final norm. Re-instrumented on a fresh model: all 5 fields now RMS 1.0, uniform 45.5% ablation — balanced.
+
+### v11d: balanced encoder, OOM, resumed — Phase 2 STILL plateaued (jobs 30623103, 30624257)
+
+v11d (RoPE + balanced fields) Phase 1 → 0.0138; Phase 2 OOM'd on all 4 ranks (landed on 44 GB g4 cards; bs=5 peaks ~43 GB — fits 48 GB cards, not 44 GB). Resumed Phase 2 from `phase1_epoch_2.pt` at bs=4 (`train_v11d_phase2_resume.sh`). Phase 2: ep 1 = 0.013837, ep 2 = 0.013835 — plateau, again.
+
+### Verdict: the input encoder was never the cause
+
+**Seven Phase 2 runs, every one at 0.0138** — RoPE on/off, scale aliased/plain/dominated/balanced, every LR, every Phase-1 schedule. Three real, verified encoder bugs fixed; Phase 2 never moved. The plateau is not in the encoder.
+
+### Control experiment: V9's recipe fails on current code
+
+Ran `runs/control_rope.sh` — V9's exact recipe (`pe_type=rope`, `--skip_phase1 --resume checkpoints_v4/phase1_epoch_20.pt`, lr 5e-5) on the *current* codebase (job 30624978). Phase 2 ep 1 = **0.013838** — plateaued. V9's own recipe, run today, fails the same way. So the regression is in **shared code changed since V9**, not the encoder. Every V11 run varied the encoder and held shared code fixed — which is why encoder tweaking could never have found it.
+
+### Root cause (confirmed): `find_unused_parameters=True`
+
+`git diff main -- training/train.py`: for a `rope` run, exactly one change is behaviorally active — `DDP(...)` gained `find_unused_parameters=True`. It was added during the V11 effort to silence the Phase-1 freeze DDP crash (job 30617463). Consistency check is exact: **every run with the flag (7 V11 runs + the control) plateaued at 0.0138; V9/V10b predate it and reached 0.0009.** With `find_unused_parameters=True`, DDP marks "unused" params gradient-ready from a per-iteration graph traversal; data-dependent masking (padded Gaussians / `valid_mask`) can make the used/unused set differ across ranks, so DDP all-reduces inconsistent gradient sets and silently corrupts training.
+
+**Fix:** `find_unused_parameters = not args.skip_phase1` in `train.py` — in-process Phase 1 needs it (frozen backbone), `--skip_phase1` runs (all params trainable, V9's mode) get `False`.
+
+### Bisect re-run (job 30625057): find_unused_parameters IS a bug — for rope
+
+Re-ran `control_rope.sh` with `find_unused_parameters = not args.skip_phase1`. Phase 2 ep 1 = 0.0115 avg, and the within-epoch binning showed a **clean monotonic descent**: 0.0157 → 0.0148 → 0.0127 → 0.0119 → 0.0091 → 0.0082 across the epoch — the first genuine descent in the whole investigation. So `find_unused_parameters=True` was a real bug. Confirmed fix for the `rope` path.
+
+### But the per-field encoder still plateaus — there are TWO bugs
+
+Re-ran v11d Phase 2 (`train_v11d_phase2_resume.sh`, `--skip_phase1` → `find_unused_parameters=False`), job 30625146. Phase 2 ep 1-11 all flat at ~0.0138 (val 0.0145). The within-epoch ep-1 binning was **identical** to the pre-fix v11d run — the `find_unused` fix changed nothing for the per-field path.
+
+| config | find_unused | result |
+|---|---|---|
+| rope | True | plateau |
+| rope | **False** | **descends** ✓ |
+| per-field | True | plateau |
+| per-field | **False** | **plateau** ✗ |
+
+So: `find_unused_parameters=True` is one bug (fixed, affects rope). The per-field encoder has a **separate, still-open bug** — it plateaus even with `find_unused` fixed. The earlier claim "the encoder was never the cause" was an overreach: the rope control only proved `find_unused` was *a* bug, not that the encoder was clean.
+
+### compare_forward.py: the per-field token is NOT degenerate
+
+`tmp/compare_forward.py` — rope vs per-field models, both weight-transferred from the *same* RenderFormer (identical 12-layer backbone), one real Gaussian batch through `construct_sequence` + `model.transformer`:
+
+| | rope | per-field |
+|---|---|---|
+| per-layer activation RMS | 4.2 → 13.9 | 3.2 → 13.6 (ratio 0.8–1.1× every layer) |
+| final scene-token RMS | 13.94 | 13.64 |
+
+The per-field token propagates through the backbone essentially identically to a rope token — no blowup, no collapse. The per-field encoder is not producing a token the backbone chokes on. **The plateau is a training-dynamics problem, not a broken-forward one.**
+
+### Open: the per-field training-dynamics bug
+
+Still unsolved. v11d `phase2_epoch_5.pt` / `phase2_epoch_10.pt` are saved (plateaued models, available to render).
+
+The bug is precisely isolated: **encoder-specific** (rope descends on current code, per-field plateaus) and **training-dynamics, not forward** (`compare_forward` shows the per-field token propagates through the backbone within ~10% of a rope token at every layer). Two confounded candidate causes:
+- **(A) Checkpoint provenance** — every per-field run resumed a per-field Phase-1 checkpoint that itself plateaued in Phase 1.
+- **(B) The per-field architecture** — 5 per-field RMSNorms force every field to exactly equal magnitude; the encoder can only rotate field directions, not weight fields by importance.
+
+### v11e: discriminating experiment (job 30629297, 2026-05-21)
+
+`runs/train_v11e_perfield_jointscratch.sh` — `nerf_perfield`, `--skip_phase1`, **no `--resume`**: fresh RenderFormer transfer with a random per-field encoder, Phase 2 trains everything jointly from step 1. No Phase-1 checkpoint in the picture, so it isolates (A) vs (B):
+- plateaus at 0.0138 → cause (B), the architecture.
+- descends toward ~0.004 → cause (A); fix is a proper Phase-1 warmup.
+
+`--skip_phase1` → `find_unused_parameters=False` (the rope-confirmed-correct path); bs=4. Verdict from the within-epoch binning of Phase 2 ep 1 (~46 min): a clean monotonic descent (like the rope control) = (A); flat ~0.0138 = (B).
+
+### Verdict (job 30629297): cause (B) — the per-field architecture
+
+v11e Phase 2 ep 1 = **0.013842** — the chronic plateau to the fourth decimal (prior per-field runs: 0.013833–0.013841). within-epoch ep-1 binning: 0.01589 → 0.01422 → 0.01324 → 0.01350 → 0.01470 — a token drop then a stall. The rope control with `find_unused` fixed, same code, descended 0.0157 → 0.0082 across ep 1; the per-field encoder cannot.
+
+v11e was the cleanest possible isolation: fresh RenderFormer transfer, *random* per-field encoder, joint Phase 2 from step 1, **no Phase-1 checkpoint anywhere**. It still plateaus. Checkpoint provenance (A) is ruled out — the per-field architecture itself caps the model.
+
+**Why the architecture caps it — precisely.** Per-field projections summed *without* the per-field norms are mathematically a single linear map over the concatenated features: `Σ_f W_f·feat_f = [W_pos|W_scale|…]·[feat_pos;feat_scale;…]`. So the *entire* difference between the per-field encoder and a plain concat encoder is the 5 per-field RMSNorms. RMSNorm divides each field's projection output by its own per-Gaussian RMS (over the 768 channels) — a nonlinearity that erases relative salience: a Gaussian at an "important" position and one at a "boring" position get their `pos_emb` normalized to the same magnitude. The encoder cannot make one field, or one Gaussian, louder than another. `compare_forward.py` already showed the per-field *forward* is healthy (token within ~10% of a rope token at every layer) — the cap is in what the encoder *can represent*, not numerical dynamics.
+
+The per-field RMSNorms were not gratuitous — without them `scale_emb` ran 7× hot and dominated the token (the v11c bug). So per-field is caught between two failures: norms off → scale domination; norms on → per-Gaussian salience erased. The decomposition itself is the dead end.
+
+### v11f: the concat encoder (`nerf` mode, repurposed) — 2026-05-21
+
+The fix follows directly from the framing above: per-field-sum **minus the 5 norms** is exactly a single linear map over the concatenated fields. The concat encoder is that map:
+
+```
+feat  = cat[ nerf(pos)   # 75   3 dims, 12 freqs, +input
+             log_scale   # 3
+             quat        # 4
+             color       # 3
+             opacity ]   # 1   -> 86-dim
+token = gaussian_token + norm( Linear(86, 768)(feat) )
+```
+
+One shared `Linear(86,768)` over the whole concat — weights every field freely via its columns, exactly like rope's `Linear(14,768)`, but with position lifted into a NeRF basis (the original V11 blur-fix hypothesis). RoPE stays on. No per-field norms, no sum.
+
+**No input standardization.** An earlier draft standardized `log_scale` by training-set mean/std — dropped: those are dataset-fitted magic numbers, and the architecture does not need them. A *shared* projection with a bias absorbs per-field offset (the bias) and per-field magnitude (its learned weight columns) on its own — which is precisely why the concat encoder fixes per-field, where *isolated* per-field projections + norms made magnitude matter. `log` on scale stays: parameter-free, and the canonical 3DGS representation of a positive multiplicative quantity. `clamp(min=1e-6)` is a standard log-of-zero guard, not a fitted constant.
+
+Decided: repurpose the (unused, no-checkpoint) `nerf` pe_type — keeps the mode count at 3; the `nerf` view transformer is made pure-rope (identical to `rope`), so `nerf` vs `rope` isolates exactly the scene encoder.
+
+Implemented in `config.py` / `gaussianformer.py` / `view_transformer.py`. CPU sanity (`tmp/compare_forward.py`, rope vs concat through the shared backbone): the concat token propagates healthily — per-layer activation RMS 0.5–1.2× rope, final scene-token RMS 10.2 vs rope 14.3 (cooler, no blowup/collapse), gradients same order at every layer.
+
+`runs/train_v11f_concat.sh` — recipe identical to v11e (`--skip_phase1`, no `--resume`: fresh RenderFormer transfer + random concat encoder, joint Phase 2), so the only variable vs v11e is the encoder architecture. Verdict from the within-epoch binning of Phase 2 ep 1: descends like the rope control (~0.008 within ep 1) → the concat encoder is the fix; flat 0.0138 → the bug is deeper than the encoder.
+
+### v11f result: concat plateaus too — theory falsified, and a confound found (job 30629625)
+
+First v11f submit (30629550) died at step 240 to a single-rank NCCL collective timeout — rank 2 hung in non-collective code, no Python exception / NaN / OOM anywhere; a transient infra stall, not the code. Resubmitted with `--exclude=firefoot-13`.
+
+v11f Phase 2 ep 1 = **0.013837**. within-epoch binning: 0.0139 → 0.0178 → 0.0138 → 0.0124 → 0.0136 → 0.0132 → 0.0161 → 0.0137 — flat and noisy, no descent. **The concat encoder plateaus too.**
+
+**The per-field-norm theory is falsified.** concat *is* per-field-projections-summed minus the 5 norms (shown mathematically in the v11f design above). Per-field-with-norms plateaus (v11e 0.013842); per-field-minus-norms plateaus (v11f 0.013837). Removing the norms changed nothing — they were never the bottleneck.
+
+**Confound found in the comparison that "proved" rope works.** The rope control that descended (0.0157→0.0082, the "Bisect re-run" above) ran `--resume checkpoints_v4/phase1_epoch_20.pt` — an **already-trained** rope encoder. v11e and v11f start from **random** encoders. So "rope descends / nerf plateaus" confounds two variables: encoder init (trained vs random) and architecture (rope vs nerf). And the evidence now favors *init*: v11e (per-field) and v11f (concat) are very different architectures yet plateau at identically 0.01383-84 — when the architecture varies wildly and the result doesn't move, the architecture is not the variable.
+
+### Control: rope, random init, joint Phase 2 from scratch (job 30629854, 2026-05-21)
+
+`runs/control_rope_jointscratch.sh` — v11e/v11f's exact recipe (`--skip_phase1`, **no `--resume`**: fresh RenderFormer transfer + random encoder, joint Phase 2) with `pe_type=rope`. The only variable vs v11f is the encoder architecture; this is the control that should have been run instead of the resumed `control_rope.sh`.
+- descends toward ~0.008 within ep 1 → random-rope-joint works → the nerf architecture is genuinely the problem.
+- plateaus at 0.0138 → random-joint plateaus regardless of encoder → the plateau is the **recipe** (a Phase-1 encoder warmup is needed), and every encoder comparison since `control_rope.sh` was apples-to-oranges.
+
+Verdict from the within-epoch binning of Phase 2 ep 1 (~46 min).
+
+### Ruled out: collate_fn zero-padding (2026-05-21)
+
+Checked whether `collate_fn`'s zero-padding interacts badly with the nerf encodings — a zero Gaussian gives `log_scale = log(1e-6) = -13.8` and `NeRF(pos=0)` has 36 cos-ones, so padding rows become large/structured tokens (benign for rope: `Linear(zeros)` → bias). Two independent findings kill it:
+- **No padding ever occurs.** All 2667 `data_v9/h5s` training scenes have exactly N=5000 Gaussians (min=max=5000). `collate_fn` pads to the batch max, which is always 5000 → `pad_size=0` every batch. The padding branch is dead code for V9-data training.
+- **Even forced padding is contained.** `tmp/test_padding_leak.py` — a batch with a truncated scene (2000 padded rows) run through `construct_sequence + transformer` with normal vs random-garbage padding: real-token outputs are bit-identical (`max|Δ| = 0.000e+00`) for both rope and nerf. The padding tokens themselves change (Δ 697 nerf / 274 rope — confirming zero-padding *is* pathological for nerf), but the key-padding mask fully contains them.
+
+collate_fn is not a plateau suspect and needs no modification. The live discriminator remains the rope-jointscratch control.
+
+### Verdict: the plateau is the recipe, not the encoder (job 30629854)
+
+rope-jointscratch Phase 2 ep 1 = **0.013840**, ep 2 = 0.013834. within-epoch ep-1 binning: 0.01588 → 0.01423 → 0.01323 → 0.01352 → 0.01457 → 0.01429 — **bin-for-bin near-identical to v11e** (per-field: 0.01589 / 0.01422 / 0.01324 / 0.01350 / 0.01470). Two completely different encoders, the same loss curve step-for-step → the loss in this regime does not depend on the encoder at all.
+
+**The encoder is ruled out — fully.** rope, per-field, and concat all plateau at 0.01384 under `--skip_phase1` + random encoder + joint Phase 2. The whole V11 encoder investigation (v11 → v11f) was a confound: every run used `--skip_phase1` with an untrained encoder, and the one baseline that descended (`control_rope.sh`, 0.0157→0.0082) *resumed a trained encoder* (`checkpoints_v4/phase1_epoch_20.pt`). "rope works, nerf doesn't" was always "trained encoder works, random encoder doesn't."
+
+**Cause:** joint Phase 2 from a random encoder does not learn the scene — it settles into a scene-independent blob (~0.013, the v11c grey-blob render). V9/V10b reached 0.0009 because they ran a **Phase-1 encoder warmup** (frozen backbone) first; V11 dropped Phase 1 because in-process Phase 1 crashed under DDP (job 30617463: the backbone was frozen *after* the single DDP wrap → reducer waits on gradients that never come).
+
+## V12 — corrected two-phase recipe + the concat encoder (job 30630480, 2026-05-21)
+
+`training/train.py` fixed: DDP is now constructed **per phase, after** `requires_grad` is set (`wrap_ddp`). Freezing the backbone before the Phase-1 wrap means DDP registers only the trainable encoder params → `find_unused_parameters=False` is correct, no crash, no corruption. At the Phase-1→2 transition the model is unfrozen and re-wrapped (the old wrapper's reducer hooks go inert once unused). `--skip_phase1` removed; `--resume` kept as a phase-aware crash-recovery escape hatch (carries phase/epoch/optimizer/scheduler). `--pe_type` default → `nerf`.
+
+`runs/train_v12.sh` — single end-to-end run: RenderFormer transfer → Phase 1 (20 ep, lr 1e-3, encoder warmup) → Phase 2 (100 ep, lr 5e-5, joint), `pe_type=nerf` (concat encoder), bs=4, 4×g4, no `--skip_phase1`/`--resume`. CPU pre-check confirmed `freeze_backbone` for `pe_type=nerf` yields exactly the 4 encoder params (68k trainable in Phase 1; 194.9M in Phase 2).
+
+Verdict signal: Phase 2 ep 1 within-epoch binning **descends** (V9's Phase 2 ep 1 was 0.003839) rather than sitting flat at 0.0138 → the recipe is fixed and the concat encoder is finally testable for the V11 blur hypothesis.
+
+### V12 results: the recipe is fixed — the plateau is escaped (2026-05-22)
+
+**Phase 1** (encoder warmup, frozen backbone, 68k trainable) ran clean — no crash (the freeze-before-DDP-wrap fix works). ep 1 avg 0.00798 → ep 20 avg 0.003720 (val 0.003957): a clean descent to the encoder-warmup floor. **Phase 1→2 transition clean** — `unfreeze_all` + fresh DDP wrap printed `phase2: 194,924,431 trainable`, no crash (the per-phase DDP re-wrap works).
+
+**Phase 2** — the plateau is **escaped**, the first run in the whole V11/V12 effort to do so:
+
+| Phase 2 epoch | avg loss |
+|---|---|
+| 1–8 | ~0.0138 (plateau) |
+| 9 | 0.012045 |
+| 10 | 0.005315 (val 0.003221) |
+| 11 | 0.002611 |
+| 12 | 0.002256 |
+
+Within-epoch binning across ep 9–11 is a clean monotonic descent (0.0120 → 0.0024). The model is now descending in V9 territory (V9's Phase 2 *started* at 0.0038; V12 is below that by ep 11) with ~88 epochs left.
+
+**The 8-epoch plateau before breakout** — a wrinkle, not a failure. Phase 1 left the model at 0.0037 with a *frozen* backbone; unfreezing in Phase 2 jumped the loss to 0.0144 and it sat there 8 epochs. The Phase-1 encoder was tuned to the frozen RenderFormer-init backbone — once the backbone started moving, the encoder–backbone match broke and the model fell into the 0.0138 attractor, then took 8 epochs of joint training to climb out. V9's Phase 2 started at 0.0038 with no such transient. **Future refinement (V12b or a re-run): a Phase-2 LR warmup, or a lower initial `--phase2_lr`, should soften the unfreeze shock and skip the ~5 h / 8-epoch detour.** Not worth disrupting the current run — it has recovered and is descending normally.
+
+Conclusion (refined). What the evidence solidly supports: (1) the encoder architecture does not cause the plateau — rope, per-field, and concat plateau bin-for-bin identically; (2) the corrected two-phase recipe with a proper Phase-1 warmup escapes it (V12, ep 9). What is *not* proven: whether a no-warmup run (`--skip_phase1`, random encoder) would also escape given enough epochs — v11e/v11f/the rope-jointscratch control were all cancelled at ep 1–2, before V12's epoch-9 escape point. The 0.0138 plateau is now known to be an escapable metastable state, not a dead end. Counter-evidence that no-warmup runs do *not* escape quickly: v11d's Phase 2 (job 30625146) ran 11 full epochs flat at 0.0138 without escaping — past V12's escape point — though with a poor 2-epoch buggy warmup. So the precise claim is: the Phase-1 warmup *enables and accelerates* the escape; whether it is strictly necessary is an open question, deliberately left untested (cheap to settle by running the v11f recipe ~20 epochs, but academic — V12 works regardless). The concat (`nerf`) encoder is now training under a working recipe and can be evaluated for the blur hypothesis once Phase 2 converges.
+
+### V12 final (cancelled at Phase 2 ep 75, 2026-05-24)
+
+V12 ran ~71 h end-to-end and was cancelled at Phase 2 ep 75 after `phase2_epoch_75.pt` saved — val plateaued at ~0.00164 from ep 30 onward (the dataset ceiling V9 also hit; V9 val was 0.001585 at ep 60, V12 val 0.001651 at ep 70), so further epochs would only nudge train. Phase 2 train: ep 50 0.001037, ep 60 0.000947, ep 70 0.000877 (matched V9's ep-50 number), ep 75 **0.000849**; val 0.001652 at ep 75. Tracked V9 at a ~15–20 epoch lag (the 8-epoch unfreeze plateau + slightly slower descent). Checkpoints on disk: `phase1_epoch_{5,10,15,20}.pt` and `phase2_epoch_{5,10,...,75}.pt`. Next: render against V10b on the multi-scene eval suite to test the V11 NeRF-position blur hypothesis — the actual unanswered question, since loss can't distinguish blur from sharp detail.
+
+### V12 vs V10b eval — the NeRF blur hypothesis is NOT vindicated (2026-05-24)
+
+Rendered V12 `phase2_epoch_75.pt` and V10b `phase2_epoch_26.pt` on all four eval scenes (tomatoes, house, dragon, cartoon) at N ∈ {5k, 10k, 20k, 30k}, against the gsplat-full reference. `data_external/run_scene.py` was extended to bake column-group captions ("gsplat-full", "gsplat-pruned (N=X)", "<model label>") plus a per-image title into the 3-way overviews; `runs/eval_v11_scene.sh` gained a `LABEL` env var defaulting to "`<ckptdir suffix> ep<N>`".
+
+PSNR vs full-gsplat, mean across the 14 orbit views, at N=10k:
+
+| scene | V12 ep75 | V10b ep26 | Δ (V12−V10b) |
+|---|---|---|---|
+| tomatoes | 27.65 | 26.69 | **+0.96** |
+| house | 30.61 | 31.28 | −0.67 |
+| dragon | 31.32 | 31.74 | −0.42 |
+| cartoon | 30.20 | 30.03 | +0.17 |
+
+Across all N the pattern holds: V12 clearly wins on tomatoes (~+0.8–1.0 dB at every N), V10b slightly edges V12 on house and dragon (mostly within 0.2–1 dB), cartoon is essentially tied. Average across scenes: ~tied, slight edge to V10b.
+
+**Qualitative read** (directly comparing the GF column of V12 and V10b strips on dragon n=10k): the two are *visually near-indistinguishable*. Same shape recovery, same soft-surface character, same level of detail loss vs the gsplat reference. The PSNR deltas of 0.2–1 dB are within the noise floor of perceptual judgment. The blur evident in V11/V12 renders (and present in V10b too) is structural to the RenderFormer-on-3DGS setup at N=5–30k, not specific to the input encoder.
+
+**Bottom line on the V11/V12 investigation:**
+- *Falsified*: the original V11 thesis that NeRF-encoding the position (and log-encoding the scale) would reduce blur vs the rope encoder. V12 produces visually equivalent output and is not consistently better in PSNR.
+- *Durable*: the recipe fix in `training/train.py` — per-phase DDP construction with `find_unused_parameters=False`, freeze-before-wrap for Phase 1, re-wrap at the Phase-1→2 transition. End-to-end runs no longer crash and the joint-from-random-encoder plateau is escapable. This is reusable for any future encoder experiment.
+- *Open*: whether a no-warmup run (`--skip_phase1`, random encoder) would *eventually* escape the 0.0138 plateau given 15–20 epochs — deliberately left untested, academic.
+
+Eval renders (captioned 3-way strips, all N variants for both models on all 4 scenes) are under `data_external/{tomatoes,house,dragon,cartoon}/renders/overview_3way_n*_checkpoints_v{12,10b}_phase2_ep*.png`.
