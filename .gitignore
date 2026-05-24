@@ -344,6 +344,7 @@ my-gaussianformer-model/
 # Training checkpoints (large; regenerated locally)
 checkpoints/
 checkpoints_v[0-9]*/
+checkpoints_probe*/
 checkpoint_renders/
 
 # Renders (large)
@@ -384,16 +385,20 @@ data_v9/sanity_*.png
 
 # External 3DGS scenes (downloaded; .py scripts are tracked)
 data_external/*/raw.ply
+data_external/*/normalized.ply
 data_external/*/transforms_*.json
 data_external/*/pruned_*.ply
 data_external/*/h5/
 data_external/*/renders/
+data_external/*/_ref/
 
 # Generated training examples & temp
 gaussian_examples/
 training_examples/*.h5
 training_examples/*.exr
 training_examples/*.png
+training_h5s/
+gaussian_training_h5s/
 tmp/
 
 # SLURM job stdout / HF cache
