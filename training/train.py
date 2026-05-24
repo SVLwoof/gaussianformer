@@ -54,6 +54,19 @@ def unwrap_model(m: torch.nn.Module) -> torch.nn.Module:
     return m.module if isinstance(m, DDP) else m
 
 
+def wrap_ddp(module: torch.nn.Module, world_size: int, local_rank: int) -> torch.nn.Module:
+    """Wrap `module` in DDP for the current trainable set, or return it bare on 1 GPU.
+
+    Constructed once per phase, AFTER requires_grad is set: DDP's reducer registers
+    only the params that require grad at construction time, so every registered param
+    produces a gradient every step and find_unused_parameters=False is correct.
+    """
+    if world_size > 1:
+        return DDP(module, device_ids=[local_rank], output_device=local_rank,
+                   find_unused_parameters=False)
+    return module
+
+
 def reduce_metric(value: float, device: torch.device) -> float:
     """Average a scalar across ranks. No-op when single-process."""
     if not dist.is_initialized():
@@ -187,6 +200,7 @@ def run_phase(
     global_step: int = 0,
     val_dataloader: DataLoader | None = None,
     train_sampler: DistributedSampler | None = None,
+    start_epoch: int = 0,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
@@ -198,7 +212,7 @@ def run_phase(
         print(f"{phase_name}: {trainable:,} / {total:,} trainable parameters", flush=True)
         print(f"{'='*60}\n", flush=True)
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
         model.train()
@@ -296,9 +310,11 @@ def run_phase(
                     flush=True,
                 )
 
-        if (epoch + 1) % save_interval == 0 and is_main_process():
+        is_last_epoch = (epoch + 1) == num_epochs
+        if ((epoch + 1) % save_interval == 0 or is_last_epoch) and is_main_process():
             ckpt_path = save_dir / f"{phase_name}_epoch_{epoch + 1}.pt"
             torch.save({
+                "phase": phase_name,
                 "epoch": epoch + 1,
                 "global_step": global_step,
                 "model_state_dict": unwrap_model(model).state_dict(),
@@ -323,9 +339,11 @@ def main():
     parser.add_argument("--phase2_epochs", type=int, default=TrainingConfig.phase2_epochs)
     parser.add_argument("--phase2_lr", type=float, default=TrainingConfig.phase2_lr)
     parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--skip_phase1", action="store_true", help="Skip phase 1 and go directly to phase 2")
     parser.add_argument("--max_samples", type=int, default=None, help="Limit dataset to N samples (for quick experiments)")
-    parser.add_argument("--resume", type=Path, help="Path to checkpoint to resume from")
+    parser.add_argument("--resume", type=Path,
+                        help="Escape hatch for crash recovery: resume from a phase1/phase2 "
+                        "checkpoint (restores phase, epoch, optimizer, scheduler). Not part "
+                        "of the normal recipe -- the default path trains end to end.")
     parser.add_argument("--min_lr_ratio", type=float, default=TrainingConfig.min_lr_ratio)
     parser.add_argument("--save_interval", type=int, default=TrainingConfig.save_interval, help="Save checkpoint every N epochs")
     parser.add_argument("--val_h5_dir", type=Path, default=None, help="Validation H5 directory")
@@ -338,6 +356,12 @@ def main():
                         help="DataLoader num_workers per rank. None = use TrainingConfig default. "
                         "DDP runs with num_workers=0 saturate one main thread per rank on disk IO; "
                         "set to 4 for prefetching parallelism.")
+    parser.add_argument("--pe_type", type=str, default="nerf",
+                        choices=["rope", "nerf", "nerf_perfield"],
+                        help="Gaussian input encoder. 'nerf' = concat encoder "
+                        "(NeRF-encoded position + log-scale); 'rope' = V9 baseline.")
+    parser.add_argument("--scale_pe_num_freqs", type=int, default=6,
+                        help="NeRFEncoding frequencies for log-scale (nerf_perfield only).")
     args = parser.parse_args()
 
     config = TrainingConfig(
@@ -356,8 +380,10 @@ def main():
     rank, local_rank, world_size, device = setup_ddp()
     num_workers = args.num_workers if args.num_workers is not None else config.num_workers
     if is_main_process():
+        from gaussianformer.layers.attention import ATTN as _GF_ATTN
         print(f"Using device: {device}, world_size: {world_size}, "
               f"num_workers (per rank): {num_workers}", flush=True)
+        print(f"attention backend: {_GF_ATTN}", flush=True)
 
     # --- Dataset ---
     dataset = GaussianRenderDataset(
@@ -406,37 +432,49 @@ def main():
             print(f"Validation set: {len(val_dataset)} samples", flush=True)
 
     # --- Model ---
-    if args.resume:
-        if is_main_process():
-            print(f"Resuming from checkpoint: {args.resume}", flush=True)
-        from gaussianformer.models.gaussianformer import GaussianFormer
-        from gaussianformer.models.config import GaussianFormerConfig
-        model = GaussianFormer(GaussianFormerConfig())
-        ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
-        model.load_state_dict(ckpt["model_state_dict"])
-    else:
-        model = transfer_weights(config.renderformer_model_id)
+    from gaussianformer.models.config import GaussianFormerConfig
+    from gaussianformer.models.gaussianformer import GaussianFormer
+    gf_config = GaussianFormerConfig(
+        pe_type=args.pe_type,
+        scale_pe_num_freqs=args.scale_pe_num_freqs,
+    )
 
-    model.to(device)
-    # Stash the config now -- DDP wrapping moves it under model.module, and
-    # training_forward needs the unwrapped reference at every call site.
-    model_config = model.config
-    if world_size > 1:
-        model = DDP(model, device_ids=[local_rank], output_device=local_rank)
+    # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
+    # it carries the phase + epoch so training continues from where it stopped. The
+    # default path always builds the model from RenderFormer weights.
+    resume_ckpt = None
+    resume_phase = None
+    resume_epoch = 0
+    if args.resume:
+        resume_ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
+        resume_phase = resume_ckpt["phase"]
+        resume_epoch = resume_ckpt["epoch"]
+        module = GaussianFormer(gf_config)
+        module.load_state_dict(resume_ckpt["model_state_dict"])
+        if is_main_process():
+            print(f"Resuming from {args.resume} ({resume_phase} epoch {resume_epoch})", flush=True)
+    else:
+        module = transfer_weights(config.renderformer_model_id, gf_config)
+
+    module.to(device)
+    model_config = module.config
     ray_generator = RayGenerator().to(device)
 
     if is_main_process():
         config.save_dir.mkdir(parents=True, exist_ok=True)
-    global_step = 0
+    global_step = resume_ckpt["global_step"] if resume_ckpt else 0
 
-    # --- Phase 1: Train input module only ---
-    if not args.skip_phase1:
-        trainable_names = freeze_backbone(unwrap_model(model))
+    # --- Phase 1: encoder warmup, frozen backbone ---
+    # DDP is constructed per phase, AFTER requires_grad is set. Freezing the backbone
+    # before the wrap means DDP's reducer registers only the trainable encoder params,
+    # so find_unused_parameters=False is correct (no Phase-1 crash, no corruption).
+    if resume_phase != "phase2":
+        trainable_names = freeze_backbone(module)
         if is_main_process():
             print(f"Phase 1 trainable params: {trainable_names}", flush=True)
-
+        p1 = wrap_ddp(module, world_size, local_rank)
         optimizer = torch.optim.AdamW(
-            [p for p in model.parameters() if p.requires_grad],
+            [p for p in p1.parameters() if p.requires_grad],
             lr=config.phase1_lr,
             weight_decay=0.01,
         )
@@ -445,21 +483,26 @@ def main():
             T_max=config.phase1_epochs,
             eta_min=config.phase1_lr * config.min_lr_ratio,
         )
-
+        phase1_start = 0
+        if resume_phase == "phase1":
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+            scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+            phase1_start = resume_epoch
         global_step = run_phase(
-            "phase1", model, ray_generator, dataloader, optimizer, scheduler,
+            "phase1", p1, ray_generator, dataloader, optimizer, scheduler,
             config, config.phase1_epochs, device, config.save_dir,
             config.log_interval, args.save_interval,
             args.log_loss_weight, args.lpips_loss_weight,
             model_config, global_step, val_dataloader=val_dataloader,
-            train_sampler=train_sampler,
+            train_sampler=train_sampler, start_epoch=phase1_start,
         )
+        del p1  # drop the Phase-1 DDP wrapper; its reducer hooks go inert once unused
 
-    # --- Phase 2: Full fine-tune ---
-    unfreeze_all(unwrap_model(model))
-
+    # --- Phase 2: full fine-tune ---
+    unfreeze_all(module)
+    p2 = wrap_ddp(module, world_size, local_rank)
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        p2.parameters(),
         lr=config.phase2_lr,
         weight_decay=0.01,
     )
@@ -468,21 +511,25 @@ def main():
         T_max=config.phase2_epochs,
         eta_min=config.phase2_lr * config.min_lr_ratio,
     )
-
+    phase2_start = 0
+    if resume_phase == "phase2":
+        optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+        phase2_start = resume_epoch
     global_step = run_phase(
-        "phase2", model, ray_generator, dataloader, optimizer, scheduler,
+        "phase2", p2, ray_generator, dataloader, optimizer, scheduler,
         config, config.phase2_epochs, device, config.save_dir,
         config.log_interval, args.save_interval,
         args.log_loss_weight, args.lpips_loss_weight,
         model_config, global_step, val_dataloader=val_dataloader,
-        train_sampler=train_sampler,
+        train_sampler=train_sampler, start_epoch=phase2_start,
     )
 
-    # --- Save final model (rank 0 only; unwrap before save_pretrained) ---
+    # --- Save final model (rank 0 only) ---
     if is_main_process():
         final_path = config.save_dir / "gaussianformer_final"
         final_path.mkdir(parents=True, exist_ok=True)
-        unwrap_model(model).save_pretrained(final_path)
+        module.save_pretrained(final_path)
         print(f"\nFinal model saved to: {final_path}", flush=True)
         print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
 
