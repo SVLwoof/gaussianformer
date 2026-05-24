@@ -37,12 +37,14 @@ class GaussianFormerConfig:
     """Whether to use bias in the transformer linear layers."""
 
     # --- Positional Encoding Config ---
-    pe_type: Literal['nerf', 'rope'] = 'rope'
+    pe_type: Literal['nerf', 'rope', 'nerf_perfield'] = 'rope'
     """The type of positional encoding to use."""
     rope_double_max_freq: bool = False
     """Whether to double the max frequency for RoPE."""
     pos_pe_num_freqs: int = 12
     """The number of frequencies in the positional encoding for gaussian positions."""
+    scale_pe_num_freqs: int = 6
+    """The number of frequencies in the positional encoding for gaussian log-scales (nerf_perfield only)."""
     gaussian_encoder_norm_type: Literal['layer_norm', 'rms_norm'] = 'rms_norm'
     """The type of normalization to use in the gaussian encoder."""
 

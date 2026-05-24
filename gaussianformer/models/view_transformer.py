@@ -15,8 +15,9 @@ class ViewTransformer(nn.Module):
         self.config = config
 
         # --- Positional Encoding Setup ---
-        if config.pe_type == 'nerf':
-            # This PE is for the ray tokens, based on the camera origin.
+        if config.pe_type == 'nerf_perfield':
+            # Ray-token NeRF PE on the camera origin -- additive to RoPE, which stays on
+            # because the RenderFormer view-transformer is RoPE-pretrained.
             self.pos_pe = NeRFEncoding(
                 in_dim=config.pos_dim,
                 num_frequencies=config.pos_pe_num_freqs,
@@ -32,9 +33,9 @@ class ViewTransformer(nn.Module):
                 self.token_pos_pe_norm = nn.RMSNorm(config.view_transformer_latent_dim)
             else:
                 raise ValueError(f"Unsupported normalization type: {config.norm_type}")
-            self.rope_dim = None
-        elif config.pe_type == 'rope':
-            # RoPE dimension is configured for the TransformerDecoder
+            self.rope_dim = config.pos_pe_num_freqs
+        elif config.pe_type in ('rope', 'nerf'):
+            # 'nerf' = concat scene encoder; its ray decoder is pure RoPE, identical to 'rope'.
             self.rope_dim = config.pos_pe_num_freqs
         else:
             raise ValueError(f"Unsupported positional encoding type: {config.pe_type}")
@@ -123,8 +124,8 @@ class ViewTransformer(nn.Module):
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
 
-        # Apply positional encoding for the 'nerf' type
-        if self.config.pe_type == 'nerf':
+        # Additive ray-token NeRF PE (nerf_perfield only; 'nerf' and 'rope' use pure RoPE)
+        if self.config.pe_type == 'nerf_perfield':
             ray_tokens = ray_tokens + self.token_pos_pe_norm(self.pe_token_proj(self.pos_pe(ray_pos)))
 
         # --- Decode with Transformer ---
