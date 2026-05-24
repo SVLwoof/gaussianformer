@@ -77,6 +77,11 @@ def parse_args() -> argparse.Namespace:
                    help="Skip entries with scene_idx < start_idx (resume support).")
     p.add_argument("--end_idx", type=int, default=-1,
                    help="Stop at this scene_idx (exclusive). -1 = process to end.")
+    p.add_argument("--skip_renders", action="store_true",
+                   help="Skip writing GT render PNGs. Use when re-pruning to a new target_n "
+                   "but keeping the existing renders dir (which is rendered from the FULL "
+                   "scene -- target_n-independent). Caller must point training at the "
+                   "original renders dir separately.")
     return p.parse_args()
 
 
@@ -260,10 +265,14 @@ def main():
                 uid = obj["uid"]
                 scene_name = f"scene_{obj['scene_idx']:04d}"
 
-                # Skip if already processed (H5 + at least one render).
+                # Skip if already processed. With --skip_renders we only check the H5;
+                # renders live in a separate (shared) dir under that mode.
                 h5_out = h5_dir / f"{scene_name}.h5"
                 first_view = renders_dir / f"{scene_name}_view_0.png"
-                if h5_out.exists() and first_view.exists() and scene_name in metadata:
+                already = h5_out.exists() and scene_name in metadata and (
+                    args.skip_renders or first_view.exists()
+                )
+                if already:
                     skipped_existing += 1
                     continue
 
@@ -296,10 +305,13 @@ def main():
                 keep_idx = np.sort(rank[:target])
 
                 # GT renders: from the FULL Gaussians (model learns to fill detail).
-                full_imgs = render_full(arr, viewmats, Ks, args.resolution, device)
-                for v in range(args.n_views):
-                    out_png = renders_dir / f"{scene_name}_view_{v}.png"
-                    imageio.v3.imwrite(out_png, (full_imgs[v] * 255).astype(np.uint8))
+                # With --skip_renders we trust the caller is reusing an existing renders
+                # dir that already contains these (since they're target_n-independent).
+                if not args.skip_renders:
+                    full_imgs = render_full(arr, viewmats, Ks, args.resolution, device)
+                    for v in range(args.n_views):
+                        out_png = renders_dir / f"{scene_name}_view_{v}.png"
+                        imageio.v3.imwrite(out_png, (full_imgs[v] * 255).astype(np.uint8))
 
                 # H5: pruned subset + cameras.
                 write_h5(arr, keep_idx, h5_out, c2w_all, fov_all)
