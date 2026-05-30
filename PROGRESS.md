@@ -1379,4 +1379,31 @@ V13 ran the full 30 epochs (10 Phase 1 + 20 Phase 2) end-to-end, no crashes, ~5d
 
 So: density helped, measurably, but did **not** crack the core quality problem. The structural softness + desaturation persists. Next-step ideas under discussion (perceptual/color-aware losses, the deferred LPIPS fine-tune V13b, tone-map/exposure audit, higher training resolution, dataset color-distribution check). **Open question still unanswered: is the ceiling the RenderFormer-on-3DGS architecture, the L1-in-tone-mapped-space loss, or the data?**
 
+> **CORRECTION (2026-05-30, supersedes the AGX numbers above).** All eval/render numbers in this V13-result section and in the "V12 / V10b val-set baselines" section above were produced with `eval_val_full.py` / `render_compare.py` defaulting to **AGX tone mapping** — a methodological bug. The `data_v9` GT renders are written with **no** tone map (`process_objaverse.py:12`: "no tonemap, since 3DGS source already trained on LDR images"), the training target is `log10(LDR+1)` of that no-tonemap LDR, and canonical `infer_gaussian.py` defaults to `tone_mapper='none'` (clip). Applying AGX — a desaturating filmic curve — only at eval mismatched the entire pipeline, *manufacturing* the "washed colors" and corrupting the metrics. See the corrected section below.
+
+### V13 verdict CORRECTED — tone-map bug fixed, win is much larger (2026-05-30)
+
+Diagnosed that the "washed colors" were largely an eval artifact: my `eval_val_full.py`/`render_compare.py` defaulted to AGX while GT + training + canonical inference all use **no tone map (clip)**. Fixed the default to `none` in both scripts (+ the 5 sbatch wrappers) and re-ran all five evals + the comparison grid on the full 183-scene val set.
+
+**Corrected full-val numbers (`tone_mapper=none`, matching the trained pipeline):**
+
+| Model | train N | infer N | PSNR mean | PSNR median | LPIPS mean |
+|---|---|---|---|---|---|
+| **V13 ep20** | 20k | 20k | **33.58** | 33.64 | 0.0349 |
+| V12 ep75 (L1) | 5k | 5k | 30.95 | 30.72 | 0.0416 |
+| V10b ep26 (production, LPIPS-FT) | 5k | 5k | 30.90 | 30.83 | **0.0283** |
+| V10b ep26 | 5k | 20k | 30.09 | 29.92 | 0.0277 |
+| V12 ep75 | 5k | 20k | 30.04 | 30.03 | 0.0404 |
+
+What the fix changed:
+- **Everything jumps ~+6 dB** (AGX was crushing the whole range): e.g. barrel scene_0030 V13 21.2→27.4 dB, truck scene_0180 V13 24.9→32.8 dB.
+- **V13's lead over production grows from +0.55 → +2.67 dB mean** (33.58 vs 30.90). AGX's filmic compression had been squashing the inter-model gap; the real margin is large.
+- **Color is faithful** in the corrected renders — the "awful washed colors" were predominantly the AGX artifact, *not* the model. (The barrel regains rich wood/blue banding; the truck regains its blue tint.)
+- **The "more inference Gaussians hurts" finding is robust to the fix** — V10b 30.90@5k → 30.09@20k (−0.81), V12 30.95@5k → 30.04@20k (−0.91). The earlier ~0.9 dB conclusion stands.
+- **LPIPS:** V13 (0.0349) beats its L1 twin V12 (0.0416) but trails LPIPS-fine-tuned V10b (0.0283). Smaller gap than the AGX eval implied; a V13b LPIPS fine-tune (mirroring V9→V10b) would likely surpass V10b.
+
+**What the fix did NOT change — the detail/softness problem is real and model-side.** Tone mapping is a color/contrast curve; it adds no texture. V13 (and V10b/V12) still lose fine detail — truck wheels/panel lines, hardware, fruit-level texture. The PSNR-up / LPIPS-still-behind-V10b split is the quantitative signature of "shape+color good, high-frequency texture missing." This is the genuine open problem and the motivation for the contemplated fundamental overhaul.
+
+Corrected artifacts overwrite the AGX ones in place: `eval_results/*.json` (all now `"tone_mapper": "none"`), `compare_renders/v13_ep20_vs_baselines/` (grid + strips). AGX-only diagnostic kept at `compare_renders/v13_ep20_TONEMAP_none/` was the isolation test.
+
 Artifacts: `eval_results/v13_ep20_n20k_val.json`; comparison strips under `compare_renders/v13_ep{10,20}_vs_baselines/` (4-way GT|V10b|V12|V13, all at N=20k); checkpoints `checkpoints_v13/phase2_epoch_{5,10,15,20}.pt`.

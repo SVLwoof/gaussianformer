@@ -122,7 +122,9 @@ def main() -> None:
     ap.add_argument("--gt_dir", type=Path, default=Path("data_v9/renders_val"))
     ap.add_argument("--out_dir", type=Path, required=True)
     ap.add_argument("--resolution", type=int, default=512)
-    ap.add_argument("--tone_mapper", type=str, default="agx")
+    ap.add_argument("--tone_mapper", type=str, default="none",
+                    help="MUST match the GT pipeline. data_v9 GT is written with NO "
+                    "tone map, so 'none' (clip) is correct; AGX desaturates.")
     args = ap.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)

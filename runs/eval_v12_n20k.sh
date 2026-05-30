@@ -29,4 +29,4 @@ uv run --frozen python -m eval_val_full \
   --gt_dir data_v9/renders_val \
   --out_json eval_results/v12_ep75_n20k_val.json \
   --resolution 512 \
-  --tone_mapper agx
+  --tone_mapper none

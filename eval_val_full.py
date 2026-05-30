@@ -51,7 +51,11 @@ def main() -> None:
     ap.add_argument("--gt_dir", type=Path, default=Path("data_v9/renders_val"))
     ap.add_argument("--out_json", type=Path, required=True)
     ap.add_argument("--resolution", type=int, default=512)
-    ap.add_argument("--tone_mapper", type=str, default="agx")
+    ap.add_argument("--tone_mapper", type=str, default="none",
+                    help="MUST match the GT pipeline. data_v9 GT renders are written "
+                    "with NO tone map (gsplat source is already LDR), so 'none' (clip) "
+                    "is correct. AGX desaturates and corrupts both the render and the "
+                    "PSNR/LPIPS metrics -- do not use it here.")
     ap.add_argument("--max_scenes", type=int, default=None,
                     help="If set, only evaluate first N scenes (smoke test).")
     args = ap.parse_args()
