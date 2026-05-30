@@ -407,3 +407,8 @@ runs/*.out
 
 # Misc
 .python-version
+
+# V13 N=20k re-pruned data (large; regenerated locally)
+data_v9_n20k/
+# 4-way comparison render strips (large)
+compare_renders/

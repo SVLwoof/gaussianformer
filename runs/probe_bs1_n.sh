@@ -5,6 +5,8 @@
 #SBATCH --output=runs/probe_bs1_n_%j.out
 #SBATCH --job-name=probe_bs1_n
 #SBATCH --gres=gg:g4:1
+#SBATCH --killable
+#SBATCH --requeue
 
 # One-off probe: peak GPU memory at bs=1 across N in {5k, 7.5k, ..., 30k} on
 # a g4 card with the V12 (pe_type=nerf) encoder, 512x512 res, AdamW + bf16

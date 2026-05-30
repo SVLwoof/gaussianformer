@@ -5,6 +5,8 @@
 #SBATCH --output=runs/regen_data_n20k_%j.out
 #SBATCH --job-name=regen_n20k
 #SBATCH --gres=gg:g4:1
+#SBATCH --killable
+#SBATCH --requeue
 
 # Re-prune the Objaverse_Splats sources to N=20,000 Gaussians per scene
 # (vs the existing N=5,000 in data_v9). Writes new H5s to data_v9_n20k/.

@@ -1289,3 +1289,94 @@ Across all N the pattern holds: V12 clearly wins on tomatoes (~+0.8–1.0 dB at 
 - *Open*: whether a no-warmup run (`--skip_phase1`, random encoder) would *eventually* escape the 0.0138 plateau given 15–20 epochs — deliberately left untested, academic.
 
 Eval renders (captioned 3-way strips, all N variants for both models on all 4 scenes) are under `data_external/{tomatoes,house,dragon,cartoon}/renders/overview_3way_n*_checkpoints_v{12,10b}_phase2_ep*.png`.
+
+## V13 — testing the compression hypothesis (job 30652016, 2026-05-24, in flight)
+
+### Hypothesis
+
+If the V11/V12 plateau-shaped blur is structural to RenderFormer-on-3DGS at N=5k (per the V12 vs V10b qualitative read above), the next leverage point is the *training-time* token budget. V13's hypothesis: **5,000 Gaussians per scene is too compressed**, and training at N=20,000 (4× more) should let the model represent richer scene content and reduce the residual blur that V12 inherited from V10b. The encoder fix is now durable, so V13 swaps only the data-side variable.
+
+### Pre-launch infrastructure (2026-05-24)
+
+**VRAM/time frontier probes.** Three new sbatch scripts under `runs/` directly measured the (bs, N) frontier on a g4 card with the V12 (`pe_type=nerf`) encoder, AdamW + bf16 autocast, expandable_segments on:
+
+- `tmp/probe_bs1_n_scaling.py` (sbatch `runs/probe_bs1_n.sh`) — bs=1, N ∈ {5k, 7.5k, …, 30k}. Linear: ~4 GB baseline + ~0.75 GB per 1,000 Gaussians per sample. Peak at N=30k bs=1 = **26.5 GB**.
+- `tmp/feasibility_n30k.py` (sbatch `runs/feasibility_n30k.sh`) — 10-iter training feasibility at N=30k for bs ∈ {1, 2}. bs=1 N=30k: **28.96 GB**, 2.72 s/step (mean after 2 warmup). bs=2 N=30k: **OOM at 47 GB** on cyril-01 A6000.
+- `tmp/probe_bs2_n_scaling.py` (sbatch `runs/probe_bs2_n.sh`) — direct (bs=2, N) sweep. Key cells: bs=2 N=20k = **39.36 GB, 3.28 s/step**; bs=2 N=22.5k = 43.11 GB; bs=2 N=25k = 46.85 GB (right at the 46 GB g4 ceiling).
+
+Verdict: **bs=2 N=20k is the sweet spot** — fits 44 GB g4 with thin margin, comfortable on 46 GB, expected ~4 h 13 m per epoch under 4-GPU DDP. The V12-era bs=4 N=5k → V13 bs=2 N=20k swap **halves the effective batch (16 → 8)** for a 4× richer per-scene token budget.
+
+**Data regeneration.** Re-pruning the Objaverse_Splats sources to N=20,000 via `data_v9.process_objaverse --target_n 20000` would have re-rendered all 14 GT views per scene — 4× wasted compute, since GT renders are full-scene rasterizations and target_n-independent. Added a `--skip_renders` flag (`data_v9/process_objaverse.py`) that gates the render block and relaxes the skip-existing check so re-pruning can keep the existing renders dir. `runs/regen_data_n20k.sh` ran train + val splits sequentially (1h 6m on epona-02, job 30651115) → `data_v9_n20k/h5s/` (2667 H5s) and `data_v9_n20k/h5s_val/` (183 H5s). Training points at `data_v9_n20k/h5s*` for input and `data_v9/renders*` for GT.
+
+**Disk cleanup** (2026-05-24, ~45 GB reclaimed): deleted V11 probe/short-run checkpoints, intermediate V12 epoch saves (kept `phase1_epoch_20.pt` + `phase2_epoch_{25,50,75}.pt`), and 5 empty V11 stub dirs. V12 went 42 GB → 8.6 GB. V5/V6/V9/V10b untouched.
+
+### V13 launch (job 30652016, 2026-05-24)
+
+`runs/train_v13.sh` — V12 architecture (`--pe_type nerf`, the concat encoder under the working two-phase recipe) on the regenerated N=20k data, **time-boxed at 30 epochs** to fit the 168 h walltime: **10 Phase 1** (encoder warmup, lr 1e-3, the recipe-critical step) + **20 Phase 2** (joint fine-tune, lr 5e-5, where the actual quality signal lives), bs=2 per GPU × 4 GPUs DDP, `--save_interval 5`. LRs left at V12 defaults — effective batch dropped from 16 (V12) to 8 (V13) so gradients are ~√2 noisier; acceptable for a time-boxed exploratory run.
+
+Phase 1 progress as of 2026-05-25 13:00:
+
+| Phase 1 epoch | avg total loss | wall |
+|---|---|---|
+| 1 | 0.006334 | 4h 26m |
+| 2 | 0.004366 (−31% vs ep 1) | 4h 25m |
+| 3 | 0.003820 (−12.5%) | 4h 25m |
+
+Clean diminishing-returns descent under cosine decay; no crashes, no plateau. The recipe fix is doing its job. Phase 1 expected to complete ~2026-05-27; Phase 2 → ~2026-06-01.
+
+### V12 / V10b val-set baselines at infer-N ∈ {5k, 20k} — V13 comparator setup (2026-05-25)
+
+Built the comparator V13 will eventually need: V12 ep75 and V10b ep26 evaluated on the **full 183-scene val set** at inference N ∈ {5k, 20k}, computing per-scene PSNR + LPIPS over 14 orbit views (2,562 views per checkpoint).
+
+New tooling:
+- `eval_val_full.py` — single-GPU bs=1 bf16 eval; takes `--checkpoint`, `--pe_type`, `--h5_dir`, `--gt_dir`, `--out_json`; renders each scene/view, tone-maps to LDR (AGX, matching GT pipeline), computes PSNR + LPIPS (AlexNet backbone), writes a per-scene + summary JSON. Defaults preserve `eval_val_set.py`'s rendering call shape but compute over the full val set with multi-metric output.
+- `eval_compare.py` — ingests any number of result JSONs, prints a sorted comparison table.
+- Four sbatch wrappers under `runs/eval_{v10b,v12}_n{5k,20k}.sh`, all `--killable --requeue` per the new non-training-job policy. Each ran ~12–15 min on a g4 card; all four killable jobs RUNNING within seconds despite tri_level holding the lab quota.
+
+The 2×2:
+
+| Model | infer-N=5k (training dist.) | infer-N=20k | Δ (20k − 5k) |
+|---|---|---|---|
+| **V10b** ep26 (rope, LPIPS-FT) | **25.597** dB / 0.0466 | 24.690 dB / 0.0499 | **−0.91 dB**, LPIPS +0.0033 (worse) |
+| **V12** ep75 (nerf, log-HDR L1) | 25.482 dB / 0.0550 | 24.650 dB / 0.0568 | **−0.83 dB**, LPIPS +0.0018 (worse) |
+
+Per-scene PSNR std ≈ 2.93 dB; LPIPS std ≈ 0.025–0.033.
+
+**Key finding: more inference Gaussians *hurts* both models** by a consistent ~0.83–0.91 dB. The 4-scene non-monotonic hint from the V12-vs-V10b investigation (house 30.4→28.2 dB, dragon 30.6→29.6 dB) generalizes across all 183 val scenes. Both models were trained at N=5k and don't know how to use the extra 15k tokens — the surplus actively degrades them rather than helping. LPIPS also degrades, ruling out "PSNR-only artifact" framings.
+
+**Implication for V13.** The compression hypothesis is more demanding than initially framed:
+
+- **Floor V13 must clear:** 24.65 dB — V12 at untrained N=20k. Failing this means the V13 recipe didn't recover what V12 has for free.
+- **Real bar (validates the hypothesis):** **25.60 dB** — V10b at its trained N=5k, the current production baseline. V13 must learn to *use* 20k tokens better than V10b uses 5k. This is the call.
+- **Strong win:** ≥26.5 dB. Would justify the 4× training-time cost + data regen.
+
+V10b roughly tied with V12 at both inference Ns also reinforces the V12 verdict: the encoder and recipe are not the bottleneck. If V13 fails the 25.60 bar, the next move is *not* more recipe tinkering — it's training resolution, dataset diversity, model capacity, or revisiting the structural blur conclusion.
+
+Eval JSONs under `eval_results/v{10b,12}_ep{26,75}_n{5k,20k}_val.json`; reproducible end-to-end via `uv run --frozen python -m eval_val_full ...` or the four sbatch wrappers.
+
+### V13 result: trains clean, beats production on PSNR, but the output still looks bad (2026-05-30)
+
+V13 ran the full 30 epochs (10 Phase 1 + 20 Phase 2) end-to-end, no crashes, ~5d 17h on epona-02.
+
+**Training behaved better than V12.** Phase 1 descended to train 0.003089 / val 0.003314 by ep 10 (half V12's epochs, below V12's ep-20 floor of 0.003720/0.003957). The Phase-1→2 transition re-wrapped cleanly (194.9M trainable). Crucially, **V13 did not sit in the 0.0138 attractor** the way V12 did for 8 epochs: Phase 2 ep 1 = 0.013841, ep 2 = 0.010921, ep 3 = 0.003611 — it broke out by ep 3 (V12 didn't escape until ep 9). The richer per-scene token budget got more out of the warmed encoder. Phase 2 val: ep 5 0.001913, ep 10 0.001495, ep 15 0.001304, ep 20 **0.001243** — below the ~0.00165 dataset-loss ceiling V9 (0.001585) and V12 (0.001652) both plateaued at. Terminal train 0.001020.
+
+**Full 183-scene val PSNR/LPIPS — V13 wins PSNR at each model's best inference N:**
+
+| Model | train N | infer N | PSNR mean | PSNR median | LPIPS mean |
+|---|---|---|---|---|---|
+| **V13 ep20** | 20k | 20k | **26.150** | **26.33** | 0.0500 |
+| V10b ep26 (production, LPIPS-FT) | 5k | 5k | 25.597 | 25.49 | **0.0466** |
+| V12 ep75 (L1) | 5k | 5k | 25.482 | 25.49 | 0.0550 |
+| V10b ep26 | 5k | 20k | 24.690 | 24.77 | 0.0499 |
+| V12 ep75 | 5k | 20k | 24.650 | 24.77 | 0.0568 |
+
+**The compression hypothesis is confirmed on PSNR — with a sharp causal isolation.** The bottom two rows show that taking V10b/V12 (trained at N=5k) *to* inference N=20k *loses* ~0.9 dB — more Gaussians at render time hurts a model that wasn't trained for them. V13, *trained* at N=20k, reaches 26.15. So the +0.55 dB mean / +0.84 dB median over production is attributable specifically to **training at the higher density**, not to inference-time Gaussian count. And V13 achieves this undertrained (20 epochs vs V12's 75).
+
+**But the verdict is heavily qualified — the renders still look bad (user's direct assessment, and correct).** Three caveats:
+1. **PSNR is the wrong judge here.** A low-contrast, washed-out render sits near the per-pixel mean and is never boldly wrong, so MSE/PSNR rewards it. The +0.55 dB partly measures "V13 hedges less badly," not "V13 looks good."
+2. **Colors are washed / desaturated.** Most visible on textured scenes: the barrel (scene_0030) loses its rich wood+metal banding to pale beige in all three models, V13 included; the truck (scene_0180) loses its blue tint to grey. V13 recovers *some* of this vs V10b/V12 but is still far from the GT's saturation.
+3. **Fine detail still missing.** V13's gain is in *global shape + color fidelity*, not texture. Wheels, hardware, fruit-level detail remain unresolved — matching the PSNR-up / LPIPS-flat split (V13's 0.0500 LPIPS is worse than LPIPS-fine-tuned V10b's 0.0466, comparable-to-better than L1 V12's 0.0550).
+
+So: density helped, measurably, but did **not** crack the core quality problem. The structural softness + desaturation persists. Next-step ideas under discussion (perceptual/color-aware losses, the deferred LPIPS fine-tune V13b, tone-map/exposure audit, higher training resolution, dataset color-distribution check). **Open question still unanswered: is the ceiling the RenderFormer-on-3DGS architecture, the L1-in-tone-mapped-space loss, or the data?**
+
+Artifacts: `eval_results/v13_ep20_n20k_val.json`; comparison strips under `compare_renders/v13_ep{10,20}_vs_baselines/` (4-way GT|V10b|V12|V13, all at N=20k); checkpoints `checkpoints_v13/phase2_epoch_{5,10,15,20}.pt`.

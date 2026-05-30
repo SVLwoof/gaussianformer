@@ -5,6 +5,8 @@
 #SBATCH --output=runs/feasibility_n30k_%j.out
 #SBATCH --job-name=feas_n30k
 #SBATCH --gres=gg:g4:1
+#SBATCH --killable
+#SBATCH --requeue
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia

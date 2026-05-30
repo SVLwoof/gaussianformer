@@ -5,6 +5,8 @@
 #SBATCH --output=runs/probe_bs2_n_%j.out
 #SBATCH --job-name=probe_bs2_n
 #SBATCH --gres=gg:g4:1
+#SBATCH --killable
+#SBATCH --requeue
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia
