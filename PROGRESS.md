@@ -1407,3 +1407,101 @@ What the fix changed:
 Corrected artifacts overwrite the AGX ones in place: `eval_results/*.json` (all now `"tone_mapper": "none"`), `compare_renders/v13_ep20_vs_baselines/` (grid + strips). AGX-only diagnostic kept at `compare_renders/v13_ep20_TONEMAP_none/` was the isolation test.
 
 Artifacts: `eval_results/v13_ep20_n20k_val.json`; comparison strips under `compare_renders/v13_ep{10,20}_vs_baselines/` (4-way GT|V10b|V12|V13, all at N=20k); checkpoints `checkpoints_v13/phase2_epoch_{5,10,15,20}.pt`.
+
+### V13b: LPIPS fine-tune of V13 — recovers the perceptual axis (2026-05-31)
+
+Mirrored the V9→V10b recipe: warm-start V13 ep20 weights (`--init_from`, fresh Phase 2, fresh cosine 5e-5), add LPIPS (`lpips_w 0.2`, `log_w 1.0`), 5 epochs, 8×g4 DDP, N=20k. The `--init_from` path was added to `training/train.py` (load weights only; no optimizer/scheduler/epoch carryover — distinct from `--resume`, which is crash recovery).
+
+Per-epoch full-val (alex LPIPS, `tone_mapper=none`), all monotonic-improving until a gentle PSNR/LPIPS trade settles:
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 1 | 31.25 | 0.02624 |
+| 2 | 31.91 | 0.02396 |
+| 3 | 32.30 | 0.02290 |
+| **4** | **32.83** | **0.02089** |
+
+**V13b ep4 = 32.83 dB / 0.0209 LPIPS** — beats production V10b (30.90 / 0.0283) on **both** axes. The FT recovered the perceptual sharpness V13's L1-in-log loss had blurred (LPIPS 0.0349→0.0209, −40%) for only −0.75 dB PSNR vs V13. Kept as the best model for the next several days. (The run was preempted mid-ep5 on a killable node; ep5 would have been a near-zero-LR no-op, so ep4 is the keeper — `checkpoints_v13b/evaluated_run1/phase2_epoch_4.pt`, md5-verified.)
+
+### V14: rope encoder + RoMa scene-rotation augmentation (plan, 2026-05-31)
+
+Two moves from a close read of the RenderFormer paper:
+1. **Back to RoPE-only position** (`pe_type=rope`). The paper (p.6) explicitly reports that NeRF-encoding triangle *positions* "is not stable, and it is prone to converge to a suboptimal local minimum" — exactly the V11 0.0138 plateau. Our entire rope lineage (V10b) was N=5k; **rope @ N=20k was the missing clean control.**
+2. **RoMa rotation augmentation.** The model is rotation-variant (relative PE → translation invariance only); the paper augments with on-the-fly scene+camera rotations. For our data this is *exactly image-preserving* (gsplat `sh_degree=None` → constant per-Gaussian color, no world-fixed lighting), verified by re-rasterizing rotated scene+camera and matching the unrotated render to **108–119 dB** PSNR. Implemented in `training/dataset.py` (`augment_rotation` flag; rotate `means`, compose rotation onto quats via the matrix path, `c2w'=R4@c2w`; WXYZ↔XYZW reorder at the RoMa boundary). Also added `--keep_last_n` rolling checkpoint prune + atomic saves.
+
+### V14 (rope @ N=20k, no-aug): nerf > rope — but the plateau was a clue (2026-06-02→03)
+
+Trained rope @ N=20k, log-L1, seeded from an aug-warmed Phase-1 ep10. **Phase 2 sat at the 0.0138 plateau for ~10 epochs, then broke out at ep11** and descended cleanly to 0.001473 train / 0.001631 val. Renders confirmed: at the plateau the model outputs *sparse* (~1% lit pixels), not a dead all-zero collapse; at break-out the geometry/silhouette appears first (grey blobs in the right shape), then color/texture fills in.
+
+Final full-val: **V14na = 31.49 dB / 0.0486 LPIPS.** vs V13 (nerf, no-aug) 33.58 / 0.0349 → **nerf beats rope by ~2.1 dB at N=20k.** So the paper's "NeRF-on-position unstable" caution did *not* translate to a problem for us; the richer NeRF position-lift actually helps organize 20k tokens. *Provisional verdict: keep nerf.* (This was later overturned — see below.) Process lesson banked: this recipe can plateau ~10 epochs before breaking out, so **don't judge a run at ep1–2.**
+
+### V14 with augmentation: the breakthrough — aug is transformative (2026-06-04)
+
+Re-ran rope @ N=20k **with augmentation**, extended to 30 Phase-2 epochs. **It broke out at ep1 (no plateau at all)** — the opposite of the no-aug run. The explanation reframes the whole plateau scare: both runs seeded from the *aug-warmed* Phase-1 ep10, so **aug Phase 2 = warmup-matched (instant break-out); no-aug Phase 2 = mismatched (10-epoch plateau while it un-learns rotation-invariance).** The plateau was a warmup/data-mismatch artifact, not a fundamental property.
+
+Val descended faster than no-aug throughout (aug ep14 val 0.001356 already beat no-aug's *final* 0.001631). The run hit a cluster-contention burst and stalled at ep20 (3 preemptions, the last two 35 min apart, 0 free 8-GPU nodes), so ep20 was taken as the result.
+
+**V14aug ep20 full-val = 33.70 dB / 0.0319 LPIPS — a new best-PSNR model:**
+- vs V14na (rope, no-aug) 31.49: **+2.2 dB** — augmentation single-handedly erases the rope-vs-nerf gap and more.
+- vs V13 (nerf, no-aug) 33.58: **V14aug WINS** (+0.12 dB, better LPIPS too).
+- **So rope+aug > nerf-no-aug: augmentation is a *bigger* lever than the encoder choice**, overturning the provisional "nerf > rope" verdict (true only without aug). Render confirms V14aug sharpest, wins PSNR on every test scene; V14na visibly softest.
+
+### V14aug-LPIPS: new best model on BOTH axes (2026-06-05)
+
+LPIPS fine-tune of V14aug ep20 (`--init_from`, aug ON, `lpips_w 0.2`, 5-epoch fresh cosine 5e-5). Classic over-shoot-then-recover trajectory (full-val, alex):
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 1 | 31.37 | 0.02484 |
+| 2 | 31.60 | 0.02338 |
+| 3 | 32.56 | 0.02200 |
+| 4 | 32.98 | 0.02044 |
+| **5** | **33.57** | **0.01948** |
+
+**V14aug-LPIPS ep5 = 33.57 dB / 0.01948 LPIPS — the new best model overall, beating V13b (32.83 / 0.0209) on PSNR by +0.74 dB *and* LPIPS by −0.0014.** It barely cost PSNR vs the base (33.70→33.57) while crushing LPIPS (0.0319→0.0195). Wins PSNR on every test scene in the comparison render. ep1's −2.3 dB PSNR dip is the normal LPIPS-FT over-shoot; it fully recovered by ep3–4 (lesson: don't judge an LPIPS FT at ep1).
+
+Crucially, **ep5 was still climbing** (+0.60 dB PSNR, −0.001 LPIPS from ep4) — the 5-epoch cosine cut it off mid-ascent. A **10-epoch FT** (same recipe, `phase2_epochs 10`) is running now (`runs/train_v14auglp10.sh`) to extend the runway and likely push PSNR past the base's 33.70 with LPIPS lower still.
+
+**Model leaderboard (full 183-scene val, `tone_mapper=none`):**
+
+| Model | encoder | aug | LPIPS-FT | PSNR | LPIPS |
+|---|---|---|---|---|---|
+| **V14aug-LPIPS ep5** | rope | yes | yes | **33.57** | **0.01948** |
+| V14aug ep20 | rope | yes | no | 33.70 | 0.0319 |
+| V13 ep20 | nerf | no | no | 33.58 | 0.0349 |
+| V13b ep4 | nerf | no | yes | 32.83 | 0.0209 |
+| V14na ep20 | rope | no | no | 31.49 | 0.0486 |
+
+**Headline takeaways:** (1) **augmentation is the dominant lever** — bigger than encoder choice, and it's free/image-preserving for our data; (2) **rope+aug+LPIPS-FT is the winning combo**; (3) the long Phase-2 plateau was a warmup-mismatch artifact, not a failure — patience + a matched warmup avoids it. Infra lessons banked along the way: `/dev/shm` dataset staging eliminates an NFS I/O bottleneck (3.0→1.2 s/step, ~3× speedup; the synthetic speed-probe had hidden it); killable jobs need `-c 32` not 64 (CPU was the scheduling blocker, not the 256 GB mem of which we use ~29); and `#!/bin/zsh` resume-aware launchers must build conditional args as zsh *arrays* (no scalar word-splitting).
+
+Artifacts: best model `checkpoints_v14aug_lpips/phase2_epoch_5.pt`; evals `eval_results/v14{na,aug,auglp}_*_n20k_val.json`; renders `compare_renders/v14auglp_ep5_FINAL/` (GT|pruned-GT|V13b|V14aug-LP) and `compare_renders/v14aug_ep20/` (5-way). 10-epoch FT in progress → `checkpoints_v14auglp10/`.
+
+### V14aug-LPIPS-10: the final best — more epochs paid off (2026-06-07)
+
+The 5-epoch LPIPS FT was still climbing at ep5, so re-ran it with a **10-epoch** cosine (same recipe: `--init_from` V14aug ep20, rope+aug, `lpips_w 0.2`, fresh cosine 5e-5, `/dev/shm`). The longer schedule's gentler anneal gave a milder ep1 over-shoot (32.38 vs the 5-ep run's 31.37) and kept climbing through the back half:
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 5 | 33.11 | 0.02025 |
+| 6 | 33.23 | 0.01998 |
+| 7 | 33.40 | 0.01960 |
+| 8 | 33.50 | 0.01922 |
+| 9 | 33.75 | 0.01877 |
+| **10** | **33.835** | **0.01853** |
+
+**v14auglp10 ep10 = 33.835 dB / 0.01853 LPIPS — the definitive best model.** It beats the 5-epoch FT by +0.27 dB / −0.001, the old V13b by **+1.0 dB / −0.0024**, and even edges the V14aug *base* PSNR (33.70) while cutting LPIPS to a quarter of it (0.0319→0.0185) — a strict improvement on both axes over the base. So the "more epochs" call was right: the 5-epoch run was genuinely cut off mid-climb (+0.27 dB recovered), though the FT is now near its ceiling (~33.8 / ~0.0185, gains slowing to +0.08/epoch by ep10).
+
+**Final model leaderboard (full 183-scene val, `tone_mapper=none`):**
+
+| Model | encoder | aug | LPIPS-FT | PSNR | LPIPS |
+|---|---|---|---|---|---|
+| **v14auglp10 ep10 (BEST)** | rope | yes | 10-ep | **33.835** | **0.01853** |
+| V14aug-LPIPS ep5 | rope | yes | 5-ep | 33.57 | 0.01948 |
+| V14aug base | rope | yes | no | 33.70 | 0.0319 |
+| V13 base | nerf | no | no | 33.58 | 0.0349 |
+| V13b (prior best) | nerf | no | yes | 32.83 | 0.0209 |
+| V14na | rope | no | no | 31.49 | 0.0486 |
+
+**Campaign summary:** the winning recipe is **rope encoder + RoMa rotation augmentation + LPIPS fine-tune (~10 epochs)**. Augmentation was the dominant lever (bigger than the nerf-vs-rope encoder choice, and free/image-preserving for our data); the long Phase-2 plateau was a warmup/data-mismatch artifact, not a failure; and the LPIPS FT — given enough epochs — lifts both PSNR and LPIPS over the base. Best model: `checkpoints_v14auglp10/phase2_epoch_10.pt`.
+
+Artifacts: `checkpoints_v14auglp10/phase2_epoch_10.pt`; evals `eval_results/v14auglp10_phase2_epoch_{5..10}_n20k_val.json`; render `compare_renders/v14auglp10_ep10_BEST/` (GT|pruned-GT|V13b|V14best).

@@ -5,6 +5,7 @@ from pathlib import Path
 import h5py
 import imageio
 import numpy as np
+import roma
 import torch
 from torch.utils.data import Dataset
 
@@ -25,10 +26,16 @@ class GaussianRenderDataset(Dataset):
         renders_dir: Path,
         resolution: int = 256,
         max_samples: int | None = None,
+        augment_rotation: bool = False,
     ):
         self.gaussian_h5_dir = Path(gaussian_h5_dir)
         self.renders_dir = Path(renders_dir)
         self.resolution = resolution
+        # On-the-fly Haar-uniform scene+camera rotation (RenderFormer's RoMa aug). The
+        # render is invariant under a joint scene+camera rotation (sh_degree=None ->
+        # constant per-Gaussian color, no world-fixed lighting), so the GT image is
+        # left untouched. Only the train dataset should set this; val stays fixed.
+        self.augment_rotation = augment_rotation
 
         # Build index of (h5_path, view_index, render_path) triples
         self.samples: list[tuple[Path, int, Path]] = []
@@ -55,6 +62,42 @@ class GaussianRenderDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.samples)
+
+    @staticmethod
+    def _rotate_scene(gaussians: torch.Tensor, c2w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Apply one Haar-uniform rotation R to the scene + camera, image-preserving.
+
+        gaussians: [N, 14] = [pos(3), scale(3), rot_quat_wxyz(4), color(3), opacity(1)].
+        c2w: [4, 4] camera-to-world. Positions rotate (means @ R.T), each Gaussian's
+        orientation world-rotates (R @ M via the matrix path -- avoids quat-product
+        operand ambiguity), and the camera pose rotates in world space (R4 @ c2w).
+        Scale/color/opacity are rotation-invariant. RoMa quaternions are XYZW; ours are
+        WXYZ -> reorder at the boundary.
+        """
+        R = roma.random_rotmat().to(gaussians.dtype)
+        if R.ndim == 3:
+            R = R[0]
+
+        means = gaussians[:, 0:3]
+        quats_wxyz = gaussians[:, 6:10]
+
+        means_rot = means @ R.T
+
+        q_xyzw = quats_wxyz[:, [1, 2, 3, 0]]
+        M = roma.unitquat_to_rotmat(q_xyzw)            # [N, 3, 3]
+        M_rot = torch.matmul(R, M)                     # broadcast R over the N batch
+        q_rot_xyzw = roma.rotmat_to_unitquat(M_rot)
+        q_rot_wxyz = q_rot_xyzw[:, [3, 0, 1, 2]]
+
+        gaussians = gaussians.clone()
+        gaussians[:, 0:3] = means_rot
+        gaussians[:, 6:10] = q_rot_wxyz
+
+        R4 = torch.eye(4, dtype=c2w.dtype)
+        R4[:3, :3] = R
+        c2w_rot = R4 @ c2w
+
+        return gaussians, c2w_rot
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         h5_path, view_idx, render_path = self.samples[idx]
@@ -96,10 +139,15 @@ class GaussianRenderDataset(Dataset):
         elif img.shape[-1] == 4:
             img = img[..., :3]
 
+        gaussians_t = torch.from_numpy(gaussians)               # [N, 14]
+        c2w_t = torch.from_numpy(c2w_view)                      # [4, 4]
+        if self.augment_rotation:
+            gaussians_t, c2w_t = self._rotate_scene(gaussians_t, c2w_t)
+
         return {
-            "gaussians": torch.from_numpy(gaussians),          # [N, 14]
+            "gaussians": gaussians_t,                           # [N, 14]
             "mask": torch.from_numpy(mask),                     # [N]
-            "c2w": torch.from_numpy(c2w_view),                  # [4, 4]
+            "c2w": c2w_t,                                       # [4, 4]
             "fov": torch.tensor(fov_view),                      # scalar
             "target": torch.from_numpy(img),                    # [H, W, 3]
         }

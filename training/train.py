@@ -201,6 +201,7 @@ def run_phase(
     val_dataloader: DataLoader | None = None,
     train_sampler: DistributedSampler | None = None,
     start_epoch: int = 0,
+    keep_last_n: int | None = None,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
@@ -313,6 +314,9 @@ def run_phase(
         is_last_epoch = (epoch + 1) == num_epochs
         if ((epoch + 1) % save_interval == 0 or is_last_epoch) and is_main_process():
             ckpt_path = save_dir / f"{phase_name}_epoch_{epoch + 1}.pt"
+            # Atomic write: save to .tmp then os.replace, so a preemption mid-write can
+            # never leave a half-written checkpoint that --resume would choke on.
+            tmp_path = ckpt_path.with_suffix(".pt.tmp")
             torch.save({
                 "phase": phase_name,
                 "epoch": epoch + 1,
@@ -321,8 +325,19 @@ def run_phase(
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "loss": avg_loss,
-            }, ckpt_path)
+            }, tmp_path)
+            os.replace(tmp_path, ckpt_path)
             print(f"  Saved checkpoint: {ckpt_path}", flush=True)
+
+            # Rolling prune: keep only the N most recent same-phase checkpoints.
+            if keep_last_n is not None and keep_last_n > 0:
+                saved = sorted(
+                    save_dir.glob(f"{phase_name}_epoch_*.pt"),
+                    key=lambda p: int(p.stem.rsplit("_", 1)[1]),
+                )
+                for stale in saved[:-keep_last_n]:
+                    stale.unlink()
+                    print(f"  Pruned old checkpoint: {stale}", flush=True)
 
     return global_step
 
@@ -344,6 +359,13 @@ def main():
                         help="Escape hatch for crash recovery: resume from a phase1/phase2 "
                         "checkpoint (restores phase, epoch, optimizer, scheduler). Not part "
                         "of the normal recipe -- the default path trains end to end.")
+    parser.add_argument("--init_from", type=Path,
+                        help="Warm-start fine-tune: load ONLY model weights from a checkpoint, "
+                        "then run a FRESH Phase 2 (new optimizer + new cosine schedule, "
+                        "global_step=0); Phase 1 is skipped. Unlike --resume, nothing about the "
+                        "prior schedule/epoch/optimizer is carried over -- use this to fine-tune "
+                        "a converged model under a new loss/LR (e.g. the V9->V10b or V13->V13b "
+                        "LPIPS fine-tune). Mutually exclusive with --resume.")
     parser.add_argument("--min_lr_ratio", type=float, default=TrainingConfig.min_lr_ratio)
     parser.add_argument("--save_interval", type=int, default=TrainingConfig.save_interval, help="Save checkpoint every N epochs")
     parser.add_argument("--val_h5_dir", type=Path, default=None, help="Validation H5 directory")
@@ -357,11 +379,16 @@ def main():
                         "DDP runs with num_workers=0 saturate one main thread per rank on disk IO; "
                         "set to 4 for prefetching parallelism.")
     parser.add_argument("--pe_type", type=str, default="nerf",
-                        choices=["rope", "nerf", "nerf_perfield"],
+                        choices=["rope", "nerf"],
                         help="Gaussian input encoder. 'nerf' = concat encoder "
                         "(NeRF-encoded position + log-scale); 'rope' = V9 baseline.")
-    parser.add_argument("--scale_pe_num_freqs", type=int, default=6,
-                        help="NeRFEncoding frequencies for log-scale (nerf_perfield only).")
+    parser.add_argument("--augment_rotation", action="store_true",
+                        help="Apply on-the-fly Haar-uniform scene+camera rotation to the "
+                        "TRAIN set (image-preserving; val stays fixed). Teaches rotation "
+                        "robustness for free -- the model is otherwise rotation-variant.")
+    parser.add_argument("--keep_last_n", type=int, default=None,
+                        help="Retain only the N most recent same-phase checkpoints "
+                        "(prune older ones after each save). None = keep all (default).")
     args = parser.parse_args()
 
     config = TrainingConfig(
@@ -389,6 +416,7 @@ def main():
     dataset = GaussianRenderDataset(
         config.gaussian_h5_dir, config.renders_dir, config.resolution,
         max_samples=args.max_samples,
+        augment_rotation=args.augment_rotation,
     )
     train_sampler: DistributedSampler | None = None
     if world_size > 1:
@@ -436,7 +464,6 @@ def main():
     from gaussianformer.models.gaussianformer import GaussianFormer
     gf_config = GaussianFormerConfig(
         pe_type=args.pe_type,
-        scale_pe_num_freqs=args.scale_pe_num_freqs,
     )
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
@@ -453,6 +480,17 @@ def main():
         module.load_state_dict(resume_ckpt["model_state_dict"])
         if is_main_process():
             print(f"Resuming from {args.resume} ({resume_phase} epoch {resume_epoch})", flush=True)
+    elif args.init_from:
+        # Warm-start fine-tune: load weights only. resume_ckpt/resume_phase stay None,
+        # so nothing about the prior optimizer/scheduler/epoch is carried over -- the
+        # Phase-2 restore block below is not taken (fresh optimizer + fresh cosine from
+        # phase2_lr, global_step/start_epoch = 0). Phase 1 is skipped via the gate below.
+        init_ckpt = torch.load(args.init_from, map_location="cpu", weights_only=True)
+        module = GaussianFormer(gf_config)
+        module.load_state_dict(init_ckpt["model_state_dict"])
+        if is_main_process():
+            print(f"Warm-start (weights only) from {args.init_from} "
+                  f"-> fresh Phase 2 fine-tune", flush=True)
     else:
         module = transfer_weights(config.renderformer_model_id, gf_config)
 
@@ -468,7 +506,7 @@ def main():
     # DDP is constructed per phase, AFTER requires_grad is set. Freezing the backbone
     # before the wrap means DDP's reducer registers only the trainable encoder params,
     # so find_unused_parameters=False is correct (no Phase-1 crash, no corruption).
-    if resume_phase != "phase2":
+    if resume_phase != "phase2" and args.init_from is None:
         trainable_names = freeze_backbone(module)
         if is_main_process():
             print(f"Phase 1 trainable params: {trainable_names}", flush=True)
@@ -495,6 +533,7 @@ def main():
             args.log_loss_weight, args.lpips_loss_weight,
             model_config, global_step, val_dataloader=val_dataloader,
             train_sampler=train_sampler, start_epoch=phase1_start,
+            keep_last_n=args.keep_last_n,
         )
         del p1  # drop the Phase-1 DDP wrapper; its reducer hooks go inert once unused
 
@@ -523,6 +562,7 @@ def main():
         args.log_loss_weight, args.lpips_loss_weight,
         model_config, global_step, val_dataloader=val_dataloader,
         train_sampler=train_sampler, start_epoch=phase2_start,
+        keep_last_n=args.keep_last_n,
     )
 
     # --- Save final model (rank 0 only) ---

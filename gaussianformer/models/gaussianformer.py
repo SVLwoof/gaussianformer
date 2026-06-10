@@ -1,13 +1,11 @@
 import torch
-from torch import nn
-from torch.amp import autocast
-
 from huggingface_hub import PyTorchModelHubMixin
+from torch import nn
 
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
 from gaussianformer.layers.attention import TransformerEncoder
-from gaussianformer.models.view_transformer import ViewTransformer
 from gaussianformer.models.config import GaussianFormerConfig
+from gaussianformer.models.view_transformer import ViewTransformer
 
 
 class GaussianFormer(nn.Module, PyTorchModelHubMixin):
@@ -20,50 +18,21 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         self.gaussian_token = nn.Parameter(torch.randn(1, 1, self.config.latent_dim))
         self.rope_dim = None
 
-        if self.config.pe_type == 'nerf_perfield':
-            # RoPE stays ON: the RenderFormer backbone is RoPE-pretrained, so its attention
-            # weights require rotary Q/K. The per-field NeRF encoding is additive input
-            # richness, not a replacement for RoPE.
-            self.rope_dim = self.config.pos_pe_num_freqs
+        # RoPE stays ON for both pe_types: the RenderFormer backbone is RoPE-pretrained.
+        self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
+        self.rope_dim = self.config.pos_pe_num_freqs
 
-            # Per-field decomposition: only position gets NeRF PE. Scale is a smooth per-Gaussian
-            # attribute spanning log-range ~[-14,-2], far outside NeRF's [0,1] working range, so
-            # every sinusoidal band aliased -- it uses a plain linear projection on log-scale.
-            self.pos_pe = NeRFEncoding(in_dim=3, num_frequencies=self.config.pos_pe_num_freqs,
-                                       include_input=True)
-
-            self.pos_proj = nn.Linear(self.pos_pe.get_out_dim(), self.config.latent_dim)
-            self.scale_proj = nn.Linear(3, self.config.latent_dim)
-            self.rotation_proj = nn.Linear(4, self.config.latent_dim)
-            self.color_proj = nn.Linear(3, self.config.latent_dim)
-            self.opacity_proj = nn.Linear(1, self.config.latent_dim)
-
-            # Per-field norms balance every field to equal magnitude before summing -- raw
-            # log-scale (input magnitude ~10 vs ~1 for the other fields) otherwise makes
-            # scale_emb ~7x hot and dominate the token. The final norm then sets the token
-            # to the ~sqrt(2) the RoPE-pretrained backbone's residual stream expects.
-            self.pos_norm = norm_class(self.config.latent_dim)
-            self.scale_norm = norm_class(self.config.latent_dim)
-            self.rotation_norm = norm_class(self.config.latent_dim)
-            self.color_norm = norm_class(self.config.latent_dim)
-            self.opacity_norm = norm_class(self.config.latent_dim)
-            self.gaussian_norm = norm_class(self.config.latent_dim)
-        else:
-            # RoPE stays ON for both: the RenderFormer backbone is RoPE-pretrained.
-            self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
-            self.rope_dim = self.config.pos_pe_num_freqs
-
-            if self.config.pe_type == 'nerf':
-                # Concat encoder: position lifted into a NeRF basis, concatenated with the
-                # remaining raw fields (scale as standardized log-scale), projected by a
-                # single Linear -- one free weighting over all fields, like rope's
-                # Linear(14,768) but with NeRF position.
-                self.gaussian_pos_pe = NeRFEncoding(in_dim=3, num_frequencies=self.config.pos_pe_num_freqs,
-                                                    include_input=True)
-                encoder_in_dim = self.gaussian_pos_pe.get_out_dim() + 11  # scale(3)+quat(4)+color(3)+opacity(1)
-                self.gaussian_encoder = nn.Linear(encoder_in_dim, self.config.latent_dim)
-            else:  # rope
-                self.gaussian_encoder = nn.Linear(self.config.gaussian_dim, self.config.latent_dim)
+        if self.config.pe_type == 'nerf':
+            # Concat encoder: position lifted into a NeRF basis, concatenated with the
+            # remaining raw fields (scale as log-scale), projected by a single Linear --
+            # one free weighting over all fields, like rope's Linear(14,768) but with
+            # NeRF position.
+            self.gaussian_pos_pe = NeRFEncoding(in_dim=3, num_frequencies=self.config.pos_pe_num_freqs,
+                                                include_input=True)
+            encoder_in_dim = self.gaussian_pos_pe.get_out_dim() + 11  # scale(3)+quat(4)+color(3)+opacity(1)
+            self.gaussian_encoder = nn.Linear(encoder_in_dim, self.config.latent_dim)
+        else:  # rope
+            self.gaussian_encoder = nn.Linear(self.config.gaussian_dim, self.config.latent_dim)
 
         # --- Common Components ---
         self.reg_tokens = nn.Parameter(torch.randn(1, self.config.num_register_tokens, self.config.latent_dim))
@@ -118,29 +87,11 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         tokens = [self.reg_tokens.expand(batch_size, -1, -1)]
 
-        if self.config.pe_type == 'nerf_perfield':
-            pos = gaussians[..., 0:3]
-            scale = gaussians[..., 3:6]
-            quat = gaussians[..., 6:10]
-            color = gaussians[..., 10:13]
-            opacity = gaussians[..., 13:14]
-
-            log_scale = torch.log(scale.clamp(min=1e-6))
-
-            pos_emb = self.pos_norm(self.pos_proj(self.pos_pe(pos)))
-            scale_emb = self.scale_norm(self.scale_proj(log_scale))
-            rot_emb = self.rotation_norm(self.rotation_proj(quat))
-            color_emb = self.color_norm(self.color_proj(color))
-            opacity_emb = self.opacity_norm(self.opacity_proj(opacity))
-
-            fused = pos_emb + scale_emb + rot_emb + color_emb + opacity_emb
-            tokens.append(self.gaussian_token + self.gaussian_norm(fused))
-        elif self.config.pe_type == 'nerf':
+        if self.config.pe_type == 'nerf':
             # Concat encoder: NeRF-lifted position + log-scale + raw quaternion /
             # color / opacity, projected by a single Linear. The shared projection's
-            # bias absorbs per-field offset and its weights absorb per-field
-            # magnitude -- no per-field normalization, which is what capped the
-            # per-field encoder.
+            # bias absorbs per-field offset, and its weights absorb per-field
+            # magnitude -- no per-field normalization.
             pos = gaussians[..., 0:3]
             scale = gaussians[..., 3:6]
             rest = gaussians[..., 6:14]  # quat(4) + color(3) + opacity(1)

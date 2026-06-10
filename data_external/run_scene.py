@@ -298,10 +298,8 @@ def main(scene: str | None = None) -> None:
                         "Render outputs land at renders/gaussianformer_n{N}_{tag}/ "
                         "and overviews at overview_3way_n{N}_{tag}.png.")
     parser.add_argument("--pe_type", type=str, default="rope",
-                        choices=["rope", "nerf", "nerf_perfield"],
+                        choices=["rope", "nerf"],
                         help="Must match the architecture of the checkpoint.")
-    parser.add_argument("--scale_pe_num_freqs", type=int, default=6,
-                        help="Only used when pe_type='nerf_perfield'.")
     parser.add_argument("--label", type=str, default=None,
                         help="Display label for the GaussianFormer column in overview captions "
                         "(e.g. 'V12 ep75'). Defaults to --tag.")
@@ -337,7 +335,7 @@ def main(scene: str | None = None) -> None:
     print(f"\nLoaded {cfg.n_views} full-scene gsplat references from {cfg.full_gsplat_dir}/")
 
     print(f"\nLoading checkpoint {checkpoint}...")
-    config = GaussianFormerConfig(pe_type=args.pe_type, scale_pe_num_freqs=args.scale_pe_num_freqs)
+    config = GaussianFormerConfig(pe_type=args.pe_type)
     model = GaussianFormer(config)
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=True)
     model.load_state_dict(ckpt["model_state_dict"])

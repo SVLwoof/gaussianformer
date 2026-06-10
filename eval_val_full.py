@@ -6,7 +6,7 @@ the GT renders, writes per-scene means and a global summary as JSON.
 
 Inputs:
   --checkpoint path/to/phaseN_epoch_M.pt
-  --pe_type {rope, nerf, nerf_perfield}    (must match how the ckpt was trained)
+  --pe_type {rope, nerf}    (must match how the ckpt was trained)
   --h5_dir   data_v9_n20k/h5s_val          (val H5s, any target_n)
   --gt_dir   data_v9/renders_val           (GT PNGs from FULL-scene raster)
   --out_json path/to/result.json
@@ -46,7 +46,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", type=Path, required=True)
     ap.add_argument("--pe_type", type=str, default="rope",
-                    choices=["rope", "nerf", "nerf_perfield"])
+                    choices=["rope", "nerf"])
     ap.add_argument("--h5_dir", type=Path, default=Path("data_v9_n20k/h5s_val"))
     ap.add_argument("--gt_dir", type=Path, default=Path("data_v9/renders_val"))
     ap.add_argument("--out_json", type=Path, required=True)

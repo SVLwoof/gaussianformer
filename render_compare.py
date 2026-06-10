@@ -19,6 +19,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
+import gsplat
 import h5py
 import imageio.v3 as iio
 import numpy as np
@@ -26,10 +27,47 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 from simple_ocio import ToneMapper
 
+from data_external.orbit import make_orbit_views
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.models.gaussianformer import GaussianFormer
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
 from infer_gaussian import load_single_gaussian_h5_data
+
+# Orbit camera params the val data was generated with (data_v9 process_objaverse
+# defaults). The orbit is scene-independent, so viewmats/Ks are computed once.
+ORBIT_N_VIEWS = 14
+ORBIT_RADIUS = 1.7
+ORBIT_FOV_DEG = 45.0
+PRUNE_N = 20_000  # target_n the data_v9_n20k H5s were pruned to
+
+
+def scene_n_gaussians(h5_path) -> int:
+    with h5py.File(h5_path, "r") as f:
+        return f["means"].shape[0]
+
+
+def render_pruned_gt(h5_path, view_idx: int, viewmats: torch.Tensor, Ks: torch.Tensor,
+                     resolution: int, device: torch.device) -> np.ndarray:
+    """Rasterize the H5's (pruned) Gaussians at one orbit view, matching the exact
+    gsplat call render_full used to make the full-GT PNGs (process_objaverse.py)."""
+    with h5py.File(h5_path, "r") as f:
+        means = torch.from_numpy(np.array(f["means"], dtype=np.float32)).to(device)
+        scales = torch.from_numpy(np.array(f["scales"], dtype=np.float32)).to(device)
+        quats = torch.from_numpy(np.array(f["rotations"], dtype=np.float32)).to(device)
+        colors = torch.from_numpy(np.array(f["colors"], dtype=np.float32)).to(device)
+        opacities = torch.from_numpy(np.array(f["opacities"], dtype=np.float32)).to(device)
+    if opacities.ndim == 2:
+        opacities = opacities.squeeze(-1)
+    with torch.no_grad():
+        img, _, _ = gsplat.rasterization(
+            means=means, quats=quats, scales=scales,
+            opacities=opacities, colors=colors,
+            viewmats=viewmats[view_idx:view_idx + 1], Ks=Ks[view_idx:view_idx + 1],
+            width=resolution, height=resolution,
+            sh_degree=None, eps2d=0.3, render_mode="RGB",
+            near_plane=0.01, packed=True,
+        )
+    return img[0].clamp(0, 1).cpu().numpy()
 
 
 @dataclass
@@ -125,6 +163,14 @@ def main() -> None:
     ap.add_argument("--tone_mapper", type=str, default="none",
                     help="MUST match the GT pipeline. data_v9 GT is written with NO "
                     "tone map, so 'none' (clip) is correct; AGX desaturates.")
+    ap.add_argument("--pruned_gt", action="store_true",
+                    help="Insert a 'pruned-GT' column: gsplat rasterization of the H5's "
+                    "(pruned) Gaussians, via the same gsplat call that made the full-GT "
+                    "PNGs. Auto-dropped per-scene when the H5 has < --prune_n Gaussians "
+                    "(i.e. the scene wasn't pruned, so pruned-GT == GT).")
+    ap.add_argument("--prune_n", type=int, default=PRUNE_N,
+                    help="Gaussian count the H5s were pruned to; a scene counts as pruned "
+                    "iff it has >= this many Gaussians.")
     args = ap.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -146,6 +192,13 @@ def main() -> None:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
     except Exception:
         font = ImageFont.load_default()
+
+    pruned_viewmats = pruned_Ks = None
+    if args.pruned_gt:
+        vm, ks = make_orbit_views(ORBIT_N_VIEWS, ORBIT_RADIUS, ORBIT_FOV_DEG,
+                                  args.resolution, up_axis="y")
+        pruned_viewmats = torch.from_numpy(vm).to(device)
+        pruned_Ks = torch.from_numpy(ks).to(device)
 
     grid_rows = []
     for si in scenes:
@@ -169,6 +222,17 @@ def main() -> None:
                 continue
             gt = load_gt(gt_path, args.resolution)
             panels = [label_panel(gt, f"GT  scene_{si:04d} v{v_idx}", font)]
+
+            if args.pruned_gt:
+                if scene_n_gaussians(h5_path) >= args.prune_n:
+                    pgt = render_pruned_gt(h5_path, v_idx, pruned_viewmats, pruned_Ks,
+                                           args.resolution, device)
+                    ppsnr = 10.0 * np.log10(1.0 / (float(((pgt - gt) ** 2).mean()) + 1e-12))
+                    panels.append(label_panel(pgt, f"pruned-GT N={args.prune_n}  PSNR {ppsnr:.2f}dB", font))
+                else:
+                    # Scene wasn't pruned -> pruned-GT == GT; show a placeholder to keep
+                    # grid columns aligned (no need to render, per spec).
+                    panels.append(label_panel(np.zeros_like(gt), "pruned-GT n/a (not pruned)", font))
 
             for spec, pipe in pipes:
                 rendered = render_view(pipe, data, v_idx, args.resolution, tone_mapper)
