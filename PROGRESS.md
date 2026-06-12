@@ -1505,3 +1505,49 @@ The 5-epoch LPIPS FT was still climbing at ep5, so re-ran it with a **10-epoch**
 **Campaign summary:** the winning recipe is **rope encoder + RoMa rotation augmentation + LPIPS fine-tune (~10 epochs)**. Augmentation was the dominant lever (bigger than the nerf-vs-rope encoder choice, and free/image-preserving for our data); the long Phase-2 plateau was a warmup/data-mismatch artifact, not a failure; and the LPIPS FT — given enough epochs — lifts both PSNR and LPIPS over the base. Best model: `checkpoints_v14auglp10/phase2_epoch_10.pt`.
 
 Artifacts: `checkpoints_v14auglp10/phase2_epoch_10.pt`; evals `eval_results/v14auglp10_phase2_epoch_{5..10}_n20k_val.json`; render `compare_renders/v14auglp10_ep10_BEST/` (GT|pruned-GT|V13b|V14best).
+
+## Side experiment: single-object overfit — capacity probe (2026-06-12, branch `exp/single-object-overfit`)
+
+**Why.** Every version through V14 leaves residual blur — even our best can't match the
+*pruned*-GT, and we keep debating whether the fix is **more data** or a **different
+architecture**. Before iterating further (V15/16…), step off the main line and answer the
+prior question directly: **is the model, at its current size/config and N=20k, even
+*capable* of representing high-frequency texture/colour detail?** Overfit a single object
+exclusively (augmentation OFF) long enough to memorise it, and read the ceiling off with
+generalisation removed entirely.
+
+**The decomposition.** Split the quality gap into two parts with opposite fixes:
+```
+real-GT --(pruning loss, fixed by N=20k)--> pruned-GT --(model loss)--> model output
+```
+- Overfit reaches **pruned-GT** → architecture *can* render the detail; bottleneck is
+  data/N → **scale up** (validates the ~50× Objaverse_Splats headroom plan).
+- Overfit plateaus **below pruned-GT** → architecture/decoder is the ceiling (most likely
+  the DPT band-limited upsampling) → **change architecture**, not data.
+- RF-base low but V14best higher → optimisation-limited, not capacity.
+The decisive number is **model-vs-pruned-GT**: pruned-GT is what the model's *own* 20k input
+can render, so failing it on one memorised object indicts the architecture.
+
+**Matrix (4 killable single-GPU jobs)** — two objects × two inits:
+- **objects**: `boxes` (Objaverse `scene_1441`, clean controlled, src-fit LPIPS 0.034) and
+  `tomatoes` (the V8–V14 hero benchmark, real captured texture). Both texture/colour-rich and
+  well-source-fit, so the detail genuinely lives in the 20k input.
+- **inits**: `base` (RF transfer → Phase 1 encoder warmup → Phase 2 joint) and `v14best`
+  (warm-start `checkpoints_v14auglp10/phase2_epoch_10.pt`; `--init_from` auto-skips Phase 1 —
+  confirms a low base ceiling is capacity, not optimisation).
+- **recipe**: `pe_type=rope`, aug **OFF**, in-train val **OFF**, bs=1, N=20k, Phase 1 50 ep /
+  Phase 2 1500 ep (~21k steps over 14 samples), `save_interval 250`, `keep_last_n 6`.
+
+**Infra.** Self-contained `experiments/overfit/` (`setup_data.sh` symlink-only,
+`run_overfit.sh` parameterised by `OBJ`/`INIT`, `eval_overfit.py` for the three-way, README).
+**Zero changes** to `train.py`/`render_compare.py`. Both objects' real-GT and pruned-GT are
+already on disk (Objaverse full-scene renders; tomatoes `gsplat_full` + `gsplat_n20000`), so
+prep = symlinks. tomatoes shares the exact orbit rig (radius 1.7, fov 45°, 14 views) as the
+Objaverse data → `render_compare --pruned_gt` works unchanged.
+
+**Status (2026-06-12, launched).** All 4 RUNNING on epona-01, healthy at ~24–27 s/epoch
+(~11 h/run). `v14best` inits start at the dataset-loss floor (0.0008–0.0015); `base` inits are
+warming the encoder. First evaluable checkpoint (ep250) ~2 h out. Eval pending →
+model-vs-pruned-GT / model-vs-real-GT / pruned-vs-real for both objects under both inits.
+Jobs: 30815617 `boxes_base`, 30815618 `boxes_v14best`, 30815619 `tomatoes_base`,
+30815620 `tomatoes_v14best`.
