@@ -33,14 +33,17 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 : ${OBJ:?set OBJ=boxes|tomatoes}
 : ${INIT:?set INIT=base|v14best}
+PHASE2_LR=${PHASE2_LR:-5e-5}   # override to escape the joint-unfreeze plateau (e.g. 2e-4)
+TAG=${TAG:-}                   # optional save_dir/job suffix for rescue/variant runs
 
 case "$OBJ" in
   boxes)    H5DIR=experiments/overfit/data/boxes/h5s;    RENDERS=data_v9/renders ;;
   tomatoes) H5DIR=experiments/overfit/data/tomatoes/h5s; RENDERS=experiments/overfit/data/tomatoes/renders ;;
   *) echo "bad OBJ=$OBJ"; exit 1 ;;
 esac
-SAVEDIR=experiments/overfit/ckpt/${OBJ}_${INIT}
+SAVEDIR=experiments/overfit/ckpt/${OBJ}_${INIT}${TAG:+_$TAG}
 mkdir -p $SAVEDIR
+echo "OBJ=$OBJ INIT=$INIT PHASE2_LR=$PHASE2_LR SAVEDIR=$SAVEDIR"
 
 # Resume-aware seed (zsh (Nom) arrays -- newest-first, null-glob; do NOT word-split a scalar).
 # Priority: own checkpoints (--resume) > v14best warm-start (--init_from) > RF base (fresh).
@@ -63,7 +66,7 @@ uv run --frozen torchrun --standalone --nproc_per_node=1 -m training.train \
   --batch_size 1 --resolution 512 \
   --pe_type rope \
   --phase1_epochs 50 --phase1_lr 1e-3 \
-  --phase2_epochs 1500 --phase2_lr 5e-5 \
+  --phase2_epochs 1500 --phase2_lr $PHASE2_LR \
   --save_interval 250 --keep_last_n 6 \
   --log_loss_weight 1.0 --lpips_loss_weight 0.0 \
   --num_workers 4 $SEED
