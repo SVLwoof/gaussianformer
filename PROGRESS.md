@@ -1598,3 +1598,31 @@ boxes fine, so boxes is overfittable — the plateau is an optimisation artifact
 
 Artifacts: `experiments/overfit/eval/*_metrics.json` + `*_strip.png` (GT|pruned|model),
 hi-res `tomatoes_v14best_hires.png`. Branch `exp/single-object-overfit`.
+
+### Novel-view generalisation probe (2026-06-13) — resolves the memorisation caveat
+
+Rendered the converged tomatoes overfits at **held-out poses** (azimuths halfway between the 14
+training views, in-between elevation — `experiments/overfit/novel_view.py`), vs gsplat-full
+(real-GT) and gsplat-pruned (20k) at the same pose. Training-view controls reproduce the ~50 dB
+memorisation number, confirming the setup.
+
+| tomatoes | TRAIN views (seen) | NOVEL views (held out) | pruned-GT ceiling |
+|---|---|---|---|
+| `v14best` | 52.5 dB | **30.5 dB / LPIPS 0.012** | 29.7 dB |
+| `base` | 48.6 dB | 24.2 dB / LPIPS 0.039 | 29.7 dB |
+
+**The overfit was NOT pure memorisation.** Novel views are coherent and correct (not collapsed) —
+the model learned a *renderable 3D representation* from the 20k input. And **at novel views the
+model saturates the N=20k ceiling** (`v14best` 30.5 dB ≈ pruned-GT 29.7 dB): when it can't
+memorise, it renders the 20k Gaussians about as well as gsplat does. So **the test-time bottleneck
+for a known object is the pruning (N), not the model** → raise N for detailed objects. The
+`v14best` vs `base` gap (30.5 vs 24.2) shows full-dataset pretraining priors are what enable
+view-generalisation. *Still untested:* cross-**object** generalisation (rendering an unseen object)
+— that is what the data scale-up addresses, and the clean next experiment.
+
+**Infra lesson (banked).** `sbatch --wrap` runs under `/bin/sh`, where `source`/`module` don't
+exist, so `module load cuda` silently fails → gsplat's JIT CUDA backend can't load → `_C=None`
+("'NoneType' has no attribute 'CameraModelType'"). GPU jobs needing the CUDA toolkit (gsplat,
+nvcc) MUST use a real `#!/bin/zsh` sbatch script that sources `huji-lmod.sh`, never `--wrap`. The
+node-exclusion chase was a red herring. Artifacts: `experiments/overfit/eval/*_novelview_*`,
+script `experiments/overfit/{novel_view.py,run_novel.sh}`.
