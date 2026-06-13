@@ -1551,3 +1551,50 @@ warming the encoder. First evaluable checkpoint (ep250) ~2 h out. Eval pending �
 model-vs-pruned-GT / model-vs-real-GT / pruned-vs-real for both objects under both inits.
 Jobs: 30815617 `boxes_base`, 30815618 `boxes_v14best`, 30815619 `tomatoes_base`,
 30815620 `tomatoes_v14best`.
+
+### Results (2026-06-13, all converged at ep1500)
+
+Three of four runs converged to near-zero train loss (`tomatoes_v14best` 0.000067,
+`tomatoes_base` 0.000101, `boxes_v14best` 0.000136 — flat at LR-floor 5e-7 for the last
+epochs, i.e. converged, *not* cut short). `boxes_base` fell into the joint-unfreeze
+scene-blob plateau and sat flat at 0.0123 (LR-robust — a 4× rescue at 2e-4 also stuck);
+retired. Final three-way (`eval_overfit.py`, alex-LPIPS, all 14 views):
+
+| Run | model vs real-GT | model vs pruned-GT | pruned vs real-GT |
+|---|---|---|---|
+| `boxes_v14best` ep1500 | **51.81 dB** / 0.0009 | 37.53 / 0.0055 | 37.58 / 0.0057 |
+| `tomatoes_base` ep1500 | **49.13 dB** / 0.0008 | 29.65 / 0.0221 | 29.61 / 0.0219 |
+| `tomatoes_v14best` ep1500 | **53.04 dB** / 0.0003 | 29.62 / 0.0221 | 29.61 / 0.0219 |
+| `boxes_base` ep250 (stuck) | 17.77 / 0.2027 | 18.32 / 0.1973 | 37.58 / 0.0057 |
+
+**Verdict — the architecture is NOT the wall.** Overfit reaches **49–53 dB / LPIPS
+0.0003–0.0009 vs real-GT** (visually pixel-perfect; model column sharper than pruned-GT).
+The **DPT-band-limit hypothesis is falsified**: the decoder can output arbitrarily sharp
+high-frequency detail when fit. So the residual blur in every general model (V9–V14) is a
+**data/generalisation** problem, not an architectural ceiling → **scale the data** is the
+right direction.
+
+**Reframing — "model vs pruned-GT = ceiling" was the wrong lens.** Trained on real-GT, the
+model memorises it to ~50 dB and *transcends* the pruned-GT (model-vs-pruned ≈ pruned-vs-real
+because model ≈ real-GT). The decisive number is **model-vs-real-GT**, not model-vs-pruned.
+(`eval_overfit.py`'s "CAPACITY CEILING" label on the pruned column is misleading and should
+be relabelled.)
+
+**Honest caveat.** Overfit = *memorisation* of 14 (object, view) targets, so it proves
+**output capacity** (decoder can produce the detail), not that the model can *render* that
+detail *from the 20k input* in a generalising way. It rules out "architecture is fundamentally
+incapable"; it does not by itself guarantee data-scaling closes the generalisation gap.
+
+**Second finding — N=20k is itself a bottleneck for high-detail real scans.** `pruned vs
+real-GT` = the cap a perfect renderer of the 20k input could reach: **tomatoes 29.6 dB**
+(real captured texture — 20k Gaussians can't hold it) vs **boxes 37.6 dB** (cleaner synthetic
+object). So for detailed objects, raising N matters independently of the model. Boxes (simpler)
+loses far less to pruning.
+
+**Recipe finding.** The bs=1 two-phase recipe is **object-dependently fragile** at the joint
+unfreeze: `tomatoes_base` escaped the plateau instantly, `boxes_base` never did, and LR was
+not the lever (2e-4 sat at the same 0.0123 as 5e-5). `boxes_v14best` (warm-started) overfits
+boxes fine, so boxes is overfittable — the plateau is an optimisation artifact, not capacity.
+
+Artifacts: `experiments/overfit/eval/*_metrics.json` + `*_strip.png` (GT|pruned|model),
+hi-res `tomatoes_v14best_hires.png`. Branch `exp/single-object-overfit`.
