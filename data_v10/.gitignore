@@ -1,0 +1,7 @@
+full_h5s/
+full_h5s_val/
+renders/
+renders_val/
+shards/
+object_list_TEST.json
+metadata_*.json
