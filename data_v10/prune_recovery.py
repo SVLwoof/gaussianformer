@@ -228,6 +228,11 @@ def main():
                 with h5py.File(h5, "r") as src:
                     f.create_dataset("c2w", data=np.array(src["c2w"])); f.create_dataset("fov", data=np.array(src["fov"]))
 
+        # Free GPU memory between objects -- otherwise the caching allocator creeps over
+        # hundreds of objects and OOMs hard (exit 7, no traceback) ~object 400.
+        del full, full_t, naive, target, rec
+        torch.cuda.empty_cache()
+
     tag = (args.scenes_file.stem if args.scenes_file else args.scenes.replace(",", "_"))[:40]
     (args.out / f"recovery_{args.split}_{tag}.json").write_text(json.dumps(results, indent=1))
     if results:
