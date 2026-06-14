@@ -12,6 +12,6 @@ module load nvidia
 module load cuda
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 uv run --frozen python -m data_v10.model_on_v10 --scenes_file data_v10/scenes_show.json --out data_v10/model_eval
 echo DONE_WRAP

@@ -15,7 +15,7 @@ module load nvidia
 module load cuda
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 : ${ITERS:=1500}
 : ${OUT:=data_v10/recovery_eval}
