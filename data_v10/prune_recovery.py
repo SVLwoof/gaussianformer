@@ -181,6 +181,8 @@ def main():
         h5 = h5dir / f"scene_{s:04d}.h5"
         if not h5.exists():
             print(f"skip scene_{s:04d}: missing"); continue
+        if args.save_h5_dir and (args.save_h5_dir / f"scene_{s:04d}.h5").exists():
+            continue   # resume-safe: skip already-recovered (survives preemption/requeue)
         full = load_full(h5)
         full_t = {k: v for k, v in to_dev(full, device).items()}
         full_t = dict(means=full_t["means"], quats=full_t["rotations"], scales=full_t["scales"],
