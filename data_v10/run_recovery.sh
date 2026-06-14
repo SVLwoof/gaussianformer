@@ -25,5 +25,6 @@ ARGS=(--split $SPLIT --iters $ITERS --out $OUT)
 [ -n "$SCENES" ] && ARGS+=(--scenes "$SCENES")
 [ -n "$SAVE" ] && ARGS+=(--save_h5_dir "$SAVE")
 [ -n "$COMPARE" ] && ARGS+=(--compare_dir "$COMPARE")
+[ -n "$SAVE_ONLY" ] && ARGS+=(--save_only)
 
 uv run --frozen python -m data_v10.prune_recovery $ARGS

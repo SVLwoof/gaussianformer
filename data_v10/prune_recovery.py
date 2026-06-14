@@ -154,6 +154,8 @@ def main():
     ap.add_argument("--rec_views", type=int, default=64)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--save_h5_dir", type=Path, default=None)
+    ap.add_argument("--save_only", action="store_true",
+                    help="Production: prune+recover+save recovered H5 only; skip the naive/held-out eval rendering.")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     device = "cuda"
@@ -190,16 +192,19 @@ def main():
                                   for v in range(args.rec_views)])
         rec = recover(naive, target, rv, rk, args.iters, device)
 
-        r = {"scene": s}
-        for name, vm, K in [("canon", cv, ck), ("heldout", hv, hk)]:
-            r[f"naive_{name}_psnr"], r[f"naive_{name}_lpips"] = eval_set(naive, full_t, vm, K, device, lpips_fn)
-            r[f"rec_{name}_psnr"], r[f"rec_{name}_lpips"] = eval_set(rec, full_t, vm, K, device, lpips_fn)
-        r["d_canon_psnr"] = r["rec_canon_psnr"] - r["naive_canon_psnr"]
-        r["d_heldout_psnr"] = r["rec_heldout_psnr"] - r["naive_heldout_psnr"]
-        results.append(r)
-        print(f"scene_{s:04d}: canon naive {r['naive_canon_psnr']:.2f} -> rec {r['rec_canon_psnr']:.2f} "
-              f"(+{r['d_canon_psnr']:.2f}) | heldout naive {r['naive_heldout_psnr']:.2f} -> rec "
-              f"{r['rec_heldout_psnr']:.2f} (+{r['d_heldout_psnr']:.2f})", flush=True)
+        if args.save_only:
+            print(f"scene_{s:04d}: recovered (save-only)", flush=True)
+        else:
+            r = {"scene": s}
+            for name, vm, K in [("canon", cv, ck), ("heldout", hv, hk)]:
+                r[f"naive_{name}_psnr"], r[f"naive_{name}_lpips"] = eval_set(naive, full_t, vm, K, device, lpips_fn)
+                r[f"rec_{name}_psnr"], r[f"rec_{name}_lpips"] = eval_set(rec, full_t, vm, K, device, lpips_fn)
+            r["d_canon_psnr"] = r["rec_canon_psnr"] - r["naive_canon_psnr"]
+            r["d_heldout_psnr"] = r["rec_heldout_psnr"] - r["naive_heldout_psnr"]
+            results.append(r)
+            print(f"scene_{s:04d}: canon naive {r['naive_canon_psnr']:.2f} -> rec {r['rec_canon_psnr']:.2f} "
+                  f"(+{r['d_canon_psnr']:.2f}) | heldout naive {r['naive_heldout_psnr']:.2f} -> rec "
+                  f"{r['rec_heldout_psnr']:.2f} (+{r['d_heldout_psnr']:.2f})", flush=True)
         if args.compare_dir:
             def _ren(a, vm, K, vi):
                 p = to_dev(a, device); p = dict(means=p["means"], quats=p["rotations"], scales=p["scales"], opacities=p["opacities"], colors=p["colors"])
