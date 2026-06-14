@@ -1667,3 +1667,35 @@ Held-out gains confirm it's **not** recovery-view overfitting. Visually verified
 no artifacts). These 3 are geometrically simple → a **30-object diverse gate** (incl. detailed/
 high-freq) is running (6 killable shards) to get the true distribution before committing the full
 14k recovery. Scripts: `prune_recovery.py`, `run_recovery.sh`. **No pruning written to disk yet.**
+
+### Recovery gate PASSED — 30 diverse objects (2026-06-14)
+Across 30 diverse objects (incl. detailed/high-freq), recovery gain is large and consistent:
+- **held-out views: naive 35.0 → recovered 49.5 dB (mean +14.6, median +14.5, min +9.2, max +18.5)**
+- canonical: mean +15.8 dB. Worst (hardest) objects still +9.7..+14.8, reaching 43–45 dB.
+Decisive go for the **full-14k recovery** as data-prep. (Bigger than LightGaussian's +1.5 because
+our naive top-k leaves holes the 50k didn't have; the over-parameterised 50k re-fits to ~20k well.)
+
+### V14best on data_v10 — baseline before retrain (`model_on_v10.py`)
+Ran V14best (`checkpoints_v14auglp10/phase2_epoch_10.pt`) on naive-pruned 20k v10 objects incl.
+**unseen** ones (scene_idx>3000 — never trained). Rotation-fix + RoMA robustness CONFIRMED (clean
+on upright). Mean **33.3 dB** (unseen 32.6 ≈ seen 34.7 → modest cross-object generalisation). KEY:
+on unseen objects the model sits **~3 dB BELOW even its own naive pruned-GT** and **caps ~33–36 dB
+regardless of input quality** (where pruned-GT~39, model falls ~6 dB short) — the generalisation/
+blur gap (unlike the overfit probe which *saturated* pruned-GT on a memorised object).
+
+**Two quantified gaps → two validated levers:**
+```
+current model (unseen):  ~33 dB
+  gap1 model blur:       ~3 dB below naive pruned-GT  -> MORE DATA (5x) + training
+naive pruned-GT:         ~35 dB
+  gap2 pruning waste:    +14.6 dB                     -> RECOVERY (validated)
+recovered pruned-GT:     ~49.5 dB
+```
+
+### NEXT (pending user go-ahead on "step A"):
+**(A) Full-14k prune-and-recovery** — run `prune_recovery.py --save_h5_dir` over all 14,307 objects
+(parallel killable shards like the data gen; ~per-object gsplat fine-tune, tune iters down from
+1500 if the knee allows). Produces `data_v10/h5s_20k_rec/` (recovered 20k H5s) for training.
+**(B) Retrain** on 5x data + recovery-pruned 20k + **256→512 curriculum**, then re-measure on these
+same unseen objects (current baseline 33.3 dB) to see if closing both gaps lifts out of the low-30s.
+Branch `data/v10-scaleup`. Eval artifacts (gitignored): `data_v10/{recovery_eval,model_eval}/`.
