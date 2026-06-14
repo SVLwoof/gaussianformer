@@ -5,3 +5,7 @@ renders_val/
 shards/
 object_list_TEST.json
 metadata_*.json
+recovery_eval/
+val_shards/
+scenes_*.json
+h5s_20k_rec/

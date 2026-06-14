@@ -1626,3 +1626,44 @@ exist, so `module load cuda` silently fails → gsplat's JIT CUDA backend can't 
 nvcc) MUST use a real `#!/bin/zsh` sbatch script that sources `huji-lmod.sh`, never `--wrap`. The
 node-exclusion chase was a red herring. Artifacts: `experiments/overfit/eval/*_novelview_*`,
 script `experiments/overfit/{novel_view.py,run_novel.sh}`.
+
+## 5x data scale-up + pruning recovery (2026-06-13/14, branch `data/v10-scaleup`)
+
+### `data_v10/` — 5x additive dataset (full splats, rotation-fixed, un-pruned)
+Built a 5x additive dataset: **14,307 objects** (13,405 train + 902 val, 0 failures) with full
+**un-pruned** ~50k-gaussian splats (SH-stripped, ~2.8 MB each) + GT renders (14 views, 512).
+- **Rotation bug fixed**: Objaverse_Splats is Z-up, our orbit Y-up → objects rendered on their
+  side. Fix = **−90° about X (Rx-90)** on means+quats in `data_v10/process_full.py`; verified
+  upright across chair/robot/tank/bike/soldier/etc.
+- **Additive**: kept data_v9's 3,000+200 selection verbatim, added 12,800 disjoint new objects
+  (same PSNR≥32/LPIPS≤0.06/num_GS=50000 filter; 86,727 unused pass) → 15k train + 1k val entries.
+- **Un-pruned by design** so we can explore a better N=20k pruning. ~46 GB fulls + 28 GB renders.
+- Ran as 6 killable chunk-disjoint shards (~1.3 h). Scripts: `process_full.py`, `build_additive.py`,
+  `make_shards.py`, `run_process.sh`. All N uniform = 50,000.
+
+### Pruning: we were skipping LightGaussian's recovery step (2026-06-14)
+Studied LightGaussian (arXiv 2311.17245 + `prune_finetune.py`). Their method = **score → prune
+~60% → RECOVER** (fine-tune survivors, L1+SSIM, densification off, ~5k iters). **Our pipeline
+does score+prune and STOPS** — i.e. their "pruning only" baseline, which their own ablation shows
+is −1.36 dB; the recovery restores it to +0.17 over baseline. Our score
+(`Σ_views opacity·proj_radii² · max_scale^γ`) is a fine LightGaussian variant; the gap is the
+**missing recovery**. **Doubly important for us**: the novel-view probe showed GaussianFormer
+*saturates the pruned-GT ceiling*, so lifting pruned-GT via recovery lifts the model's achievable
+ceiling **at the same N=20k, no architecture/data/inference cost.**
+
+`data_v10/prune_recovery.py`: prune 50k→20k → recover (gsplat Adam on means/log-scale/quat/
+opacity-logit/color-logit, L1+SSIM vs full-splat renders at 64 views, no densification, exp-LR,
+~1500 iters), then eval naive-topk vs recovered vs full on **canonical (14) + strict held-out
+(16, unseen elevation)** views.
+
+**Initial 3 texture-rich objects (1500 iters):** gains far bigger than LightGaussian's (theirs
+starts from already-good gaussians; our naive top-k leaves *holes* the recovery fills):
+| scene | canon naive→rec | held-out naive→rec |
+|---|---|---|
+| boxes (1441) | 36.45 → 51.35 (**+14.9**) | 35.77 → 47.33 (+11.6) |
+| cannon (1196) | 37.11 → 51.28 (**+14.2**) | 36.77 → 50.46 (+13.7) |
+| helmet (2426) | 39.45 → 55.76 (**+16.3**) | 39.01 → 53.06 (+14.1) |
+Held-out gains confirm it's **not** recovery-view overfitting. Visually verified (full ≈ recovered,
+no artifacts). These 3 are geometrically simple → a **30-object diverse gate** (incl. detailed/
+high-freq) is running (6 killable shards) to get the true distribution before committing the full
+14k recovery. Scripts: `prune_recovery.py`, `run_recovery.sh`. **No pruning written to disk yet.**
