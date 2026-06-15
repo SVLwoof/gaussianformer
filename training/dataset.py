@@ -27,10 +27,16 @@ class GaussianRenderDataset(Dataset):
         resolution: int = 256,
         max_samples: int | None = None,
         augment_rotation: bool = False,
+        views_per_epoch: int | None = None,
     ):
         self.gaussian_h5_dir = Path(gaussian_h5_dir)
         self.renders_dir = Path(renders_dir)
         self.resolution = resolution
+        # Per-epoch view subsampling: with K set, each epoch draws K random views per scene
+        # (instead of all 14), shrinking the epoch ~14/K and giving finer checkpoint
+        # granularity, while the model still covers all views across epochs. Call set_epoch()
+        # each epoch to redraw (seeded by epoch so every DDP rank agrees on the selection).
+        self.views_per_epoch = views_per_epoch
         # On-the-fly Haar-uniform scene+camera rotation (RenderFormer's RoMa aug). The
         # render is invariant under a joint scene+camera rotation (sh_degree=None ->
         # constant per-Gaussian color, no world-fixed lighting), so the GT image is
@@ -57,11 +63,36 @@ class GaussianRenderDataset(Dataset):
         if max_samples is not None and len(self.samples) > max_samples:
             self.samples = self.samples[:max_samples]
 
-        print(f"GaussianRenderDataset: {len(self.samples)} samples from "
-              f"{len(set(s[0] for s in self.samples))} scenes")
+        # Group sample indices by scene for per-epoch view subsampling.
+        self._by_scene: dict[Path, list[int]] = {}
+        for i, (h5_path, _, _) in enumerate(self.samples):
+            self._by_scene.setdefault(h5_path, []).append(i)
+        self._active: list[int] = list(range(len(self.samples)))
+        self.set_epoch(0)
+
+        msg = (f"GaussianRenderDataset: {len(self.samples)} samples from "
+               f"{len(self._by_scene)} scenes")
+        if self.views_per_epoch:
+            msg += (f"  (subsampling {self.views_per_epoch} views/scene/epoch "
+                    f"-> {len(self._active)} samples/epoch)")
+        print(msg)
+
+    def set_epoch(self, epoch: int) -> None:
+        """Pick this epoch's active (scene, view) samples. With views_per_epoch=K, draw K
+        random views per scene seeded by `epoch` (identical across DDP ranks so the shared
+        DistributedSampler splits a consistent pool); otherwise use every sample."""
+        if not self.views_per_epoch:
+            self._active = list(range(len(self.samples)))
+            return
+        import random
+        rng = random.Random(epoch)
+        active: list[int] = []
+        for idxs in self._by_scene.values():
+            active.extend(rng.sample(idxs, min(self.views_per_epoch, len(idxs))))
+        self._active = active
 
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self._active)
 
     @staticmethod
     def _rotate_scene(gaussians: torch.Tensor, c2w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -100,7 +131,7 @@ class GaussianRenderDataset(Dataset):
         return gaussians, c2w_rot
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        h5_path, view_idx, render_path = self.samples[idx]
+        h5_path, view_idx, render_path = self.samples[self._active[idx]]
 
         # --- Load Gaussian scene data ---
         with h5py.File(h5_path, "r") as f:

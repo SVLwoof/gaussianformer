@@ -58,7 +58,7 @@ uv run --frozen torchrun --standalone --nproc_per_node=8 -m training.train \
   --gaussian_h5_dir $SHM/h5s --renders_dir $SHM/renders \
   --save_dir checkpoints_v15_256 \
   --batch_size 1 --resolution 256 \
-  --pe_type rope --augment_rotation \
+  --pe_type rope --augment_rotation --views_per_epoch 4 \
   --phase1_epochs 5 --phase1_lr 1e-3 \
   --phase2_epochs 10 --phase2_lr 5e-5 \
   --save_interval 1 --keep_last_n 3 \

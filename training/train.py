@@ -216,6 +216,9 @@ def run_phase(
     for epoch in range(start_epoch, num_epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
+        # Redraw this epoch's view subsample (no-op unless views_per_epoch is set). Must run
+        # before the dataloader spawns workers so the fresh forks inherit this selection.
+        dataloader.dataset.set_epoch(epoch)
         model.train()
         epoch_loss = 0.0
         epoch_log = 0.0
@@ -389,6 +392,11 @@ def main():
     parser.add_argument("--keep_last_n", type=int, default=None,
                         help="Retain only the N most recent same-phase checkpoints "
                         "(prune older ones after each save). None = keep all (default).")
+    parser.add_argument("--views_per_epoch", type=int, default=None,
+                        help="Per-epoch view subsampling for the TRAIN set: draw this many "
+                        "random views per scene each epoch (redrawn per epoch; all views seen "
+                        "across epochs). Shrinks the epoch ~14/K. None = all views (default). "
+                        "Val is never subsampled.")
     args = parser.parse_args()
 
     config = TrainingConfig(
@@ -417,6 +425,7 @@ def main():
         config.gaussian_h5_dir, config.renders_dir, config.resolution,
         max_samples=args.max_samples,
         augment_rotation=args.augment_rotation,
+        views_per_epoch=args.views_per_epoch,
     )
     train_sampler: DistributedSampler | None = None
     if world_size > 1:
@@ -429,7 +438,9 @@ def main():
         sampler=train_sampler,
         shuffle=(train_sampler is None),
         num_workers=num_workers,
-        persistent_workers=(num_workers > 0),
+        # With view subsampling the per-epoch selection is set on the dataset just before
+        # each epoch; persistent workers would keep a stale fork, so disable in that mode.
+        persistent_workers=(num_workers > 0 and not args.views_per_epoch),
         pin_memory=device.type == "cuda",
         collate_fn=collate_fn,
     )
