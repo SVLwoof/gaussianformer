@@ -1699,3 +1699,48 @@ recovered pruned-GT:     ~49.5 dB
 **(B) Retrain** on 5x data + recovery-pruned 20k + **256→512 curriculum**, then re-measure on these
 same unseen objects (current baseline 33.3 dB) to see if closing both gaps lifts out of the low-30s.
 Branch `data/v10-scaleup`. Eval artifacts (gitignored): `data_v10/{recovery_eval,model_eval}/`.
+
+---
+
+## Session: 2026-06-15
+
+### Repo migration tomhope → sagieb (done)
+Migrated the live workspace from `/cs/labs/tomhope/shahaf_levy/gaussianformer` to
+`/cs/labs/sagieb/shahaf_levy/gaussianformer` (account `-A sagieb`). Tom's copy kept as a cold
+backup (nothing deleted). Data verified bit-identical (checkpoints, H5s, code, PROGRESS), `.venv`
+rebuilt via `uv sync --frozen` (torch 2.9.1+cu128 / gsplat 1.5.3 import-clean), memory copied to
+the sagieb project slug. All training scripts gained `#SBATCH --account=sagieb`.
+
+### Step A — full-14k prune-and-recovery (DONE)
+Ran `prune_recovery.py --save_*` over the whole dataset → recovered 20k H5s on disk:
+**`data_v10/h5s_20k_rec/` = 13,405 train + `h5s_20k_rec_val/` = 902 val = 14,307 objects.**
+Resume-safe shards (skip-existing) survived preemption/requeue; OOM-per-object fix (free GPU mem
+between objects) landed mid-run. These recovered H5s are the training input for V15 (input ceiling
+now ~49.5 dB held-out vs ~35 naive — gap2 closed in the data).
+
+### Step B — V15 256→512→LPIPS curriculum LAUNCHED (chained)
+Three SLURM jobs submitted as an `afterok` dependency chain (8×g4, `--killable --requeue`,
+`-c 32`, `--mem 200GB`; /dev/shm staging of the 66 GB recovered H5s+renders):
+
+| Stage | Script | Res | Phase budget | LPIPS w | Job | Trigger |
+|---|---|---|---|---|---|---|
+| 1 bulk | `train_v15_256.sh` | 256² | P1 5ep @1e-3, P2 10ep @5e-5 | 0.0 | 30837514 | — (running) |
+| 2 refine | `train_v15_512.sh` | 512² | P2 3ep @5e-5 (`--init_from` 256) | 0.0 | 30837515 | afterok:…514 |
+| 3 LPIPS FT | `train_v15_lpips.sh` *(new)* | 512² | P2 10ep @5e-5 (`--init_from` 512) | **0.2** | 30837516 | afterok:…515 |
+
+Stage 3 mirrors the v14auglp10 recipe (rope + RoMa aug + 10-epoch LPIPS FT @0.2 — the stage that
+produced every prior best; v14auglp10 ep10 = 33.835 dB / 0.0185, still climbing). `--init_from`
+loads weights-only and skips Phase 1 → fresh Phase 2 cosine from 5e-5. `keep_last_n 10` so every
+LPIPS epoch is an eval candidate. Chain is preemption-safe: requeue keeps dependents waiting; a
+terminal crash leaves downstream blocked (`DependencyNeverSatisfied`) rather than seeding from a
+bad checkpoint.
+
+**bs/LR NOT adjusted per resolution (deliberate).** All three stages use `batch_size 1` (×8 GPU =
+eff batch 8 == V14) and the same LRs (P1 1e-3 / P2 5e-5), to reuse V14's tuned LR pair and keep the
+curriculum a pure resolution change. Keeping LR fixed across resolutions is correct at fixed
+effective batch (LR tracks batch size, not resolution). The one unexploited lever: at 256² there's
+~4× activation-memory headroom, so a larger bs there could speed the bulk stage — but that would
+require LR re-tuning, so it was left for a later pass.
+
+**Eval is run independently** (`model_on_v10.py`, baseline 33.3 dB on unseen v10 objects) against
+`checkpoints_v15_lpips/phase2_epoch_*.pt` once the chain produces them — not part of the launch.
