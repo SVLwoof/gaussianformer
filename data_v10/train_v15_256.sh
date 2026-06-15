@@ -33,16 +33,21 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-# Stage recovered 20k h5s + GT renders to node-local RAM (kills NFS I/O at 5x scale).
+# Stage to node-local RAM by extracting the prebuilt tar shards (data_v10/build_tars.sh) in
+# parallel -- one sequential read per big tar instead of ~214k tiny-file NFS round-trips
+# (the cp-loop was ~1.8 MB/s -> ~4.5 h/job). Falls back to nothing: build_tars.sh must have run.
 SHM=/dev/shm/v15_${SLURM_JOB_ID}
+TARS=data_v10/tars
 trap "rm -rf $SHM" EXIT
-rm -rf $SHM; mkdir -p $SHM
-echo "staging recovered data -> $SHM ..."
-cp -r data_v10/h5s_20k_rec      $SHM/h5s
-cp -r data_v10/h5s_20k_rec_val  $SHM/h5s_val
-cp -r data_v10/renders          $SHM/renders
-cp -r data_v10/renders_val      $SHM/renders_val
-echo "staged: $(du -sh $SHM | cut -f1)"
+rm -rf $SHM; mkdir -p $SHM/h5s $SHM/h5s_val $SHM/renders $SHM/renders_val
+echo "staging (parallel tar extract) -> $SHM ..."
+pids=()
+for t in $TARS/renders_[0-9]*.tar;     do tar -xf $t -C $SHM/renders     & pids+=($!); done
+for t in $TARS/h5s_[0-9]*.tar;         do tar -xf $t -C $SHM/h5s         & pids+=($!); done
+for t in $TARS/renders_val_[0-9]*.tar; do tar -xf $t -C $SHM/renders_val & pids+=($!); done
+for t in $TARS/h5s_val_[0-9]*.tar;     do tar -xf $t -C $SHM/h5s_val     & pids+=($!); done
+wait $pids
+echo "staged: $(du -sh $SHM|cut -f1) | h5s=$(ls $SHM/h5s|wc -l) renders=$(ls $SHM/renders|wc -l) val_h5=$(ls $SHM/h5s_val|wc -l)"
 
 # Resume-aware (zsh array; (Nom) = null-glob + mtime-newest).
 files=( checkpoints_v15_256/phase2_epoch_*.pt(Nom) checkpoints_v15_256/phase1_epoch_*.pt(Nom) )

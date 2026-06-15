@@ -24,12 +24,19 @@ export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 V15_256_CKPT=${V15_256_CKPT:-checkpoints_v15_256/phase2_epoch_10.pt}
 
+# Stage to node-local RAM via parallel tar-extract of the prebuilt shards (data_v10/build_tars.sh).
 SHM=/dev/shm/v15b_${SLURM_JOB_ID}
+TARS=data_v10/tars
 trap "rm -rf $SHM" EXIT
-rm -rf $SHM; mkdir -p $SHM
-cp -r data_v10/h5s_20k_rec $SHM/h5s; cp -r data_v10/h5s_20k_rec_val $SHM/h5s_val
-cp -r data_v10/renders $SHM/renders; cp -r data_v10/renders_val $SHM/renders_val
-echo "staged: $(du -sh $SHM | cut -f1)"
+rm -rf $SHM; mkdir -p $SHM/h5s $SHM/h5s_val $SHM/renders $SHM/renders_val
+echo "staging (parallel tar extract) -> $SHM ..."
+pids=()
+for t in $TARS/renders_[0-9]*.tar;     do tar -xf $t -C $SHM/renders     & pids+=($!); done
+for t in $TARS/h5s_[0-9]*.tar;         do tar -xf $t -C $SHM/h5s         & pids+=($!); done
+for t in $TARS/renders_val_[0-9]*.tar; do tar -xf $t -C $SHM/renders_val & pids+=($!); done
+for t in $TARS/h5s_val_[0-9]*.tar;     do tar -xf $t -C $SHM/h5s_val     & pids+=($!); done
+wait $pids
+echo "staged: $(du -sh $SHM|cut -f1) | h5s=$(ls $SHM/h5s|wc -l) renders=$(ls $SHM/renders|wc -l) val_h5=$(ls $SHM/h5s_val|wc -l)"
 
 # Resume own progress if any, else init from the 256 model.
 files=( checkpoints_v15_512/phase2_epoch_*.pt(Nom) )
