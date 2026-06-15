@@ -9,3 +9,7 @@ recovery_eval/
 val_shards/
 scenes_*.json
 h5s_20k_rec/
+h5s_20k_rec_val/
+model_eval/
+rec_shards/
+recovery_run/
