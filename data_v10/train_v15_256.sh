@@ -5,6 +5,7 @@
 #SBATCH --output=runs/train_v15_256_%j.out
 #SBATCH --job-name=gformer_v15_256
 #SBATCH --gres=gg:g4:8
+#SBATCH --account=sagieb
 #SBATCH --killable
 #SBATCH --requeue
 
