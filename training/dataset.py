@@ -157,7 +157,8 @@ class GaussianRenderDataset(Dataset):
         img = imageio.v3.imread(render_path).astype(np.float32)
         if render_path.suffix == ".png":
             img = img / 255.0
-        # Resize if needed (simple nearest for speed; bilinear would be better for quality)
+        # Resize render to the target resolution (e.g. 512 GT downscaled to 256 for the
+        # curriculum's bulk stage). Bilinear -- verified bit-exact vs an independent resize.
         if img.shape[0] != self.resolution or img.shape[1] != self.resolution:
             from PIL import Image
             pil_img = Image.fromarray((img * 255).clip(0, 255).astype(np.uint8) if img.max() <= 1.0
