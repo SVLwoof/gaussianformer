@@ -14,3 +14,4 @@ model_eval/
 rec_shards/
 recovery_run/
 tars/
+probe_subset/
