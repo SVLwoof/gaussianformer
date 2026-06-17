@@ -32,6 +32,11 @@ def main():
     ap.add_argument("--keep_n", type=int, default=20000)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--views", default="0,3,6")
+    ap.add_argument("--label", default="V14best", help="model panel label + console tag")
+    ap.add_argument("--out_name", default="v14best_on_v10", help="output png/json stem")
+    ap.add_argument("--input_mode", choices=["naive", "recovered"], default="naive",
+                    help="naive = significance_topk 50k->20k (V14best training match); "
+                    "recovered = load data_v10/h5s_20k_rec/<scene>.h5 (V15 training match)")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     device = "cuda"
@@ -39,57 +44,66 @@ def main():
 
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
-    pipe = load_model(ModelSpec(ckpt=args.ckpt, label="V14best", pe_type=args.pe_type), device)
+    pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type), device)
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device).eval()
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
 
     scenes = [int(x) for x in json.loads(args.scenes_file.read_text())]
     results, all_rows = [], []
     for s in scenes:
-        h5 = Path("data_v10/full_h5s") / f"scene_{s:04d}.h5"
-        if not h5.exists():
-            print(f"skip {s}: missing"); continue
-        full = load_full(h5)
-        naive = significance_topk(full, vm, K, args.keep_n, device)  # 50k -> 20k (current method)
-        # write a temp 20k h5 the model loader understands
-        with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tf:
-            tmp = Path(tf.name)
-        with h5py.File(tmp, "w") as f, h5py.File(h5, "r") as src:
-            for k in ("means", "scales", "colors"):
-                f.create_dataset(k, data=naive[k])
-            f.create_dataset("rotations", data=naive["rotations"])
-            f.create_dataset("opacities", data=naive["opacities"].reshape(-1, 1))
-            f.create_dataset("c2w", data=np.array(src["c2w"]))
-            f.create_dataset("fov", data=np.array(src["fov"]))
-        data = load_single_gaussian_h5_data(tmp)
+        if args.input_mode == "recovered":
+            # V15 training match: feed the recovered-20k h5 directly (model input + pruned-GT).
+            inp = Path("data_v10/h5s_20k_rec") / f"scene_{s:04d}.h5"
+            tmp = None
+            if not inp.exists():
+                print(f"skip {s}: no recovered h5"); continue
+        else:
+            # naive significance_topk 50k -> 20k (V14best training match).
+            full_h5 = Path("data_v10/full_h5s") / f"scene_{s:04d}.h5"
+            if not full_h5.exists():
+                print(f"skip {s}: missing"); continue
+            full = load_full(full_h5)
+            naive = significance_topk(full, vm, K, args.keep_n, device)
+            with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tf:
+                tmp = Path(tf.name)
+            with h5py.File(tmp, "w") as f, h5py.File(full_h5, "r") as src:
+                for k in ("means", "scales", "colors"):
+                    f.create_dataset(k, data=naive[k])
+                f.create_dataset("rotations", data=naive["rotations"])
+                f.create_dataset("opacities", data=naive["opacities"].reshape(-1, 1))
+                f.create_dataset("c2w", data=np.array(src["c2w"]))
+                f.create_dataset("fov", data=np.array(src["fov"]))
+            inp = tmp
+        data = load_single_gaussian_h5_data(inp)
         for k in ("gaussians", "mask", "c2w", "fov"):
             data[k] = data[k].to(device)
 
         pm, plp, ppm = [], [], []
         for v in views:
             gt = load_gt(Path("data_v10/renders") / f"scene_{s:04d}_view_{v}.png", RES)
-            pgt = render_pruned_gt(tmp, v, vm, K, RES, device)
+            pgt = render_pruned_gt(inp, v, vm, K, RES, device)
             mdl = render_view(pipe, data, v, RES, None)
             pm.append(psnr(mdl, gt)); ppm.append(psnr(pgt, gt))
             plp.append(float(lpips_fn(torch.from_numpy(mdl).permute(2,0,1)[None].to(device)*2-1,
                                       torch.from_numpy(gt).permute(2,0,1)[None].to(device)*2-1).item()))
-            lab = lambda im, t: np.array(_label(im, t, font))
+            pgt_tag = "rec-GT" if args.input_mode == "recovered" else "pruned-GT"
             all_rows.append(np.concatenate([
                 _label(gt, f"GT s{s} v{v}", font),
-                _label(pgt, f"pruned-GT {psnr(pgt,gt):.1f}", font),
-                _label(mdl, f"V14best {psnr(mdl,gt):.1f}dB", font)], axis=1))
+                _label(pgt, f"{pgt_tag} {psnr(pgt,gt):.1f}", font),
+                _label(mdl, f"{args.label} {psnr(mdl,gt):.1f}dB", font)], axis=1))
         r = dict(scene=s, model_psnr=float(np.mean(pm)), model_lpips=float(np.mean(plp)),
                  pruned_psnr=float(np.mean(ppm)), new_object=(s > 3000))
         results.append(r)
-        tmp.unlink(missing_ok=True)
-        print(f"scene_{s:04d} ({'NEW' if s>3000 else 'seen'}): V14best vs GT {r['model_psnr']:.2f}dB / "
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
+        print(f"scene_{s:04d} ({'NEW' if s>3000 else 'seen'}): {args.label} vs GT {r['model_psnr']:.2f}dB / "
               f"LPIPS {r['model_lpips']:.4f}  (pruned-GT {r['pruned_psnr']:.2f})", flush=True)
 
     grid = (np.clip(np.concatenate(all_rows, axis=0), 0, 1) * 255).astype(np.uint8)
-    iio.imwrite(args.out / "v14best_on_v10.png", grid)
-    (args.out / "v14best_on_v10.json").write_text(json.dumps(results, indent=1))
+    iio.imwrite(args.out / f"{args.out_name}.png", grid)
+    (args.out / f"{args.out_name}.json").write_text(json.dumps(results, indent=1))
     if results:
-        print(f"\nMEAN V14best-vs-GT: {np.mean([r['model_psnr'] for r in results]):.2f}dB | "
+        print(f"\nMEAN {args.label}-vs-GT: {np.mean([r['model_psnr'] for r in results]):.2f}dB | "
               f"NEW objects only: {np.mean([r['model_psnr'] for r in results if r['new_object']] or [0]):.2f}dB", flush=True)
     print("DONE_MODELEVAL", flush=True)
 
