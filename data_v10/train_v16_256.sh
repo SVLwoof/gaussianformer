@@ -40,10 +40,21 @@ for t in $TARS/h5s_val_[0-9]*.tar;     do tar -xf $t -C $SHM/h5s_val     & pids+
 wait $pids
 echo "staged: $(du -sh $SHM|cut -f1) | h5s=$(ls $SHM/h5s|wc -l) renders=$(ls $SHM/renders|wc -l) val_h5=$(ls $SHM/h5s_val|wc -l)"
 
-# Resume-aware (zsh array; (Nom) = null-glob + mtime-newest).
-files=( checkpoints_v16_256/phase2_epoch_*.pt(Nom) checkpoints_v16_256/phase1_epoch_*.pt(Nom) )
+# Resume-aware (zsh arrays; (Nom) = null-glob + mtime-newest). CRITICAL: never --resume a
+# *phase1* checkpoint into phase2 -- that path builds a no-op phase1 DDP wrapper whose stale
+# reducer hooks corrupt phase2 gradients (phase2 then "trains" without learning, val loss
+# frozen -- observed 2026-06-18). Once phase1 is complete, seed phase2 cleanly with --init_from
+# (skips the phase1 block entirely, the same path the LPIPS stage uses).
 RESUME_ARG=()
-[ ${#files} -gt 0 ] && { RESUME_ARG=(--resume ${files[1]}); echo "RESUME from ${files[1]}"; }
+p2=( checkpoints_v16_256/phase2_epoch_*.pt(Nom) )
+if [ ${#p2} -gt 0 ]; then
+  RESUME_ARG=(--resume ${p2[1]}); echo "RESUME phase2 from ${p2[1]}"
+elif [ -f checkpoints_v16_256/phase1_epoch_5.pt ]; then   # phase1 done (== --phase1_epochs)
+  RESUME_ARG=(--init_from checkpoints_v16_256/phase1_epoch_5.pt); echo "INIT phase2 (clean) from phase1_epoch_5"
+else
+  p1=( checkpoints_v16_256/phase1_epoch_*.pt(Nom) )
+  [ ${#p1} -gt 0 ] && { RESUME_ARG=(--resume ${p1[1]}); echo "RESUME phase1 from ${p1[1]}"; }
+fi
 
 uv run --frozen torchrun --standalone --nproc_per_node=8 -m training.train \
   --gaussian_h5_dir $SHM/h5s --renders_dir $SHM/renders \
