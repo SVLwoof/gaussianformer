@@ -14,4 +14,8 @@ module load cuda
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_ALLOC_CONF=expandable_segments:True
-uv run --frozen python -m data_v10.render_recovery_compare --scenes_file data_v10/scenes_rendercmp.json --out data_v10/recovery_eval/final_compare
+SCENES=${SCENES:-data_v10/scenes_rendercmp.json}
+OUT=${OUT:-data_v10/recovery_eval/final_compare}
+VIEWS=${VIEWS:-0,6}
+echo "scenes=$SCENES out=$OUT views=$VIEWS"
+uv run --frozen python -m data_v10.render_recovery_compare --scenes_file $SCENES --out $OUT --views $VIEWS

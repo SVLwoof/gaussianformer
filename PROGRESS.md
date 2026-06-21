@@ -1744,3 +1744,55 @@ require LR re-tuning, so it was left for a later pass.
 
 **Eval is run independently** (`model_on_v10.py`, baseline 33.3 dB on unseen v10 objects) against
 `checkpoints_v15_lpips/phase2_epoch_*.pt` once the chain produces them — not part of the launch.
+
+---
+
+## Session: 2026-06-17 .. 2026-06-21 — V15 diagnostic, V16 retrain, and the blur diagnosis
+
+### V15 = under-trained diagnostic
+The 5×-data + recovered-20k + 256→512→LPIPS chain ran end-to-end (V15) but came out soft:
+phase-2 loss still descending, LPIPS ~2× V14best. Cause: epoch budget too small for 4.7× data
+(~9× less per-object exposure than V14) + a 3-epoch 512 stage. Kept as reference.
+
+### Infra wins (reused by V16)
+- **tar-staging**: the per-job `cp -r` of ~214k tiny render files sat at ~1.8 MB/s over NFS
+  (~4.5 h/job). `data_v10/build_tars.sh` packs them into 27 shard-tars once (~12 min, parallel),
+  each job extracts a few big tars → staging dropped to ~5 min.
+- **view-subsampling** (`--views_per_epoch 4`): the dataset emits one sample per (scene,view), so
+  a full-views epoch is 187,670 samples (~7.5 h @256). K=4 reslices the epoch ~14/K with finer
+  checkpoints; the **batch probe proved training is compute-bound on the 20k attention** (256 bs1
+  6.2 ≈ bs2 6.5 samples/s; bs>1 no gain, 256 maxes bs2 / 512 bs1 on 46 GB), so bigger batch is no
+  lever. Multi-node (12 GPU) failed (NCCL inter-node); khan 96 GB nodes too contended to pin.
+
+### V16 = bigger-budget retrain (256 P2 20, 512 P2 12, LPIPS 12), bs=1 + K=4
+**V16's phase-1 silently failed to train** (val 0.0135 vs V15's 0.0038 — pinned with the
+standalone `data_v10/diag_val.py`), starving phase-2 (frozen at 0.0126 for 16 epochs). Earlier
+DDP/resume theories were wrong. **Fix**: seed phase-2 via `--init_from checkpoints_v15_256/
+phase1_epoch_5.pt` (V15's known-good warmup). Then it converged cleanly: 256→0.00103, 512→0.000956
+(both beat V15). Lesson: verify phase-1 val converges before trusting phase-2.
+
+### THE BLUR DIAGNOSIS — whole-image PSNR is a lying metric
+Shahaf flagged the renders look soft despite "+2.6 dB over V14best". Confirmed: objects are on
+black bg and are only **2–5 % of pixels** (skull 1.7 %), so whole-image PSNR is ~95–98 % "match the
+black" → inflated, blind to object sharpness. Added **`model_on_v10.py --crop_fg`** (crop to GT
+object bbox, metric there, zoom the crop). Object-only, V16-512-L1 is ~27.7 dB / LPIPS 0.31 on the
+skull vs the recovered-input ceiling ~40 dB → a real ~13 dB model-blur gap the metric hid. **Eval
+everything `--crop_fg` from now on.**
+
+### CAPACITY PROBE v2 — the blur is a GENERALISATION gap, not architecture or loss
+Overfit ONE detailed object (skull 9869) from v16_512, L1 vs high-LPIPS
+(`experiments/overfit/run_overfit_lpips.sh`). **Both arms reproduce the fine engravings**
+(converged: L1 35.3 dB/0.062, hi-LPIPS 33.9 dB/**0.022**; general model 0.311). → the architecture
+CAN render fine detail at N=20k; the general model smears it only because it can't *generalise* the
+sharp mapping. **High-LPIPS is a real lever** (0.31→0.022 memorised).
+
+### Acting on it — LPIPS-weight sweep on the full model (running)
+The planned LPIPS@0.2 stage FAILED at ep3 (node fault, no requeue). Pivoted to a perceptual-weight
+sweep, all `--init_from` v16_512, eval `--crop_fg`:
+- **hi** `train_v16_lpips_hi.sh` — log_w 0.5 / **lpips_w 1.0** (job 30891156). ep2 on unseen skull:
+  **LPIPS 0.31→0.159** (transfers to generalisation!) but grainy (ep1-2 over-shoot); statue (low
+  detail) slightly worse — 1.0 may be too strong there.
+- **mid** `train_v16_lpips_mid.sh` — log_w 0.5 / **lpips_w 0.5** (job 30894280), same log anchor so
+  only lpips_w differs. Tests detail-gain-vs-graininess sweet spot.
+Re-eval both ~ep5–6 (past over-shoot) `--crop_fg` to pick the winner. Deeper fix for the
+generalisation gap remains more/better data.
