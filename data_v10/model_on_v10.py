@@ -37,6 +37,9 @@ def main():
     ap.add_argument("--input_mode", choices=["naive", "recovered"], default="naive",
                     help="naive = significance_topk 50k->20k (V14best training match); "
                     "recovered = load data_v10/h5s_20k_rec/<scene>.h5 (V15 training match)")
+    ap.add_argument("--crop_fg", action="store_true",
+                    help="Object-only eval: crop to the GT object bbox + compute PSNR/LPIPS "
+                    "there (background is ~95-98% black -> whole-image PSNR is misleading).")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     device = "cuda"
@@ -83,6 +86,11 @@ def main():
             gt = load_gt(Path("data_v10/renders") / f"scene_{s:04d}_view_{v}.png", RES)
             pgt = render_pruned_gt(inp, v, vm, K, RES, device)
             mdl = render_view(pipe, data, v, RES, None)
+            if args.crop_fg:
+                # Object-only eval: crop all panels to the GT object bbox (the background is
+                # ~95-98% black and inflates whole-image PSNR). Metrics computed on the crop;
+                # crop upscaled to RES for a zoomed, honest visual.
+                gt, pgt, mdl = _fg_crop([gt, pgt, mdl], gt, pad=12, out=RES)
             pm.append(psnr(mdl, gt)); ppm.append(psnr(pgt, gt))
             plp.append(float(lpips_fn(torch.from_numpy(mdl).permute(2,0,1)[None].to(device)*2-1,
                                       torch.from_numpy(gt).permute(2,0,1)[None].to(device)*2-1).item()))
@@ -106,6 +114,27 @@ def main():
         print(f"\nMEAN {args.label}-vs-GT: {np.mean([r['model_psnr'] for r in results]):.2f}dB | "
               f"NEW objects only: {np.mean([r['model_psnr'] for r in results if r['new_object']] or [0]):.2f}dB", flush=True)
     print("DONE_MODELEVAL", flush=True)
+
+
+def _fg_crop(imgs, ref, pad=12, out=512):
+    """Crop every img to ref's object bounding box (non-black region), square + padded,
+    then resize to out x out (nearest = honest, no smoothing). Foreground-only view."""
+    lum = ref.mean(-1)
+    ys, xs = np.where(lum > 0.02)
+    if len(ys) < 10:
+        return imgs
+    y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
+    cy, cx = (y0 + y1) // 2, (x0 + x1) // 2
+    half = max(y1 - y0, x1 - x0) // 2 + pad
+    H = ref.shape[0]
+    y0, y1 = max(0, cy - half), min(H, cy + half)
+    x0, x1 = max(0, cx - half), min(H, cx + half)
+    cropped = []
+    for im in imgs:
+        c = im[y0:y1, x0:x1]
+        pil = Image.fromarray((np.clip(c, 0, 1) * 255).astype(np.uint8)).resize((out, out), Image.NEAREST)
+        cropped.append(np.array(pil, dtype=np.float32) / 255.0)
+    return cropped
 
 
 def _label(img, text, font):

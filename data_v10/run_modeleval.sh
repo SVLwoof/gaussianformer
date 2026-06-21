@@ -27,9 +27,11 @@ SCENES=${SCENES:-data_v10/scenes_preview.json}
 OUTNAME=${OUTNAME:-v15_on_v10}
 VIEWS=${VIEWS:-0,6}
 INPUT_MODE=${INPUT_MODE:-naive}
+CROP_FG=${CROP_FG:-0}
+[ "$CROP_FG" = "1" ] && CROP_ARG=(--crop_fg) || CROP_ARG=()
 
-echo "ckpt=$CKPT label=$LABEL scenes=$SCENES views=$VIEWS input_mode=$INPUT_MODE"
+echo "ckpt=$CKPT label=$LABEL scenes=$SCENES views=$VIEWS input_mode=$INPUT_MODE crop_fg=$CROP_FG"
 uv run --frozen python -m data_v10.model_on_v10 \
   --scenes_file $SCENES --ckpt $CKPT --label $LABEL \
-  --out data_v10/model_eval --out_name $OUTNAME --views $VIEWS --input_mode $INPUT_MODE
+  --out data_v10/model_eval --out_name $OUTNAME --views $VIEWS --input_mode $INPUT_MODE $CROP_ARG
 echo DONE_WRAP
