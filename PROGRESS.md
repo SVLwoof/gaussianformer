@@ -1796,3 +1796,193 @@ sweep, all `--init_from` v16_512, eval `--crop_fg`:
   only lpips_w differs. Tests detail-gain-vs-graininess sweet spot.
 Re-eval both ~ep5–6 (past over-shoot) `--crop_fg` to pick the winner. Deeper fix for the
 generalisation gap remains more/better data.
+
+---
+
+## Session: 2026-07-12 — LPIPS sweep verdict, V14-vs-V16 apples-to-apples, and "we under-trained"
+
+Picking up after a ~3-week gap (the Claude SLURM node died mid-sweep). Both sweep arms had
+actually finished 12 epochs and been eval'd on 06-23; nobody had read the results.
+
+### LPIPS-weight sweep — settled: w=0.5, and 1.0 buys nothing
+Foreground-cropped (`--crop_fg`, `--input_mode recovered`), 3 unseen objects (10916 statue /
+9869 skull / 10751 honeypot):
+
+| model | statue | skull | honeypot | mean PSNR |
+|---|---|---|---|---|
+| V16-512 (L1 only) | 28.5 / 0.035 | 27.5 / **0.311** | 27.0 / 0.120 | 27.7 dB |
+| LPIPS **hi** (w=1.0) | 27.0 / 0.031 | 26.2 / 0.129 | 26.8 / 0.070 | 26.7 dB |
+| LPIPS **mid** (w=0.5) | 27.3 / **0.030** | 26.5 / **0.128** | 27.0 / **0.067** | 26.9 dB |
+
+**mid ≥ hi on both axes on every scene** → cranking lpips_w past 0.5 is pure PSNR cost, no
+perceptual gain. LPIPS FT halves LPIPS on the hard objects for ~1 dB PSNR — a real, cheap win.
+**`checkpoints_v16_lpips_mid/phase2_epoch_12.pt` is the new best model.**
+Caveat that keeps it honest: on the skull the FT renders *invented* carved texture, not the
+actual engraving. Perceptual loss bought texture, not fidelity.
+
+### V14best vs V16, apples-to-apples in object space (the missing number)
+Every V14-era metric was whole-image, i.e. from the lying-metric era. Ran V14best
+(`checkpoints_v14auglp10/phase2_epoch_10.pt`) `--crop_fg` on the same 3 scenes, both input modes:
+
+| model (input) | statue | skull | honeypot | mean |
+|---|---|---|---|---|
+| V14best (naive — its own training distribution) | 22.6 / 0.061 | 26.5 / 0.183 | 25.5 / 0.091 | **24.88 dB** |
+| V14best (recovered input) | 23.2 / 0.058 | 25.2 / 0.183 | 25.3 / 0.093 | 24.55 dB |
+| **V16 + LPIPS mid** | 27.3 / 0.030 | 26.5 / 0.128 | 27.0 / 0.067 | **26.94 dB** |
+
+**The v10 scale-up paid off: +2.1 dB and ~½ the LPIPS on every object.** Renders confirm —
+V14best's skull is nearly featureless and it drops the honeypot's small props entirely.
+
+Two structural findings:
+- **The naive-pruned ceiling is meaningless.** V14best's naive input ceiling is only 25–29 dB
+  (vs 40–43 recovered). V14best's skull *scores above its own ceiling* (26.5 > 25.0) — not
+  because it's good, but because the naive input is so degraded that a smooth blob lands nearer
+  the true GT than the input render does. Discount every naive-ceiling comparison.
+- **Recovered input does NOT help a model that wasn't trained on it** (V14best: 24.55 rec vs
+  24.88 naive — slightly *worse*). The gain is from the retrain, not from nicer eval-time
+  Gaussians. You must train on recovered data to benefit from it.
+
+### THE BIG ONE — V16 was never converged; we under-trained by a wide margin
+Every stage's val loss was **still descending monotonically at its final epoch**, no plateau,
+no overfitting signal (val tracked down throughout):
+- 256 P2: ep19 0.001039 → ep20 0.001034 (cut at the budget, not at convergence)
+- 512 P2: ep10 0.000979 → ep11 0.000962 → ep12 **0.000956**
+- LPIPS mid: lpips term ep11 0.017998 → ep12 **0.017893**
+
+**CORRECTION (same session, after launching V17): hardware, not budget, sets the wall-clock.**
+I first read V16's `sacct` times (256: 7h35/20ep = 23 min/ep · 512: 4h43/12ep · LPIPS: 2h25/12ep)
+and concluded "the whole V16 chain was ~15 h, we rationed a budget we didn't need to ration."
+**That was wrong — the entire V16 chain ran on `khan-01` (RTX Pro 6000, 128 cores).** V17 landed on
+`firefoot-11` (L40S, 64 cores) and measures **80 min/epoch, 3.5× slower**, on identical config
+(1.39 steps/s/rank; 11.1 samples/s over 8 GPUs; epoch = 53,620 samples = 6,702 steps/rank). So the
+original "multi-day, compute-bound" read was closer to right than my correction of it. **Never quote
+a min/epoch without naming the node.** khan is normally 8/8 allocated by non-preemptible jobs, so a
+killable job cannot bump it — getting khan is luck, not a plan.
+
+Per-object exposure math: the whole V16 chain = ~12.5 passes over the 187,670-sample set. V14
+got ~30 passes over its 3k objects. So V16 has seen each object-view **less than half** as often
+as V14 did — on 4.5× more objects. **The "generalisation gap" and "under-trained" may be the
+same problem: the model hasn't finished digesting the data it already has.** This reframes the
+"need more data" conclusion — before buying more data, spend the training we already can afford.
+
+### Next
+V17 = V16 recipe, much longer, with LPIPS(w=0.5) folded into the 512 stage from the start rather
+than bolted on as a 12-epoch tail FT. Gate on the LPIPS val term + periodic `--crop_fg` renders,
+NOT on log-L1 (V4/V5/V6 precedent: log-L1 improvements do not reliably translate to perceptual
+gain).
+
+## 2026-07-23 — V17 finished; NEW BEST MODEL; skull-fidelity ceiling; scale-up prep + paper renders
+
+### V17 completed — `checkpoints_v17_512lp/phase2_epoch_36.pt` is the new best model
+Two-stage chain, all 8×g4 killable, seeded from V15's known-good phase1:
+- **Stage A** (`train_v17_256.sh`) — 60 phase-2 epochs @256, pure log-L1. Converged flat at
+  val log-L1 **0.000765** (~25% below V16's 0.001034 floor).
+- **Stage B** (`train_v17_512lp.sh`) — 36 epochs @512 with LPIPS(0.5)+log(0.5) from epoch 1.
+  LPIPS val term descended monotonically the whole way: 0.02061 (ep1) → 0.01783 (ep5) →
+  0.01701 (ep10) → 0.01559 (ep17) → 0.01440 (ep27) → **0.01397 (ep36)**, cosine LR to 5e-7,
+  converged. Final is **~22% below V16's 0.017893**.
+- Wall-clock: 65.9 min/epoch on khan-01. Ran clean for 29 epochs, then got preempted twice
+  (first preemptions of the run) and sat PENDING ~1.5 days on a fully-saturated g4 partition
+  (all 22 g4 nodes 8/8; the one idle node was DRAINed). Requeue resumed from per-epoch ckpts,
+  **zero work lost**. Confirms the killable trade-off: cheap when the cluster is free, unbounded
+  wait when it's not.
+
+### Object-space verdict (`--crop_fg --input_mode recovered`, scenes_profcompare, 3 unseen)
+| model | statue | skull | honeypot | **mean PSNR** |
+|---|---|---|---|---|
+| V14best | 22.6 / 0.061 | 26.5 / 0.183 | 25.5 / 0.091 | 24.88 |
+| V16+LPIPS-mid ep12 | 27.3 / 0.030 | 26.5 / 0.128 | 27.0 / 0.067 | 26.94 |
+| V17 ep6 (over-shoot) | 25.0 / 0.038 | 25.7 / 0.129 | 25.5 / 0.068 | 25.40 |
+| V17 ep17 | 28.3 / 0.025 | 25.6 / 0.126 | 27.6 / 0.052 | 27.17 |
+| **V17 ep36** | **30.5 / 0.020** | **26.5 / 0.110** | **28.5 / 0.044** | **28.49** |
+
+**V17 ep36 wins on every axis: +1.55 dB mean PSNR over V16, better LPIPS on all three objects.**
+The ep6 reading (1.5 dB *behind*) was the documented fresh-cosine LPIPS over-shoot window — do
+not judge an LPIPS run before ~ep15. "Train longer + LPIPS-throughout" was a real win.
+
+### THE CEILING — longer training does NOT fix high-frequency fidelity
+The skull LPIPS moved 0.128 → 0.110 (−14%) and the render is visibly sharper/higher-contrast,
+**but it still renders *invented* swirly carving, not the true engraving** — same failure mode as
+V16, just prettier. This is exactly what the June capacity probe predicted: overfitting the skull
+alone reproduces the real engraving at 0.022 LPIPS, so the architecture CAN render it; the general
+model can't *generalise* the sharp mapping. The two levers we picked (perceptual loss, more epochs)
+are now both spent on this: LPIPS did 0.311→0.128, all of V17's extra epochs did 0.128→0.110.
+**Faithful high-freq detail is the open problem, and it is NOT an epochs problem.** Next lever is
+data curation (does the training set even contain enough high-freq surface detail?), not more training.
+The input ceiling holds the engraving fine at ~40 dB, so the information is in the Gaussians — the
+model is losing it, not the data.
+
+### Scale-up storage check (Sagie volume `/cs/labs/sagieb`)
+462 G free (2.0 T total, 1.6 T used, 78%; group quota 1587/2048 G — agrees). Current footprint:
+`data_v10` = 117 G / ~13.4k scenes (incl. 25 G redundant `tars` staging) → ~8.7 MB/object all-in;
+v17 ckpts ~39 G; **~113 G of stale v15/v16 experiment ckpts** (v16_lpips_hi/mid are 32 G each).
+Scale-up headroom: **2× (~+117 G data +40 G ckpt) fits comfortably today**; 3× fits but tight;
+4× needs cleanup first. Reclaiming the stale v15/v16 ckpts (~113 G) → ~575 G, makes 3–4× easy.
+**Storage is not the bottleneck — data-generation compute is** (re-running prune+recovery, the
+~1500-iter gsplat FT/object that bought +14.6 dB, as a long swarm on a saturated g4 cluster).
+
+### Paper renders BEFORE pruning v15/v16 (`data_v10/showcase_versions.py`, `run_showcase.sh`)
+To preserve the cross-generation visual comparison before reclaiming the v15/v16 ckpts, generating
+raw per-render PNGs over **200 random unseen objects** (idx>3000, pool=10,737): each rendered by
+V14best (naive input) / V16-LPIPS-mid (recovered) / V17-ep36 (recovered) at 4 views → **~2,400
+renders** named `data_v10/showcase/s{scene:05d}_v{view:02d}_{model}.png`. Clean, unlabeled,
+full-frame — **no grids/strips** (those are composed later). Each model fed its NATIVE input
+distribution (feeding all the same input would mis-state the leap). Per-shard PSNR/LPIPS manifests
+written for later selection. 8 killable 1-GPU shards. Once complete, **pruning v15/v16 is safe** —
+their output is captured permanently.
+- Gotcha logged: `seq -w 0 7` pads to width 1 (max is single-digit) → looked for `shard_0.json`
+  not `shard_00.json`; first 8-job launch no-op'd on FileNotFound. Relaunched with explicit `00..07`.
+
+## 2026-07-24..26 — showcase renders, v15/v16 cleanup, 2× DATA SCALE-UP, V18 launch (no tars)
+
+### Paper showcase renders done, then reclaimed ~110 GB
+Rendered 200 random UNSEEN objects × {V14best(naive), V16+LPIPS-mid(recovered), V17-ep36(recovered)}
+at 4 views → **~2,400 clean per-render PNGs** in `data_v10/showcase/` (`showcase_versions.py`,
+`run_showcase.sh`). Each model fed its NATIVE input; raw/unlabeled/full-frame so any grid can be
+composed later. With the cross-generation comparison captured permanently, deleted the stale
+v15/v16 checkpoints — **~110 GB reclaimed** (kept `checkpoints_v15_256/phase1_epoch_5.pt`, the
+reusable phase-1 seed, + its HF export). Free space 462 → 556 GB.
+
+### 2× DATA SCALE-UP — data_v10 doubled in place (train 13,405→26,820, val 902→1,806)
+Three stages, all resume-safe:
+1. **Select** (`build_expand_2x.py`, SEED=2): excluded all 16k current uids, drew +15k train /
+   +1k val from a 73,927-object pool passing PSNR≥32/LPIPS≤0.06/num_GS=50k. New scene_idx
+   continues after the max (train 15000–29999, val 1000–1999). 24 fresh chunks (~79 GB transient).
+2. **Process** (`run_process.sh` → `process_full.py`): downloaded chunks, normalized (Rx-90),
+   14-view 512 GT renders + full ~50k-splat h5. **13,415 new train + 904 val** survived (rest
+   low-opacity/degenerate). Total: **26,820 train / 1,806 val**.
+3. **Recover** (`run_recovery.sh` → `prune_recovery.py`): prune 50k→20k + gsplat FT ~1500 iters,
+   **~9.6 s/object** (much faster than the 60 s feared → ~36 GPU-h, not 220). All 13,415 new train
+   + 904 val recovered into `h5s_20k_rec` / `h5s_20k_rec_val`. **0 missing.**
+
+### THE DATA-GEN GOTCHA (cost several hours) — gsplat co-tenancy "invalid device ordinal"
+Two single-GPU gsplat sbatch jobs packed on ONE node → the 2nd dies `CUDA error: invalid device
+ordinal` at first rasterization; a job ALONE on a node always works. Chased two false leads first:
+- `--export=ALL` from the claude_node leaks parent SLURM GPU context → contributes; fix = submit
+  clean `--export=<vars>` only (needs `export PATH=$HOME/.local/bin:$PATH` for uv). See memory.
+- Pinning `CUDA_VISIBLE_DEVICES=$SLURM_JOB_GPUS` (physical idx) → "No CUDA GPUs available", which
+  PROVED the gg:g4 gres IS cgroup-isolated (allocated GPU = device 0). So CVD=0 was right all along.
+- Real robust fix for the tail: run remaining work as ONE consolidated sweep (a lone process can't
+  self-pack). Also `--exclude=firefoot-08` (separate gsplat shared-memory bug on that node).
+**Lesson: prefer FEW big sweeps over wide swarms for gsplat data-gen.** `run_process.sh` /
+`run_recovery.sh` now strip `--killable` (queue policy per-submit: `--account=sagieb` vs
+`--killable`), pin PATH, echo the GPU binding, and warn against `--export=ALL`.
+
+### V18 — V17 recipe on 2× data, STANDARD setup (tars retired)
+User: the `/dev/shm` tar-staging doesn't scale as the dataset grows → **ditched tars**.
+`train_v18_256.sh` / `train_v18_512lp.sh` (copies of V17) now read DIRECTLY from NFS
+(`data_v10/h5s_20k_rec` + `renders`, 8 ranks × `--num_workers 8`). Training is compute-bound
+(~6 samples/s) so on-demand small-file reads should hide behind compute — **watch first-epoch time;
+bump workers if I/O-bound.** Deleted `data_v10/tars` (~25 GB). Stage A (job 31136104, 60ep@256)
++ Stage B (31136105, afterok, 36ep@512+LPIPS0.5) submitted 8×g4 killable; both PENDING on the
+strained cluster. Gate on LPIPS val + `--crop_fg` vs **V17-ep36 (28.49 dB / skull 0.110)**.
+
+### OPEN DISCUSSION — 4-GPU Sagie fallback vs 8-GPU killable (comparability)
+Cluster strained; 4-GPU Sagie may get an allocation more reliably than 8-GPU killable. But
+`training/train.py` has NO gradient accumulation, so effective batch = #GPU × bs = **8 (V17) vs 4
+(V18 on 4 GPU)** — a real confound. At micro-batch sizes the effect is modest (total data/epochs/
+per-step LR/aug unchanged; 4 GPU just takes 2× more, slightly noisier steps at the same epoch-based
+cosine LR), but not nothing. Airtight fix if forced to 4 GPU: `batch_size=2` (→ effective 8), but
+bs2@512 with N=20k may OOM (test first; bs2@256 likely fits). Wall-clock: 4 GPU ≈ 2× slower, and 2×
+data already ≈ 2× V17/epoch → 4-GPU V18 ≈ 4× V17 per epoch (~2 weeks). **Decision: leave the 8-GPU
+killable queued for now; revisit 4-GPU Sagie if it hasn't landed by ~a day.**
