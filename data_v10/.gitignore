@@ -15,3 +15,11 @@ rec_shards/
 recovery_run/
 tars/
 probe_subset/
+# 2x scale-up (2026-07): derived shard lists + binary showcase renders (regenerable from
+# object_list_*.json via build_expand_2x.py / make_shards.py / showcase_versions.py)
+showcase/
+showcase_scenes/
+shards_2x/
+rec_shards_2x/
+object_list_*_new2x.json
+object_list_*_pre2x.json
