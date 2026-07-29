@@ -4,9 +4,8 @@
 #SBATCH --mem=200GB
 #SBATCH --output=runs/train_v18_256_%j.out
 #SBATCH --job-name=gformer_v18_256
-#SBATCH --gres=gg:g4:8
+#SBATCH --gres=gg:g4:4
 #SBATCH --account=sagieb
-#SBATCH --killable
 #SBATCH --requeue
 
 # V17 stage 1/2 -- the LONG 256 bulk stage. 60 phase-2 epochs (V16 ran 20).
@@ -54,13 +53,13 @@ else
   RESUME_ARG=(--init_from $SEED_CKPT); echo "INIT phase2 (clean) from $SEED_CKPT"
 fi
 
-uv run --frozen torchrun --standalone --nproc_per_node=8 -m training.train \
+uv run --frozen torchrun --standalone --nproc_per_node=4 -m training.train \
   --gaussian_h5_dir $GH5 --renders_dir $REN \
   --save_dir checkpoints_v18_256 \
-  --batch_size 1 --resolution 256 \
+  --batch_size 2 --resolution 256 \
   --pe_type rope --augment_rotation --views_per_epoch 4 \
   --phase1_epochs 5 --phase1_lr 1e-3 \
-  --phase2_epochs 60 --phase2_lr 5e-5 \
+  --phase2_epochs 30 --phase2_lr 5e-5 \
   --save_interval 1 --keep_last_n 3 \
   --val_h5_dir $VH5 --val_renders_dir $VREN \
   --log_loss_weight 1.0 --lpips_loss_weight 0.0 \

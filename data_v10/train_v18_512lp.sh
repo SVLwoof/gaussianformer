@@ -4,9 +4,8 @@
 #SBATCH --mem=200GB
 #SBATCH --output=runs/train_v18_512lp_%j.out
 #SBATCH --job-name=gformer_v18_512lp
-#SBATCH --gres=gg:g4:8
+#SBATCH --gres=gg:g4:4
 #SBATCH --account=sagieb
-#SBATCH --killable
 #SBATCH --requeue
 
 # V17 stage 2/2 -- 512 refine with LPIPS applied THROUGHOUT (log_w 0.5 / lpips_w 0.5), 36 epochs.
@@ -49,13 +48,13 @@ else
   RESUME_ARG=(--init_from ${seed[1]}); echo "INIT phase2 (clean) from ${seed[1]}"
 fi
 
-uv run --frozen torchrun --standalone --nproc_per_node=8 -m training.train \
+uv run --frozen torchrun --standalone --nproc_per_node=4 -m training.train \
   --gaussian_h5_dir $GH5 --renders_dir $REN \
   --save_dir checkpoints_v18_512lp \
-  --batch_size 1 --resolution 512 \
+  --batch_size 2 --resolution 512 \
   --pe_type rope --augment_rotation --views_per_epoch 4 \
   --phase1_epochs 5 --phase1_lr 1e-3 \
-  --phase2_epochs 36 --phase2_lr 5e-5 \
+  --phase2_epochs 20 --phase2_lr 5e-5 \
   --save_interval 1 --keep_last_n 12 \
   --val_h5_dir $VH5 --val_renders_dir $VREN \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 \
