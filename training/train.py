@@ -146,6 +146,7 @@ def compute_loss(
     log_w: float,
     lpips_w: float,
     device: torch.device,
+    fg_bg_weight: float = 1.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return (total, log_term, lpips_term).
 
@@ -156,9 +157,20 @@ def compute_loss(
     lpips_term = LPIPS-VGG(pred_ldr, target) on display-space values in [-1, 1].
                  pred_ldr = clamp(10^pred - 1, 0, 1) brings the log-HDR prediction
                  back to the same display-referred space the PNG target lives in.
+
+    fg_bg_weight < 1 down-weights BACKGROUND pixels (target luminance <= 0.02, the
+    same threshold as the eval-side _fg_crop) in the log term. Objects cover 2-7% of
+    pixels, so the plain mean dilutes the object's gradient 14-50x; at 0.05 the
+    foreground carries ~60% of the log term instead of ~7%. LPIPS is left whole-image
+    (its conv stats are not meaningfully maskable). 1.0 = exact baseline behavior.
     """
     log_target = torch.log10(target + 1.0)
-    log_term = F.l1_loss(pred.squeeze(1), log_target)
+    if fg_bg_weight != 1.0:
+        fg = (target.amax(dim=-1, keepdim=True) > 0.02).float()
+        w = (fg + (1.0 - fg) * fg_bg_weight).expand_as(log_target)
+        log_term = (w * (pred.squeeze(1) - log_target).abs()).sum() / w.sum()
+    else:
+        log_term = F.l1_loss(pred.squeeze(1), log_target)
     total = log_w * log_term
 
     lpips_term = torch.tensor(0.0, device=device)
@@ -187,6 +199,7 @@ def run_phase(
     save_interval: int,
     log_loss_weight: float,
     lpips_loss_weight: float,
+    fg_bg_weight: float,
     model_config,
     global_step: int = 0,
     val_dataloader: DataLoader | None = None,
@@ -229,6 +242,7 @@ def run_phase(
                 )
                 loss, log_term, lpips_term = compute_loss(
                     pred, b["target"], log_loss_weight, lpips_loss_weight, device,
+                    fg_bg_weight=fg_bg_weight,
                 )
 
             optimizer.zero_grad()
@@ -280,6 +294,7 @@ def run_phase(
                     )
                     total, log_term, lpips_term = compute_loss(
                         pred, b["target"], log_loss_weight, lpips_loss_weight, device,
+                        fg_bg_weight=fg_bg_weight,
                     )
                     val_sums += torch.stack([total, log_term, lpips_term])
                     val_steps += 1
@@ -358,6 +373,10 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--fg_bg_weight", type=float, default=1.0,
+                        help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
+                        "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
+                        "term instead of ~7%%. LPIPS stays whole-image.")
     parser.add_argument("--weight_decay", type=float, default=0.01,
                         help="AdamW weight decay for phase 2 (0 disables; used by memorization controls)")
     parser.add_argument("--num_workers", type=int, default=None,
@@ -524,7 +543,7 @@ def main():
             "phase1", p1, ray_generator, dataloader, optimizer, scheduler,
             config, config.phase1_epochs, device, config.save_dir,
             config.log_interval, args.save_interval,
-            args.log_loss_weight, args.lpips_loss_weight,
+            args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
             model_config, global_step, val_dataloader=val_dataloader,
             train_sampler=train_sampler, start_epoch=phase1_start,
             keep_last_n=args.keep_last_n,
@@ -553,7 +572,7 @@ def main():
         "phase2", p2, ray_generator, dataloader, optimizer, scheduler,
         config, config.phase2_epochs, device, config.save_dir,
         config.log_interval, args.save_interval,
-        args.log_loss_weight, args.lpips_loss_weight,
+        args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
         model_config, global_step, val_dataloader=val_dataloader,
         train_sampler=train_sampler, start_epoch=phase2_start,
         keep_last_n=args.keep_last_n,
