@@ -1,13 +1,11 @@
 import torch
-from torch import nn
-from torch.amp import autocast
-
 from huggingface_hub import PyTorchModelHubMixin
+from torch import nn
 
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
 from gaussianformer.layers.attention import TransformerEncoder
-from gaussianformer.models.view_transformer import ViewTransformer
 from gaussianformer.models.config import GaussianFormerConfig
+from gaussianformer.models.view_transformer import ViewTransformer
 
 
 class GaussianFormer(nn.Module, PyTorchModelHubMixin):
@@ -16,20 +14,25 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         self.config = config
 
         # --- Input Encoders ---
-        self.gaussian_encoder = nn.Linear(self.config.gaussian_dim, self.config.latent_dim)
         norm_class = nn.LayerNorm if self.config.gaussian_encoder_norm_type == 'layer_norm' else nn.RMSNorm
-        self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
         self.gaussian_token = nn.Parameter(torch.randn(1, 1, self.config.latent_dim))
+        self.rope_dim = None
+
+        # RoPE stays ON for both pe_types: the RenderFormer backbone is RoPE-pretrained.
+        self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
+        self.rope_dim = self.config.pos_pe_num_freqs
 
         if self.config.pe_type == 'nerf':
+            # Concat encoder: position lifted into a NeRF basis, concatenated with the
+            # remaining raw fields (scale as log-scale), projected by a single Linear --
+            # one free weighting over all fields, like rope's Linear(14,768) but with
+            # NeRF position.
             self.gaussian_pos_pe = NeRFEncoding(in_dim=3, num_frequencies=self.config.pos_pe_num_freqs,
                                                 include_input=True)
-            self.gaussian_encoding_proj = nn.Linear(self.gaussian_pos_pe.get_out_dim(), self.config.latent_dim)
-
-        # --- Positional Encoding ---
-        self.rope_dim = None
-        if self.config.pe_type == 'rope':
-            self.rope_dim = self.config.pos_pe_num_freqs
+            encoder_in_dim = self.gaussian_pos_pe.get_out_dim() + 11  # scale(3)+quat(4)+color(3)+opacity(1)
+            self.gaussian_encoder = nn.Linear(encoder_in_dim, self.config.latent_dim)
+        else:  # rope
+            self.gaussian_encoder = nn.Linear(self.config.gaussian_dim, self.config.latent_dim)
 
         # --- Common Components ---
         self.reg_tokens = nn.Parameter(torch.randn(1, self.config.num_register_tokens, self.config.latent_dim))
@@ -82,19 +85,22 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         """Constructs sequence from Gaussian data."""
         batch_size = gaussians.size(0)
 
-        # Encode gaussian parameters into an embedding
-        gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(gaussians))
-
         tokens = [self.reg_tokens.expand(batch_size, -1, -1)]
 
-        # Add positional encoding if using NeRF-style PE
         if self.config.pe_type == 'nerf':
-            # Assuming the first 3 dimensions of gaussians are position
-            gaussian_pos = gaussians[..., :self.config.pos_dim]
-            pos_pe = self.gaussian_pos_pe(gaussian_pos)
-            pos_emb = self.gaussian_encoding_proj(pos_pe)
-            tokens.append(self.gaussian_token + gaussian_emb + pos_emb)
-        elif self.config.pe_type == 'rope':
+            # Concat encoder: NeRF-lifted position + log-scale + raw quaternion /
+            # color / opacity, projected by a single Linear. The shared projection's
+            # bias absorbs per-field offset, and its weights absorb per-field
+            # magnitude -- no per-field normalization.
+            pos = gaussians[..., 0:3]
+            scale = gaussians[..., 3:6]
+            rest = gaussians[..., 6:14]  # quat(4) + color(3) + opacity(1)
+            log_scale = torch.log(scale.clamp(min=1e-6))
+            feat = torch.cat([self.gaussian_pos_pe(pos), log_scale, rest], dim=-1)
+            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(feat))
+            tokens.append(self.gaussian_token + gaussian_emb)
+        else:  # rope
+            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(gaussians))
             tokens.append(self.gaussian_token + gaussian_emb)
 
         seq = torch.cat(tokens, dim=1)

@@ -4,36 +4,41 @@ import torch
 
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.models.gaussianformer import GaussianFormer
+from renderformer.models.config import RenderFormerConfig
 from renderformer.models.renderformer import RenderFormer
 
 
-GAUSSIAN_SPECIFIC_PARAMS = {
-    "gaussian_encoder.weight",
-    "gaussian_encoder.bias",
-    "gaussian_encoder_norm.weight",
-    "gaussian_token",
-}
+def _renderformer_param_names() -> set[str]:
+    """Names of all params/buffers in a fresh RenderFormer (the shared backbone surface)."""
+    return set(RenderFormer(RenderFormerConfig()).state_dict().keys())
 
 
-def transfer_weights(renderformer_model_id: str) -> GaussianFormer:
+def gaussian_specific_param_names(model: GaussianFormer) -> set[str]:
+    """Trainable parameter names in `model` that are NOT part of the RenderFormer backbone."""
+    rf_names = _renderformer_param_names()
+    return {name for name, _ in model.named_parameters() if name not in rf_names}
+
+
+def transfer_weights(
+    renderformer_model_id: str,
+    gf_config: GaussianFormerConfig | None = None,
+) -> GaussianFormer:
     """
     Create a GaussianFormer model initialized with RenderFormer pretrained weights.
 
-    The 277 shared parameters (transformer, view_transformer, reg_tokens, DPT decoder)
-    are copied directly. The 4 Gaussian-specific parameters (gaussian_encoder, gaussian_token)
-    keep their random initialization.
+    Shared-name parameters (transformer, view_transformer, reg_tokens, DPT decoder) are
+    copied directly. Gaussian-specific input-module parameters keep their random init.
     """
     print(f"Loading RenderFormer from: {renderformer_model_id}")
-    from renderformer.models.config import RenderFormerConfig
     from huggingface_hub import hf_hub_download
     import safetensors.torch
 
-    # Load config and weights manually (from_pretrained doesn't work with positional config arg)
-    renderformer = RenderFormer(RenderFormerConfig())
     weights_path = hf_hub_download(renderformer_model_id, "model.safetensors")
     rf_state = safetensors.torch.load_file(weights_path)
 
-    gf_model = GaussianFormer(GaussianFormerConfig())
+    if gf_config is None:
+        gf_config = GaussianFormerConfig()
+    gf_model = GaussianFormer(gf_config)
     gf_state = gf_model.state_dict()
 
     transferred = 0
@@ -52,7 +57,7 @@ def transfer_weights(renderformer_model_id: str) -> GaussianFormer:
 
     gf_model.load_state_dict(gf_state)
 
-    gaussian_only = sorted(GAUSSIAN_SPECIFIC_PARAMS & set(gf_state.keys()))
+    gaussian_only = sorted(gaussian_specific_param_names(gf_model))
 
     print(f"Transferred {transferred} parameters from RenderFormer")
     print(f"Gaussian-specific (random init): {gaussian_only}")
@@ -68,9 +73,10 @@ def transfer_weights(renderformer_model_id: str) -> GaussianFormer:
 
 def freeze_backbone(model: GaussianFormer) -> list[str]:
     """Freeze everything except the Gaussian-specific input module."""
+    trainable_names = gaussian_specific_param_names(model)
     trainable = []
     for name, param in model.named_parameters():
-        if name in GAUSSIAN_SPECIFIC_PARAMS:
+        if name in trainable_names:
             param.requires_grad = True
             trainable.append(name)
         else:

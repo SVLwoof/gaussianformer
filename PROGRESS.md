@@ -889,3 +889,1204 @@ Train LPIPS dropped 40% (0.021 → 0.013). **Val LPIPS flat at ~0.033 throughout
 V9 ep60 holds best PSNR across all N. V10b PSNR regresses 0.1–0.4 dB vs V9 ep60, consistent with LPIPS optimizing a perceptual proxy rather than pixel fidelity. The slight PSNR cost is the expected trade for perceptual sharpness; visual inspection (user-confirmed at ep2) showed better-defined shapes and reduced smoothing.
 
 **Eval invocation pattern (V10b).** `sbatch --export=ALL,EP=<N> runs/eval_v10b_tomatoes.sh`. Outputs at `data_external/tomatoes/renders/gaussianformer_n{N}_v10b_ep<N>/` and `overview_3way_n{N}_v10b_ep<N>.png`. Logs at `runs/eval_v10b_ep<N>.log`.
+
+## V11 — Per-field NeRF input encoding (started 2026-05-19)
+
+**Goal.** Replace V10b's monolithic `Linear(14, 768)` Gaussian encoder with a per-field decomposition: NeRFEncoding on position (12 freqs) and `log(scale)` (6 freqs), plain linear for rotation/color/opacity, summed additively into the `gaussian_token`. Motivation: address V4–V10b's chronic blurriness and PSNR plateau by giving the transformer explicit high-frequency spatial features instead of relying solely on RoPE on the attention side.
+
+**Architecture diff (vs V10b).**
+- New `pe_type='nerf_perfield'` in `GaussianFormerConfig`.
+- 5 per-field `Linear → RMSNorm(768)` projections (`pos_proj`, `scale_proj`, `rotation_proj`, `color_proj`, `opacity_proj`) replacing the monolithic encoder.
+- `pos_pe = NeRFEncoding(3, num_freqs=12, include_input=True)` → 75-D → 768.
+- `scale_pe = NeRFEncoding(3, num_freqs=6, include_input=True)`, applied to `log(scale + 1e-6)` → 39-D → 768.
+- View-transformer reuses the existing `nerf` PE path (NeRF on ray camera origin → 768; added to ray tokens).
+- 19 new "Gaussian-specific" params total: 10 weights+biases for the 5 projections, 5 norms, 3 view-side NeRF params, `gaussian_token`.
+
+**Init.** Fresh from `microsoft/renderformer-v1-base` via `training/weight_transfer.transfer_weights` (not V10b — the encoder is structurally different and cannot be partially loaded). The 12-layer transformer, view-transformer, DPT decoder, and `reg_tokens` copy from RF; the 19 Gaussian-specific params init random. `weight_transfer.py` now derives "Gaussian-specific" dynamically from the RF state-dict (set difference) instead of a hardcoded list, so it's robust as the encoder evolves.
+
+**Loss.** Log-HDR L1 only (LPIPS=0) — clean baseline isolating the architectural change. LPIPS fine-tune (V11b) deferred until V11 converges, mirroring the V9→V10b sequencing.
+
+**Sanity (job 30616892, 2026-05-19).** Forward `(1, 2, 3, 32, 32)` on CUDA with bf16 autocast; grads flow into every per-field projection; `gaussian_specific_param_names()` identifies the 19 new params; `freeze_backbone` trainable count matches. Side fixes that landed: `tmp/__init__.py` for module discovery, `SLURM_SUBMIT_DIR` for sbatch cwd, `uv run --frozen` to skip dependency resolution, numpy publish-time allowlist in `~/.config/uv/uv.toml` (needed because of the global `exclude-newer = "7 days"` supply-chain hardening).
+
+**Pre-launch optimization.** V10b at bs=4 sat at 40.6/46 GB, but training H5 scenes are small (500–2,600 Gaussians; inference runs 5k–30k), so most batches' `max_N_in_batch` is well under the worst case → headroom likely. Probing `bs ∈ {4, 5, 6, 8}` via 4 parallel sbatch jobs (`runs/probe_v11_bs{4,5,6,8}.sh`, 4 GPUs each, `--max_samples 32`, 1 phase-2 epoch, `--skip_phase1`). Each has an `nvidia-smi -l 10` sidecar logging peak `memory.used`. Decision rule: largest bs whose peak stays under ~44 GB on all 4 ranks. Data unchanged from V10b (`data_v9/h5s` + `data_v9/renders`) so V11 vs V10b is an apples-to-apples comparison of the encoder. Denser-N training data deferred to a future V12 experiment.
+
+**Probe results (jobs 30617186-89, 2026-05-19, max_samples=32, 1 phase-2 epoch each).**
+
+| bs | result | probe peak VRAM (GPUs 0–3) | notes |
+|---|---|---|---|
+| 4 | COMPLETED 0:0 | 33.2 GB | Elapsed 5:18. Reference probe point. |
+| 5 | COMPLETED 0:0 | 35.9 GB | Elapsed 5:19. Δ vs bs=4 = +2.7 GB. |
+| 6 | COMPLETED 0:0 | smi missed peak (271 MiB readings only) | Elapsed 2:10, training itself 7.7s — cudnn/flash-attn cache warm from bs=4/5, smi 10s polling never sampled during the active step. |
+| 8 | FAILED 1:0 | OOM on rank 2 | `Tried to allocate 96 MiB. GPU 2 has total 47.40 GiB of which 7.19 MiB is free.` |
+
+**Backend confirmed:** `attention backend: flash_attn` printed at startup on every probe — flash-attn imports cleanly under the venv (`uv run --frozen`), no SDPA fallback.
+
+**Decision: bs=5 for V11.** V10b at bs=4 sat at 40.6 GB in production but our probe at bs=4 (small-data) saw only 33.2 GB — a ~7.4 GB probe-to-production gap from outlier high-N batches. Linear-extrapolating the same gap: bs=5 production peak ~43 GB (≥3 GB headroom on 46 GB cards), bs=6 production peak ~46 GB (OOM risk), bs=8 confirmed OOM even on small data. bs=5 gives a 25% throughput bump over V10b (global bs 20 vs 16) with verified headroom.
+
+**Launch.** `runs/train_v11_perfield.sh` set to `--batch_size 5`, phase1=5 + phase2=100 epochs, log-L1 only, 4×g4 / 168 h walltime.
+
+**Launch attempts (2026-05-19).** Three sbatch tries before V11 stabilized:
+- Job `30617444` — cwd fail (`$(dirname "$0")/..` resolved to SLURM staging dir). Cancelled.
+- Job `30617456` — uv resolver hit numpy publish-time exclusion (script lacked `--frozen`). Cancelled.
+- Job `30617463` — DDP `find_unused_parameters` crash in Phase 1 (FAILED 5:14): Phase 1 freezes most of the 195M backbone *after* DDP wraps, so DDP's reducer saw params it expected grads for that never produced any. This had been latent — V9/V10/V10b all used `--skip_phase1 --resume`, so a real Phase 1 step + DDP was never exercised on this codepath. Fix: pass `find_unused_parameters=True` at DDP construction (`training/train.py`); small per-step overhead, no behavioral regression. Root-causing the specific unused param deferred — `find_unused_parameters=True` is the documented escape hatch and Phase 1 is only 5 epochs.
+
+**V11 RUNNING.** Job `30617577`, launched 2026-05-19 ~14:48. `attention backend: flash_attn` and Phase 1 trainables (19) confirmed printed; awaiting first epoch loss. Persistent monitor `b6h2tgc2b` armed for state/epoch/error events.
+
+### Eval-suite refactor (in-flight; CPU work complete, GPU steps queued)
+
+For V11 vs V10b we wanted comparisons across multiple diverse scenes, not just tomatoes. The eval pipeline (`data_external/run_tomatoes.py`) was scene-specific — refactored into a parameterized version, and 3 additional Objaverse_Splats val scenes added to the registry.
+
+- `data_external/scene_configs.py` (new) — `SceneConfig` dataclass + `SCENES` registry with `tomatoes`, `house` (UID `4272ba78...`, chunk `000-031`), `dragon` (UID `7cddac29...`, chunk `000-045`), `cartoon` (UID `235e2e4c...`, chunk `000-091`). Picked from `data_v9/object_list_val.json` for diversity vs tomatoes' single-organic profile: structured multi-object (house), thin/specular geometry (dragon), stylized OOD-leaning (cartoon).
+- `data_external/run_scene.py` (new) — generalized pipeline. Takes `--scene <name>` from the registry; everything else (norm, scoring, pruning, render, metrics, overview grids) is scene-agnostic. Scene-specific bits (norm_scale vs norm_target_aabb, X-flip, orbit camera) live in `SceneConfig`.
+- `data_external/run_tomatoes.py` — 4-line shim preserving `python -m data_external.run_tomatoes` so existing `runs/eval_v10b_tomatoes.sh` still works.
+- `data_external/prep_objaverse_scene.py` (new) — `--scene <name>` downloads PLY by UID from the HF chunk zip + renders the 14-view gsplat-full reference. Supports `--download-only` for CPU-side prep.
+- `runs/prep_eval_v11_scenes.sh` (new) — one-shot 1-GPU sbatch prepping all 3 new scenes.
+- `runs/eval_v11_scene.sh` (new) — per-checkpoint per-scene eval template: `sbatch --export=ALL,SCENE=<name>,EP=<n> runs/eval_v11_scene.sh`.
+
+**Done so far:** 3 PLYs downloaded CPU-side to `data_external/{house,dragon,cartoon}/raw.ply` (3.4 MB each, 50k Gaussians).
+
+**Pending GPU work:** `sbatch runs/prep_eval_v11_scenes.sh` (renders gsplat-full references; queues behind V11) → then `runs/eval_v11_scene.sh` per (scene, ckpt) once V11 has checkpoints.
+
+### V11 Phase 1 results (job 30617577, 2026-05-19)
+
+Phase 1 ran clean across all 5 epochs (~2235 s/epoch at bs=5 / 4 GPUs / flash-attn). Loss curve was smooth and monotone:
+
+| Phase 1 epoch | train avg | val | lr (cosine end) |
+|---|---|---|---|
+| 1 | 0.013833 | – | 9.05e-04 |
+| 2 | 0.010068 | – | 6.58e-04 |
+| 3 | 0.008688 | – | 3.52e-04 |
+| 4 | 0.008512 | – | 1.05e-04 |
+| 5 | 0.008389 | 0.008683 | 1.00e-05 |
+
+Step-level binning showed the actual descent: 0.015 → 0.013 in ep 1, 0.013 → 0.009 in ep 2, ~0.008 by mid-ep 3, fully flat through ep 4–5. The "good learning" happened in ep 1–2; ep 4–5 were pure over-specialization. `phase1_epoch_5.pt` (781 MB, encoder-only) saved as the fallback.
+
+### V11 Phase 2 plateau (low-LR, 2026-05-19)
+
+Phase 2 began with the V9/V10b fine-tune recipe (lr=5e-5, cosine over 100 epochs). All 5 trained epochs flat-to-rising:
+
+| Phase 2 epoch | train | val | lr |
+|---|---|---|---|
+| 1 | 0.014307 | – | 5.00e-05 |
+| 2 | 0.013833 | – | 5.00e-05 |
+| 3 | 0.013835 | – | 4.99e-05 |
+| 4 | 0.013834 | – | 4.98e-05 |
+| 5 | 0.013888 | **0.014490** | 4.97e-05 |
+
+Notably, Phase 2 ep 5 val (0.014490) is **66% worse than Phase 1 ep 5 val (0.008683)** — the unfreezing actively degraded the model. Cancelled at end of ep 5.
+
+### V11 phase1_ep5 eval on tomatoes (job 30619102, 2026-05-19)
+
+To anchor the diagnosis, ran `data_external.run_scene` on `phase1_epoch_5.pt` (the best V11 ckpt — encoder trained, backbone at RenderFormer init). Side bug surfaced: `run_scene.py` hardcoded `GaussianFormerConfig()` with default `pe_type='rope'`, causing `load_state_dict` to reject the per-field state. Fixed by threading `--pe_type` and `--scale_pe_num_freqs` through to both the script and the SLURM wrapper.
+
+| N | V11 phase1_ep5 (vs full) | V10b ep26 (vs full) | Δ |
+|---|---|---|---|
+| 5000 | 23.07 dB | 25.80 dB | −2.7 |
+| 10000 | 23.24 dB | 26.70 dB | −3.5 |
+| 20000 | 22.87 dB | 27.41 dB | −4.5 |
+| 30000 | 22.56 dB | 27.81 dB | −5.3 |
+
+Confirms: the per-field encoder learned a *useful but partial* mapping (23 dB > random), but the unchanged RenderFormer backbone can't fully decode it. The V11-vs-V10b comparison is meaningless until Phase 2 actually works.
+
+### V11 Phase 2 hi-LR retry (job 30619107, started 2026-05-19 ~23:10)
+
+Hypothesis: lr=5e-5 was too low to pull the backbone out of its RenderFormer init given the new input distribution. Restarted Phase 2 from `phase1_epoch_5.pt` (skip Phase 1) with `--phase2_lr 2e-4` (4× higher), output to `checkpoints_v11_hi_lr/`. Live trajectory:
+
+| Phase 2 epoch | low-LR (5e-5) | hi-LR (2e-4) |
+|---|---|---|
+| 1 | 0.014307 | 0.019580 |
+| 2 | 0.013833 | 0.014827 |
+| 3 | 0.013835 | 0.014827 |
+| 4 | 0.013834 | (in flight) |
+
+ep 1 spiked (cold start at hi-LR), ep 2–3 plateaued ~0.0010 *above* the low-LR plateau. Hi-LR disturbed the backbone more than low-LR but didn't reach a better basin. Verdict pending ep 4: <0.014 = continue, ≥0.014 = abort + pivot to short-Phase-1.
+
+### Diagnosis: freeze-then-unfreeze trap
+
+Two failed Phase 2 attempts at different LRs both plateau (low at 0.0138, hi at 0.0148). The encoder dropped Phase 1 loss to 0.0084 (it learned something), but unfreezing the backbone consistently fails to find a better minimum. This isn't an LR problem — it's a **freeze-then-unfreeze trap**: during the 5-epoch Phase 1 the encoder over-specialized to a frozen RenderFormer-init backbone, putting joint optimization into a saddle that gradient descent (at any LR we tried) can't escape.
+
+### Short-Phase-1 recipe (queued, ready to launch on wake)
+
+`runs/train_v11_perfield_short_phase1.sh`:
+- **Phase 1**: `--phase1_lr 3e-4` (3× lower than V11's 1e-3), `--phase1_epochs 2` (cut before the plateau — ep 2 was the elbow in the descent).
+- **Phase 2**: `--phase2_lr 5e-5`, `--phase2_epochs 100` (V9 recipe).
+- Init from `renderformer-v1-base` (no `--resume`), per-field arch unchanged, bs=5 / 4×g4.
+- Output to `checkpoints_v11_short_p1/`.
+
+Side patch in `training/train.py`: the final epoch of each phase now always saves a ckpt, even off the `save_interval` cadence — otherwise `phase1_epochs=2` with `save_interval=5` would leave no Phase 1 ckpt.
+
+**Decision tree (autonomous overnight):**
+- Hi-LR ep 4 lands <0.014 → gamble alive, let it continue.
+- Hi-LR ep 4 lands ≥0.014 or crashes → wait for wake; ready commands: `scancel 30619107 && sbatch runs/train_v11_perfield_short_phase1.sh`.
+
+### Hi-LR aborted; short-Phase-1 also plateaued (2026-05-20)
+
+Hi-LR run (30619107): ep 2/3/4 all 0.014827 — plateau confirmed, cancelled. Short-Phase-1 run (`30619669`, `runs/train_v11_perfield_short_phase1.sh`): Phase 1 (2 ep, lr=3e-4) trained clean (0.0138 → 0.0126, `phase1_epoch_2.pt` saved). Phase 2 then plateaued **identically to the original V11**:
+
+| P2 epoch | reported avg | step-mean |
+|---|---|---|
+| 1 | 0.013833 | 0.013412 |
+| 2 | 0.013833 | 0.013406 |
+| 3 | 0.013832 | 0.013678 |
+| 4 | 0.013851 | – |
+| 5 | 0.013864 (val 0.014475) | – |
+| 6 | 0.013830 | 0.014018 |
+| 7 | 0.013830 | 0.013333 |
+| 8 | 0.013839 | – |
+
+Step-level means confirm a real plateau (not a logging artifact). Three Phase 2 configs now all stuck ~0.0138. The freeze-then-unfreeze-trap hypothesis is **disproven** — short Phase 1 was designed to avoid it and plateaued at the exact same place.
+
+### ~~Hypothesis: DDP bucket bug in the in-process phase transition~~ (SUPERSEDED — wrong)
+
+> This section is kept as an investigation record. It was **disproven** by the
+> `train_v11_phase2_resume.sh` run below and is not the real cause.
+
+Initial hypothesis: `train.py` wraps the model in `DDP(..., find_unused_parameters=True)` then calls `freeze_backbone`, so Phase 2's `unfreeze_all` re-enables backbone params that DDP never synced → replicas drift → plateau. The `--skip_phase1 --resume` recipe was proposed as the fix.
+
+**Why it was wrong:** the `runs/train_v11_phase2_resume.sh` run (job `30619869`) used exactly `--skip_phase1 --resume` — DDP constructed once with all params trainable, no freeze/unfreeze — and **plateaued identically** (ep 1 0.013841, ep 2 0.013833). That codepath has no DDP bucket issue, so the bucket bug cannot be the cause.
+
+### Root cause (confirmed): scale fed to NeRF encoding ~14× out of range
+
+Checked V9's *actual* Phase 2 trajectory: ep 1 = **0.003839**, descending smoothly to 0.000877 by ep 50. V11 plateaus at 0.0138 — ~4× worse than where V9 *started*. So V11 was never "slow", it was broken; and the only thing differing from V9 is the encoder.
+
+The bug, verified on `data_v9/h5s/scene_0000.h5`: `construct_sequence` computes `log_scale = log(scale)`. Real scales are `[1e-6, 0.11]` → `log_scale ∈ [-13.8, -2.2]`, range 11.6 wide. `NeRFEncoding` requires inputs in ~`[0,1]` (per its own docstring) so the lowest band is smooth. At this range **even band 0 (freq 1) spans 1.8 periods** — `sin(log_scale)` is non-monotonic, non-injective. All 36 sinusoidal dims of the 39-D scale encoding are aliased oscillation; only the 3 raw `include_input` dims carry usable scale. The model effectively cannot read Gaussian scale — and scale is the splat footprint, so the renderer defaults to an average blur and plateaus. This explains both the chronic blurriness *and* the flat loss.
+
+Position is fine by contrast (range `[-0.45, 0.29]`, band 0 spans 0.1 periods — textbook NeRF).
+
+Secondary: `token = gaussian_token + Σ RMSNorm(proj_i)` over 5 fields → token RMS ≈ √6, vs √2 for the working `rope` path; the pretrained backbone's residual stream is balanced for √2.
+
+### Fix applied: per-field encoder rewrite (2026-05-20)
+
+`gaussianformer/models/gaussianformer.py`, `nerf_perfield` branch:
+- **Scale no longer NeRF-encoded** — `scale_proj` is now `Linear(3, 768)` on raw `log_scale`; `scale_pe` removed. (Position keeps NeRF.)
+- **Single final norm** — the 5 per-field RMSNorms replaced by one `gaussian_norm` on the summed projections.
+
+Verified on CPU with realistic data ranges: fixed `nerf_perfield` token RMS = 1.41, matching the `rope` path's 1.40 (was ~2.45). `tmp/sanity_perfield.py` updated for the new param names. `scale_pe_num_freqs` config field is now unused (left in place; harmless).
+
+### v11b run: scale fix did NOT move the plateau (job 30620114, 2026-05-20)
+
+Launched the scale-fixed encoder (`runs/train_v11b_perfield_fixed.sh`). GPU sanity passed. Phase 1 (2 ep, lr 3e-4) → 0.0138. Phase 2: ep 1 = 0.013838, ep 2 = 0.013848 — same plateau. Killed at ep 2.
+
+Five Phase 2 runs now plateau at 0.0138 to three sig figs (4× LR range, 2 Phase-1 schedules, broken *and* fixed encoder). That degree of reproducibility means the floor is **not** an optimization plateau and **not** the input encoder — it is a fixed component of the model that is broken identically every time.
+
+### Root cause (confirmed, structural): RoPE was disabled for `nerf_perfield`
+
+The `renderformer-v1-base` backbone is RoPE-pretrained (`RenderFormerConfig.pe_type` defaults to `'rope'`; V9/V10b set `rope_dim=12` and worked, which only succeeds against a RoPE-trained backbone). `transfer_weights` copies that backbone's RoPE-trained attention weights into GaussianFormer.
+
+But the `nerf_perfield` path left `rope_dim = None` in **both** transformers — `gaussianformer.py` (view-independent) and `view_transformer.py` (view-dependent). `attention.py`: `rope_dim=None` → no RoPE applied. So every V11 run ran RoPE-trained attention weights **without RoPE** — Q/K never rotated by position, attention patterns meaningless, the entire scene encoder + view decoder compromised. This is input-encoder-independent → explains the identical 0.0138 floor across all 5 runs.
+
+The V11 design assumed the per-field NeRF position encoding *replaces* RoPE. It can't — you cannot drop RoPE from a RoPE-pretrained backbone. NeRF encoding must be additive to RoPE.
+
+**Fix:** `nerf_perfield` now sets `rope_dim = pos_pe_num_freqs` in both `gaussianformer.py` and `view_transformer.py`. Verified on CPU: `nerf_perfield` now has both `rope_emb` buffers identical to the `rope` path; names shared with RenderFormer rose 275 → 277 (the 2 rope buffers align); the 15 GF-only params are exactly the per-field encoder. (The `pe_type='nerf'` path has the same latent bug — left as-is, never used.)
+
+Net: three fixes in the `nerf_perfield` path — (1) RoPE re-enabled [primary], (2) scale plain-linear not aliased-NeRF, (3) single final token norm.
+
+Next: `runs/train_v11c_perfield.sh` → `checkpoints_v11c/`. Verdict at Phase 2 ep 1 — descent toward V9's ~0.004 confirms the fix; another 0.0138 freeze means deeper instrumentation.
+
+### v11c: RoPE fix helped Phase 1 but Phase 2 still plateaued (job 30620496)
+
+v11c (RoPE fixed) Phase 1 reached **0.0063** — the first time any V11 run broke below 0.0138 at any stage, proving the RoPE fix did something real (the frozen backbone now functions). But Phase 2: ep 1 = 0.014143, ep 2 = 0.013833 — back at the plateau. Killed at ep 2.
+
+### Rendering v11c phase1_ep2: a featureless grey blob
+
+Rendered `checkpoints_v11c/phase1_epoch_2.pt` (the 0.0063 model) on tomatoes. PSNR vs full: 21.9 / 19.4 / 16.9 / 15.6 dB at N = 5k/10k/20k/30k — and **degrading hard with N**. The image: a featureless grey-white blob — no color, no structure, correct rough position and extent, and the blob grows with N. The "0.0063 Phase 1" was never good: L1 is computed in log-space on ~90%-black images, so a correctly-placed grey blob lands at ~0.006. **The loss number cannot distinguish a blob from real content — only the render can.**
+
+### Instrumenting the encoder: scale drowned every other field (self-inflicted)
+
+`tmp/instrument_encoder.py` measured per-field embedding RMS on a real batch through the v11c encoder:
+
+| field | emb RMS | token Δ if removed |
+|---|---|---|
+| pos | 0.56 | 15% |
+| **scale** | **3.77** | **117%** |
+| rotation | 0.42 | 11% |
+| color | 0.47 | 13% |
+| opacity | 0.60 | 16% |
+
+`scale_emb` was ~7× every other field; the summed token was almost purely scale. Cause: the v11b "fixes" — replacing aliased scale-NeRF with a plain `Linear` on *raw* `log_scale` (input magnitude ~10 vs ~1 for other fields) made `scale_emb` hot, and removing the per-field RMSNorms (the safeguard that kept fields balanced) let it dominate unchecked. **Fix:** restored per-field RMSNorm on all 5 projections + kept the final norm. Re-instrumented on a fresh model: all 5 fields now RMS 1.0, uniform 45.5% ablation — balanced.
+
+### v11d: balanced encoder, OOM, resumed — Phase 2 STILL plateaued (jobs 30623103, 30624257)
+
+v11d (RoPE + balanced fields) Phase 1 → 0.0138; Phase 2 OOM'd on all 4 ranks (landed on 44 GB g4 cards; bs=5 peaks ~43 GB — fits 48 GB cards, not 44 GB). Resumed Phase 2 from `phase1_epoch_2.pt` at bs=4 (`train_v11d_phase2_resume.sh`). Phase 2: ep 1 = 0.013837, ep 2 = 0.013835 — plateau, again.
+
+### Verdict: the input encoder was never the cause
+
+**Seven Phase 2 runs, every one at 0.0138** — RoPE on/off, scale aliased/plain/dominated/balanced, every LR, every Phase-1 schedule. Three real, verified encoder bugs fixed; Phase 2 never moved. The plateau is not in the encoder.
+
+### Control experiment: V9's recipe fails on current code
+
+Ran `runs/control_rope.sh` — V9's exact recipe (`pe_type=rope`, `--skip_phase1 --resume checkpoints_v4/phase1_epoch_20.pt`, lr 5e-5) on the *current* codebase (job 30624978). Phase 2 ep 1 = **0.013838** — plateaued. V9's own recipe, run today, fails the same way. So the regression is in **shared code changed since V9**, not the encoder. Every V11 run varied the encoder and held shared code fixed — which is why encoder tweaking could never have found it.
+
+### Root cause (confirmed): `find_unused_parameters=True`
+
+`git diff main -- training/train.py`: for a `rope` run, exactly one change is behaviorally active — `DDP(...)` gained `find_unused_parameters=True`. It was added during the V11 effort to silence the Phase-1 freeze DDP crash (job 30617463). Consistency check is exact: **every run with the flag (7 V11 runs + the control) plateaued at 0.0138; V9/V10b predate it and reached 0.0009.** With `find_unused_parameters=True`, DDP marks "unused" params gradient-ready from a per-iteration graph traversal; data-dependent masking (padded Gaussians / `valid_mask`) can make the used/unused set differ across ranks, so DDP all-reduces inconsistent gradient sets and silently corrupts training.
+
+**Fix:** `find_unused_parameters = not args.skip_phase1` in `train.py` — in-process Phase 1 needs it (frozen backbone), `--skip_phase1` runs (all params trainable, V9's mode) get `False`.
+
+### Bisect re-run (job 30625057): find_unused_parameters IS a bug — for rope
+
+Re-ran `control_rope.sh` with `find_unused_parameters = not args.skip_phase1`. Phase 2 ep 1 = 0.0115 avg, and the within-epoch binning showed a **clean monotonic descent**: 0.0157 → 0.0148 → 0.0127 → 0.0119 → 0.0091 → 0.0082 across the epoch — the first genuine descent in the whole investigation. So `find_unused_parameters=True` was a real bug. Confirmed fix for the `rope` path.
+
+### But the per-field encoder still plateaus — there are TWO bugs
+
+Re-ran v11d Phase 2 (`train_v11d_phase2_resume.sh`, `--skip_phase1` → `find_unused_parameters=False`), job 30625146. Phase 2 ep 1-11 all flat at ~0.0138 (val 0.0145). The within-epoch ep-1 binning was **identical** to the pre-fix v11d run — the `find_unused` fix changed nothing for the per-field path.
+
+| config | find_unused | result |
+|---|---|---|
+| rope | True | plateau |
+| rope | **False** | **descends** ✓ |
+| per-field | True | plateau |
+| per-field | **False** | **plateau** ✗ |
+
+So: `find_unused_parameters=True` is one bug (fixed, affects rope). The per-field encoder has a **separate, still-open bug** — it plateaus even with `find_unused` fixed. The earlier claim "the encoder was never the cause" was an overreach: the rope control only proved `find_unused` was *a* bug, not that the encoder was clean.
+
+### compare_forward.py: the per-field token is NOT degenerate
+
+`tmp/compare_forward.py` — rope vs per-field models, both weight-transferred from the *same* RenderFormer (identical 12-layer backbone), one real Gaussian batch through `construct_sequence` + `model.transformer`:
+
+| | rope | per-field |
+|---|---|---|
+| per-layer activation RMS | 4.2 → 13.9 | 3.2 → 13.6 (ratio 0.8–1.1× every layer) |
+| final scene-token RMS | 13.94 | 13.64 |
+
+The per-field token propagates through the backbone essentially identically to a rope token — no blowup, no collapse. The per-field encoder is not producing a token the backbone chokes on. **The plateau is a training-dynamics problem, not a broken-forward one.**
+
+### Open: the per-field training-dynamics bug
+
+Still unsolved. v11d `phase2_epoch_5.pt` / `phase2_epoch_10.pt` are saved (plateaued models, available to render).
+
+The bug is precisely isolated: **encoder-specific** (rope descends on current code, per-field plateaus) and **training-dynamics, not forward** (`compare_forward` shows the per-field token propagates through the backbone within ~10% of a rope token at every layer). Two confounded candidate causes:
+- **(A) Checkpoint provenance** — every per-field run resumed a per-field Phase-1 checkpoint that itself plateaued in Phase 1.
+- **(B) The per-field architecture** — 5 per-field RMSNorms force every field to exactly equal magnitude; the encoder can only rotate field directions, not weight fields by importance.
+
+### v11e: discriminating experiment (job 30629297, 2026-05-21)
+
+`runs/train_v11e_perfield_jointscratch.sh` — `nerf_perfield`, `--skip_phase1`, **no `--resume`**: fresh RenderFormer transfer with a random per-field encoder, Phase 2 trains everything jointly from step 1. No Phase-1 checkpoint in the picture, so it isolates (A) vs (B):
+- plateaus at 0.0138 → cause (B), the architecture.
+- descends toward ~0.004 → cause (A); fix is a proper Phase-1 warmup.
+
+`--skip_phase1` → `find_unused_parameters=False` (the rope-confirmed-correct path); bs=4. Verdict from the within-epoch binning of Phase 2 ep 1 (~46 min): a clean monotonic descent (like the rope control) = (A); flat ~0.0138 = (B).
+
+### Verdict (job 30629297): cause (B) — the per-field architecture
+
+v11e Phase 2 ep 1 = **0.013842** — the chronic plateau to the fourth decimal (prior per-field runs: 0.013833–0.013841). within-epoch ep-1 binning: 0.01589 → 0.01422 → 0.01324 → 0.01350 → 0.01470 — a token drop then a stall. The rope control with `find_unused` fixed, same code, descended 0.0157 → 0.0082 across ep 1; the per-field encoder cannot.
+
+v11e was the cleanest possible isolation: fresh RenderFormer transfer, *random* per-field encoder, joint Phase 2 from step 1, **no Phase-1 checkpoint anywhere**. It still plateaus. Checkpoint provenance (A) is ruled out — the per-field architecture itself caps the model.
+
+**Why the architecture caps it — precisely.** Per-field projections summed *without* the per-field norms are mathematically a single linear map over the concatenated features: `Σ_f W_f·feat_f = [W_pos|W_scale|…]·[feat_pos;feat_scale;…]`. So the *entire* difference between the per-field encoder and a plain concat encoder is the 5 per-field RMSNorms. RMSNorm divides each field's projection output by its own per-Gaussian RMS (over the 768 channels) — a nonlinearity that erases relative salience: a Gaussian at an "important" position and one at a "boring" position get their `pos_emb` normalized to the same magnitude. The encoder cannot make one field, or one Gaussian, louder than another. `compare_forward.py` already showed the per-field *forward* is healthy (token within ~10% of a rope token at every layer) — the cap is in what the encoder *can represent*, not numerical dynamics.
+
+The per-field RMSNorms were not gratuitous — without them `scale_emb` ran 7× hot and dominated the token (the v11c bug). So per-field is caught between two failures: norms off → scale domination; norms on → per-Gaussian salience erased. The decomposition itself is the dead end.
+
+### v11f: the concat encoder (`nerf` mode, repurposed) — 2026-05-21
+
+The fix follows directly from the framing above: per-field-sum **minus the 5 norms** is exactly a single linear map over the concatenated fields. The concat encoder is that map:
+
+```
+feat  = cat[ nerf(pos)   # 75   3 dims, 12 freqs, +input
+             log_scale   # 3
+             quat        # 4
+             color       # 3
+             opacity ]   # 1   -> 86-dim
+token = gaussian_token + norm( Linear(86, 768)(feat) )
+```
+
+One shared `Linear(86,768)` over the whole concat — weights every field freely via its columns, exactly like rope's `Linear(14,768)`, but with position lifted into a NeRF basis (the original V11 blur-fix hypothesis). RoPE stays on. No per-field norms, no sum.
+
+**No input standardization.** An earlier draft standardized `log_scale` by training-set mean/std — dropped: those are dataset-fitted magic numbers, and the architecture does not need them. A *shared* projection with a bias absorbs per-field offset (the bias) and per-field magnitude (its learned weight columns) on its own — which is precisely why the concat encoder fixes per-field, where *isolated* per-field projections + norms made magnitude matter. `log` on scale stays: parameter-free, and the canonical 3DGS representation of a positive multiplicative quantity. `clamp(min=1e-6)` is a standard log-of-zero guard, not a fitted constant.
+
+Decided: repurpose the (unused, no-checkpoint) `nerf` pe_type — keeps the mode count at 3; the `nerf` view transformer is made pure-rope (identical to `rope`), so `nerf` vs `rope` isolates exactly the scene encoder.
+
+Implemented in `config.py` / `gaussianformer.py` / `view_transformer.py`. CPU sanity (`tmp/compare_forward.py`, rope vs concat through the shared backbone): the concat token propagates healthily — per-layer activation RMS 0.5–1.2× rope, final scene-token RMS 10.2 vs rope 14.3 (cooler, no blowup/collapse), gradients same order at every layer.
+
+`runs/train_v11f_concat.sh` — recipe identical to v11e (`--skip_phase1`, no `--resume`: fresh RenderFormer transfer + random concat encoder, joint Phase 2), so the only variable vs v11e is the encoder architecture. Verdict from the within-epoch binning of Phase 2 ep 1: descends like the rope control (~0.008 within ep 1) → the concat encoder is the fix; flat 0.0138 → the bug is deeper than the encoder.
+
+### v11f result: concat plateaus too — theory falsified, and a confound found (job 30629625)
+
+First v11f submit (30629550) died at step 240 to a single-rank NCCL collective timeout — rank 2 hung in non-collective code, no Python exception / NaN / OOM anywhere; a transient infra stall, not the code. Resubmitted with `--exclude=firefoot-13`.
+
+v11f Phase 2 ep 1 = **0.013837**. within-epoch binning: 0.0139 → 0.0178 → 0.0138 → 0.0124 → 0.0136 → 0.0132 → 0.0161 → 0.0137 — flat and noisy, no descent. **The concat encoder plateaus too.**
+
+**The per-field-norm theory is falsified.** concat *is* per-field-projections-summed minus the 5 norms (shown mathematically in the v11f design above). Per-field-with-norms plateaus (v11e 0.013842); per-field-minus-norms plateaus (v11f 0.013837). Removing the norms changed nothing — they were never the bottleneck.
+
+**Confound found in the comparison that "proved" rope works.** The rope control that descended (0.0157→0.0082, the "Bisect re-run" above) ran `--resume checkpoints_v4/phase1_epoch_20.pt` — an **already-trained** rope encoder. v11e and v11f start from **random** encoders. So "rope descends / nerf plateaus" confounds two variables: encoder init (trained vs random) and architecture (rope vs nerf). And the evidence now favors *init*: v11e (per-field) and v11f (concat) are very different architectures yet plateau at identically 0.01383-84 — when the architecture varies wildly and the result doesn't move, the architecture is not the variable.
+
+### Control: rope, random init, joint Phase 2 from scratch (job 30629854, 2026-05-21)
+
+`runs/control_rope_jointscratch.sh` — v11e/v11f's exact recipe (`--skip_phase1`, **no `--resume`**: fresh RenderFormer transfer + random encoder, joint Phase 2) with `pe_type=rope`. The only variable vs v11f is the encoder architecture; this is the control that should have been run instead of the resumed `control_rope.sh`.
+- descends toward ~0.008 within ep 1 → random-rope-joint works → the nerf architecture is genuinely the problem.
+- plateaus at 0.0138 → random-joint plateaus regardless of encoder → the plateau is the **recipe** (a Phase-1 encoder warmup is needed), and every encoder comparison since `control_rope.sh` was apples-to-oranges.
+
+Verdict from the within-epoch binning of Phase 2 ep 1 (~46 min).
+
+### Ruled out: collate_fn zero-padding (2026-05-21)
+
+Checked whether `collate_fn`'s zero-padding interacts badly with the nerf encodings — a zero Gaussian gives `log_scale = log(1e-6) = -13.8` and `NeRF(pos=0)` has 36 cos-ones, so padding rows become large/structured tokens (benign for rope: `Linear(zeros)` → bias). Two independent findings kill it:
+- **No padding ever occurs.** All 2667 `data_v9/h5s` training scenes have exactly N=5000 Gaussians (min=max=5000). `collate_fn` pads to the batch max, which is always 5000 → `pad_size=0` every batch. The padding branch is dead code for V9-data training.
+- **Even forced padding is contained.** `tmp/test_padding_leak.py` — a batch with a truncated scene (2000 padded rows) run through `construct_sequence + transformer` with normal vs random-garbage padding: real-token outputs are bit-identical (`max|Δ| = 0.000e+00`) for both rope and nerf. The padding tokens themselves change (Δ 697 nerf / 274 rope — confirming zero-padding *is* pathological for nerf), but the key-padding mask fully contains them.
+
+collate_fn is not a plateau suspect and needs no modification. The live discriminator remains the rope-jointscratch control.
+
+### Verdict: the plateau is the recipe, not the encoder (job 30629854)
+
+rope-jointscratch Phase 2 ep 1 = **0.013840**, ep 2 = 0.013834. within-epoch ep-1 binning: 0.01588 → 0.01423 → 0.01323 → 0.01352 → 0.01457 → 0.01429 — **bin-for-bin near-identical to v11e** (per-field: 0.01589 / 0.01422 / 0.01324 / 0.01350 / 0.01470). Two completely different encoders, the same loss curve step-for-step → the loss in this regime does not depend on the encoder at all.
+
+**The encoder is ruled out — fully.** rope, per-field, and concat all plateau at 0.01384 under `--skip_phase1` + random encoder + joint Phase 2. The whole V11 encoder investigation (v11 → v11f) was a confound: every run used `--skip_phase1` with an untrained encoder, and the one baseline that descended (`control_rope.sh`, 0.0157→0.0082) *resumed a trained encoder* (`checkpoints_v4/phase1_epoch_20.pt`). "rope works, nerf doesn't" was always "trained encoder works, random encoder doesn't."
+
+**Cause:** joint Phase 2 from a random encoder does not learn the scene — it settles into a scene-independent blob (~0.013, the v11c grey-blob render). V9/V10b reached 0.0009 because they ran a **Phase-1 encoder warmup** (frozen backbone) first; V11 dropped Phase 1 because in-process Phase 1 crashed under DDP (job 30617463: the backbone was frozen *after* the single DDP wrap → reducer waits on gradients that never come).
+
+## V12 — corrected two-phase recipe + the concat encoder (job 30630480, 2026-05-21)
+
+`training/train.py` fixed: DDP is now constructed **per phase, after** `requires_grad` is set (`wrap_ddp`). Freezing the backbone before the Phase-1 wrap means DDP registers only the trainable encoder params → `find_unused_parameters=False` is correct, no crash, no corruption. At the Phase-1→2 transition the model is unfrozen and re-wrapped (the old wrapper's reducer hooks go inert once unused). `--skip_phase1` removed; `--resume` kept as a phase-aware crash-recovery escape hatch (carries phase/epoch/optimizer/scheduler). `--pe_type` default → `nerf`.
+
+`runs/train_v12.sh` — single end-to-end run: RenderFormer transfer → Phase 1 (20 ep, lr 1e-3, encoder warmup) → Phase 2 (100 ep, lr 5e-5, joint), `pe_type=nerf` (concat encoder), bs=4, 4×g4, no `--skip_phase1`/`--resume`. CPU pre-check confirmed `freeze_backbone` for `pe_type=nerf` yields exactly the 4 encoder params (68k trainable in Phase 1; 194.9M in Phase 2).
+
+Verdict signal: Phase 2 ep 1 within-epoch binning **descends** (V9's Phase 2 ep 1 was 0.003839) rather than sitting flat at 0.0138 → the recipe is fixed and the concat encoder is finally testable for the V11 blur hypothesis.
+
+### V12 results: the recipe is fixed — the plateau is escaped (2026-05-22)
+
+**Phase 1** (encoder warmup, frozen backbone, 68k trainable) ran clean — no crash (the freeze-before-DDP-wrap fix works). ep 1 avg 0.00798 → ep 20 avg 0.003720 (val 0.003957): a clean descent to the encoder-warmup floor. **Phase 1→2 transition clean** — `unfreeze_all` + fresh DDP wrap printed `phase2: 194,924,431 trainable`, no crash (the per-phase DDP re-wrap works).
+
+**Phase 2** — the plateau is **escaped**, the first run in the whole V11/V12 effort to do so:
+
+| Phase 2 epoch | avg loss |
+|---|---|
+| 1–8 | ~0.0138 (plateau) |
+| 9 | 0.012045 |
+| 10 | 0.005315 (val 0.003221) |
+| 11 | 0.002611 |
+| 12 | 0.002256 |
+
+Within-epoch binning across ep 9–11 is a clean monotonic descent (0.0120 → 0.0024). The model is now descending in V9 territory (V9's Phase 2 *started* at 0.0038; V12 is below that by ep 11) with ~88 epochs left.
+
+**The 8-epoch plateau before breakout** — a wrinkle, not a failure. Phase 1 left the model at 0.0037 with a *frozen* backbone; unfreezing in Phase 2 jumped the loss to 0.0144 and it sat there 8 epochs. The Phase-1 encoder was tuned to the frozen RenderFormer-init backbone — once the backbone started moving, the encoder–backbone match broke and the model fell into the 0.0138 attractor, then took 8 epochs of joint training to climb out. V9's Phase 2 started at 0.0038 with no such transient. **Future refinement (V12b or a re-run): a Phase-2 LR warmup, or a lower initial `--phase2_lr`, should soften the unfreeze shock and skip the ~5 h / 8-epoch detour.** Not worth disrupting the current run — it has recovered and is descending normally.
+
+Conclusion (refined). What the evidence solidly supports: (1) the encoder architecture does not cause the plateau — rope, per-field, and concat plateau bin-for-bin identically; (2) the corrected two-phase recipe with a proper Phase-1 warmup escapes it (V12, ep 9). What is *not* proven: whether a no-warmup run (`--skip_phase1`, random encoder) would also escape given enough epochs — v11e/v11f/the rope-jointscratch control were all cancelled at ep 1–2, before V12's epoch-9 escape point. The 0.0138 plateau is now known to be an escapable metastable state, not a dead end. Counter-evidence that no-warmup runs do *not* escape quickly: v11d's Phase 2 (job 30625146) ran 11 full epochs flat at 0.0138 without escaping — past V12's escape point — though with a poor 2-epoch buggy warmup. So the precise claim is: the Phase-1 warmup *enables and accelerates* the escape; whether it is strictly necessary is an open question, deliberately left untested (cheap to settle by running the v11f recipe ~20 epochs, but academic — V12 works regardless). The concat (`nerf`) encoder is now training under a working recipe and can be evaluated for the blur hypothesis once Phase 2 converges.
+
+### V12 final (cancelled at Phase 2 ep 75, 2026-05-24)
+
+V12 ran ~71 h end-to-end and was cancelled at Phase 2 ep 75 after `phase2_epoch_75.pt` saved — val plateaued at ~0.00164 from ep 30 onward (the dataset ceiling V9 also hit; V9 val was 0.001585 at ep 60, V12 val 0.001651 at ep 70), so further epochs would only nudge train. Phase 2 train: ep 50 0.001037, ep 60 0.000947, ep 70 0.000877 (matched V9's ep-50 number), ep 75 **0.000849**; val 0.001652 at ep 75. Tracked V9 at a ~15–20 epoch lag (the 8-epoch unfreeze plateau + slightly slower descent). Checkpoints on disk: `phase1_epoch_{5,10,15,20}.pt` and `phase2_epoch_{5,10,...,75}.pt`. Next: render against V10b on the multi-scene eval suite to test the V11 NeRF-position blur hypothesis — the actual unanswered question, since loss can't distinguish blur from sharp detail.
+
+### V12 vs V10b eval — the NeRF blur hypothesis is NOT vindicated (2026-05-24)
+
+Rendered V12 `phase2_epoch_75.pt` and V10b `phase2_epoch_26.pt` on all four eval scenes (tomatoes, house, dragon, cartoon) at N ∈ {5k, 10k, 20k, 30k}, against the gsplat-full reference. `data_external/run_scene.py` was extended to bake column-group captions ("gsplat-full", "gsplat-pruned (N=X)", "<model label>") plus a per-image title into the 3-way overviews; `runs/eval_v11_scene.sh` gained a `LABEL` env var defaulting to "`<ckptdir suffix> ep<N>`".
+
+PSNR vs full-gsplat, mean across the 14 orbit views, at N=10k:
+
+| scene | V12 ep75 | V10b ep26 | Δ (V12−V10b) |
+|---|---|---|---|
+| tomatoes | 27.65 | 26.69 | **+0.96** |
+| house | 30.61 | 31.28 | −0.67 |
+| dragon | 31.32 | 31.74 | −0.42 |
+| cartoon | 30.20 | 30.03 | +0.17 |
+
+Across all N the pattern holds: V12 clearly wins on tomatoes (~+0.8–1.0 dB at every N), V10b slightly edges V12 on house and dragon (mostly within 0.2–1 dB), cartoon is essentially tied. Average across scenes: ~tied, slight edge to V10b.
+
+**Qualitative read** (directly comparing the GF column of V12 and V10b strips on dragon n=10k): the two are *visually near-indistinguishable*. Same shape recovery, same soft-surface character, same level of detail loss vs the gsplat reference. The PSNR deltas of 0.2–1 dB are within the noise floor of perceptual judgment. The blur evident in V11/V12 renders (and present in V10b too) is structural to the RenderFormer-on-3DGS setup at N=5–30k, not specific to the input encoder.
+
+**Bottom line on the V11/V12 investigation:**
+- *Falsified*: the original V11 thesis that NeRF-encoding the position (and log-encoding the scale) would reduce blur vs the rope encoder. V12 produces visually equivalent output and is not consistently better in PSNR.
+- *Durable*: the recipe fix in `training/train.py` — per-phase DDP construction with `find_unused_parameters=False`, freeze-before-wrap for Phase 1, re-wrap at the Phase-1→2 transition. End-to-end runs no longer crash and the joint-from-random-encoder plateau is escapable. This is reusable for any future encoder experiment.
+- *Open*: whether a no-warmup run (`--skip_phase1`, random encoder) would *eventually* escape the 0.0138 plateau given 15–20 epochs — deliberately left untested, academic.
+
+Eval renders (captioned 3-way strips, all N variants for both models on all 4 scenes) are under `data_external/{tomatoes,house,dragon,cartoon}/renders/overview_3way_n*_checkpoints_v{12,10b}_phase2_ep*.png`.
+
+## V13 — testing the compression hypothesis (job 30652016, 2026-05-24, in flight)
+
+### Hypothesis
+
+If the V11/V12 plateau-shaped blur is structural to RenderFormer-on-3DGS at N=5k (per the V12 vs V10b qualitative read above), the next leverage point is the *training-time* token budget. V13's hypothesis: **5,000 Gaussians per scene is too compressed**, and training at N=20,000 (4× more) should let the model represent richer scene content and reduce the residual blur that V12 inherited from V10b. The encoder fix is now durable, so V13 swaps only the data-side variable.
+
+### Pre-launch infrastructure (2026-05-24)
+
+**VRAM/time frontier probes.** Three new sbatch scripts under `runs/` directly measured the (bs, N) frontier on a g4 card with the V12 (`pe_type=nerf`) encoder, AdamW + bf16 autocast, expandable_segments on:
+
+- `tmp/probe_bs1_n_scaling.py` (sbatch `runs/probe_bs1_n.sh`) — bs=1, N ∈ {5k, 7.5k, …, 30k}. Linear: ~4 GB baseline + ~0.75 GB per 1,000 Gaussians per sample. Peak at N=30k bs=1 = **26.5 GB**.
+- `tmp/feasibility_n30k.py` (sbatch `runs/feasibility_n30k.sh`) — 10-iter training feasibility at N=30k for bs ∈ {1, 2}. bs=1 N=30k: **28.96 GB**, 2.72 s/step (mean after 2 warmup). bs=2 N=30k: **OOM at 47 GB** on cyril-01 A6000.
+- `tmp/probe_bs2_n_scaling.py` (sbatch `runs/probe_bs2_n.sh`) — direct (bs=2, N) sweep. Key cells: bs=2 N=20k = **39.36 GB, 3.28 s/step**; bs=2 N=22.5k = 43.11 GB; bs=2 N=25k = 46.85 GB (right at the 46 GB g4 ceiling).
+
+Verdict: **bs=2 N=20k is the sweet spot** — fits 44 GB g4 with thin margin, comfortable on 46 GB, expected ~4 h 13 m per epoch under 4-GPU DDP. The V12-era bs=4 N=5k → V13 bs=2 N=20k swap **halves the effective batch (16 → 8)** for a 4× richer per-scene token budget.
+
+**Data regeneration.** Re-pruning the Objaverse_Splats sources to N=20,000 via `data_v9.process_objaverse --target_n 20000` would have re-rendered all 14 GT views per scene — 4× wasted compute, since GT renders are full-scene rasterizations and target_n-independent. Added a `--skip_renders` flag (`data_v9/process_objaverse.py`) that gates the render block and relaxes the skip-existing check so re-pruning can keep the existing renders dir. `runs/regen_data_n20k.sh` ran train + val splits sequentially (1h 6m on epona-02, job 30651115) → `data_v9_n20k/h5s/` (2667 H5s) and `data_v9_n20k/h5s_val/` (183 H5s). Training points at `data_v9_n20k/h5s*` for input and `data_v9/renders*` for GT.
+
+**Disk cleanup** (2026-05-24, ~45 GB reclaimed): deleted V11 probe/short-run checkpoints, intermediate V12 epoch saves (kept `phase1_epoch_20.pt` + `phase2_epoch_{25,50,75}.pt`), and 5 empty V11 stub dirs. V12 went 42 GB → 8.6 GB. V5/V6/V9/V10b untouched.
+
+### V13 launch (job 30652016, 2026-05-24)
+
+`runs/train_v13.sh` — V12 architecture (`--pe_type nerf`, the concat encoder under the working two-phase recipe) on the regenerated N=20k data, **time-boxed at 30 epochs** to fit the 168 h walltime: **10 Phase 1** (encoder warmup, lr 1e-3, the recipe-critical step) + **20 Phase 2** (joint fine-tune, lr 5e-5, where the actual quality signal lives), bs=2 per GPU × 4 GPUs DDP, `--save_interval 5`. LRs left at V12 defaults — effective batch dropped from 16 (V12) to 8 (V13) so gradients are ~√2 noisier; acceptable for a time-boxed exploratory run.
+
+Phase 1 progress as of 2026-05-25 13:00:
+
+| Phase 1 epoch | avg total loss | wall |
+|---|---|---|
+| 1 | 0.006334 | 4h 26m |
+| 2 | 0.004366 (−31% vs ep 1) | 4h 25m |
+| 3 | 0.003820 (−12.5%) | 4h 25m |
+
+Clean diminishing-returns descent under cosine decay; no crashes, no plateau. The recipe fix is doing its job. Phase 1 expected to complete ~2026-05-27; Phase 2 → ~2026-06-01.
+
+### V12 / V10b val-set baselines at infer-N ∈ {5k, 20k} — V13 comparator setup (2026-05-25)
+
+Built the comparator V13 will eventually need: V12 ep75 and V10b ep26 evaluated on the **full 183-scene val set** at inference N ∈ {5k, 20k}, computing per-scene PSNR + LPIPS over 14 orbit views (2,562 views per checkpoint).
+
+New tooling:
+- `eval_val_full.py` — single-GPU bs=1 bf16 eval; takes `--checkpoint`, `--pe_type`, `--h5_dir`, `--gt_dir`, `--out_json`; renders each scene/view, tone-maps to LDR (AGX, matching GT pipeline), computes PSNR + LPIPS (AlexNet backbone), writes a per-scene + summary JSON. Defaults preserve `eval_val_set.py`'s rendering call shape but compute over the full val set with multi-metric output.
+- `eval_compare.py` — ingests any number of result JSONs, prints a sorted comparison table.
+- Four sbatch wrappers under `runs/eval_{v10b,v12}_n{5k,20k}.sh`, all `--killable --requeue` per the new non-training-job policy. Each ran ~12–15 min on a g4 card; all four killable jobs RUNNING within seconds despite tri_level holding the lab quota.
+
+The 2×2:
+
+| Model | infer-N=5k (training dist.) | infer-N=20k | Δ (20k − 5k) |
+|---|---|---|---|
+| **V10b** ep26 (rope, LPIPS-FT) | **25.597** dB / 0.0466 | 24.690 dB / 0.0499 | **−0.91 dB**, LPIPS +0.0033 (worse) |
+| **V12** ep75 (nerf, log-HDR L1) | 25.482 dB / 0.0550 | 24.650 dB / 0.0568 | **−0.83 dB**, LPIPS +0.0018 (worse) |
+
+Per-scene PSNR std ≈ 2.93 dB; LPIPS std ≈ 0.025–0.033.
+
+**Key finding: more inference Gaussians *hurts* both models** by a consistent ~0.83–0.91 dB. The 4-scene non-monotonic hint from the V12-vs-V10b investigation (house 30.4→28.2 dB, dragon 30.6→29.6 dB) generalizes across all 183 val scenes. Both models were trained at N=5k and don't know how to use the extra 15k tokens — the surplus actively degrades them rather than helping. LPIPS also degrades, ruling out "PSNR-only artifact" framings.
+
+**Implication for V13.** The compression hypothesis is more demanding than initially framed:
+
+- **Floor V13 must clear:** 24.65 dB — V12 at untrained N=20k. Failing this means the V13 recipe didn't recover what V12 has for free.
+- **Real bar (validates the hypothesis):** **25.60 dB** — V10b at its trained N=5k, the current production baseline. V13 must learn to *use* 20k tokens better than V10b uses 5k. This is the call.
+- **Strong win:** ≥26.5 dB. Would justify the 4× training-time cost + data regen.
+
+V10b roughly tied with V12 at both inference Ns also reinforces the V12 verdict: the encoder and recipe are not the bottleneck. If V13 fails the 25.60 bar, the next move is *not* more recipe tinkering — it's training resolution, dataset diversity, model capacity, or revisiting the structural blur conclusion.
+
+Eval JSONs under `eval_results/v{10b,12}_ep{26,75}_n{5k,20k}_val.json`; reproducible end-to-end via `uv run --frozen python -m eval_val_full ...` or the four sbatch wrappers.
+
+### V13 result: trains clean, beats production on PSNR, but the output still looks bad (2026-05-30)
+
+V13 ran the full 30 epochs (10 Phase 1 + 20 Phase 2) end-to-end, no crashes, ~5d 17h on epona-02.
+
+**Training behaved better than V12.** Phase 1 descended to train 0.003089 / val 0.003314 by ep 10 (half V12's epochs, below V12's ep-20 floor of 0.003720/0.003957). The Phase-1→2 transition re-wrapped cleanly (194.9M trainable). Crucially, **V13 did not sit in the 0.0138 attractor** the way V12 did for 8 epochs: Phase 2 ep 1 = 0.013841, ep 2 = 0.010921, ep 3 = 0.003611 — it broke out by ep 3 (V12 didn't escape until ep 9). The richer per-scene token budget got more out of the warmed encoder. Phase 2 val: ep 5 0.001913, ep 10 0.001495, ep 15 0.001304, ep 20 **0.001243** — below the ~0.00165 dataset-loss ceiling V9 (0.001585) and V12 (0.001652) both plateaued at. Terminal train 0.001020.
+
+**Full 183-scene val PSNR/LPIPS — V13 wins PSNR at each model's best inference N:**
+
+| Model | train N | infer N | PSNR mean | PSNR median | LPIPS mean |
+|---|---|---|---|---|---|
+| **V13 ep20** | 20k | 20k | **26.150** | **26.33** | 0.0500 |
+| V10b ep26 (production, LPIPS-FT) | 5k | 5k | 25.597 | 25.49 | **0.0466** |
+| V12 ep75 (L1) | 5k | 5k | 25.482 | 25.49 | 0.0550 |
+| V10b ep26 | 5k | 20k | 24.690 | 24.77 | 0.0499 |
+| V12 ep75 | 5k | 20k | 24.650 | 24.77 | 0.0568 |
+
+**The compression hypothesis is confirmed on PSNR — with a sharp causal isolation.** The bottom two rows show that taking V10b/V12 (trained at N=5k) *to* inference N=20k *loses* ~0.9 dB — more Gaussians at render time hurts a model that wasn't trained for them. V13, *trained* at N=20k, reaches 26.15. So the +0.55 dB mean / +0.84 dB median over production is attributable specifically to **training at the higher density**, not to inference-time Gaussian count. And V13 achieves this undertrained (20 epochs vs V12's 75).
+
+**But the verdict is heavily qualified — the renders still look bad (user's direct assessment, and correct).** Three caveats:
+1. **PSNR is the wrong judge here.** A low-contrast, washed-out render sits near the per-pixel mean and is never boldly wrong, so MSE/PSNR rewards it. The +0.55 dB partly measures "V13 hedges less badly," not "V13 looks good."
+2. **Colors are washed / desaturated.** Most visible on textured scenes: the barrel (scene_0030) loses its rich wood+metal banding to pale beige in all three models, V13 included; the truck (scene_0180) loses its blue tint to grey. V13 recovers *some* of this vs V10b/V12 but is still far from the GT's saturation.
+3. **Fine detail still missing.** V13's gain is in *global shape + color fidelity*, not texture. Wheels, hardware, fruit-level detail remain unresolved — matching the PSNR-up / LPIPS-flat split (V13's 0.0500 LPIPS is worse than LPIPS-fine-tuned V10b's 0.0466, comparable-to-better than L1 V12's 0.0550).
+
+So: density helped, measurably, but did **not** crack the core quality problem. The structural softness + desaturation persists. Next-step ideas under discussion (perceptual/color-aware losses, the deferred LPIPS fine-tune V13b, tone-map/exposure audit, higher training resolution, dataset color-distribution check). **Open question still unanswered: is the ceiling the RenderFormer-on-3DGS architecture, the L1-in-tone-mapped-space loss, or the data?**
+
+> **CORRECTION (2026-05-30, supersedes the AGX numbers above).** All eval/render numbers in this V13-result section and in the "V12 / V10b val-set baselines" section above were produced with `eval_val_full.py` / `render_compare.py` defaulting to **AGX tone mapping** — a methodological bug. The `data_v9` GT renders are written with **no** tone map (`process_objaverse.py:12`: "no tonemap, since 3DGS source already trained on LDR images"), the training target is `log10(LDR+1)` of that no-tonemap LDR, and canonical `infer_gaussian.py` defaults to `tone_mapper='none'` (clip). Applying AGX — a desaturating filmic curve — only at eval mismatched the entire pipeline, *manufacturing* the "washed colors" and corrupting the metrics. See the corrected section below.
+
+### V13 verdict CORRECTED — tone-map bug fixed, win is much larger (2026-05-30)
+
+Diagnosed that the "washed colors" were largely an eval artifact: my `eval_val_full.py`/`render_compare.py` defaulted to AGX while GT + training + canonical inference all use **no tone map (clip)**. Fixed the default to `none` in both scripts (+ the 5 sbatch wrappers) and re-ran all five evals + the comparison grid on the full 183-scene val set.
+
+**Corrected full-val numbers (`tone_mapper=none`, matching the trained pipeline):**
+
+| Model | train N | infer N | PSNR mean | PSNR median | LPIPS mean |
+|---|---|---|---|---|---|
+| **V13 ep20** | 20k | 20k | **33.58** | 33.64 | 0.0349 |
+| V12 ep75 (L1) | 5k | 5k | 30.95 | 30.72 | 0.0416 |
+| V10b ep26 (production, LPIPS-FT) | 5k | 5k | 30.90 | 30.83 | **0.0283** |
+| V10b ep26 | 5k | 20k | 30.09 | 29.92 | 0.0277 |
+| V12 ep75 | 5k | 20k | 30.04 | 30.03 | 0.0404 |
+
+What the fix changed:
+- **Everything jumps ~+6 dB** (AGX was crushing the whole range): e.g. barrel scene_0030 V13 21.2→27.4 dB, truck scene_0180 V13 24.9→32.8 dB.
+- **V13's lead over production grows from +0.55 → +2.67 dB mean** (33.58 vs 30.90). AGX's filmic compression had been squashing the inter-model gap; the real margin is large.
+- **Color is faithful** in the corrected renders — the "awful washed colors" were predominantly the AGX artifact, *not* the model. (The barrel regains rich wood/blue banding; the truck regains its blue tint.)
+- **The "more inference Gaussians hurts" finding is robust to the fix** — V10b 30.90@5k → 30.09@20k (−0.81), V12 30.95@5k → 30.04@20k (−0.91). The earlier ~0.9 dB conclusion stands.
+- **LPIPS:** V13 (0.0349) beats its L1 twin V12 (0.0416) but trails LPIPS-fine-tuned V10b (0.0283). Smaller gap than the AGX eval implied; a V13b LPIPS fine-tune (mirroring V9→V10b) would likely surpass V10b.
+
+**What the fix did NOT change — the detail/softness problem is real and model-side.** Tone mapping is a color/contrast curve; it adds no texture. V13 (and V10b/V12) still lose fine detail — truck wheels/panel lines, hardware, fruit-level texture. The PSNR-up / LPIPS-still-behind-V10b split is the quantitative signature of "shape+color good, high-frequency texture missing." This is the genuine open problem and the motivation for the contemplated fundamental overhaul.
+
+Corrected artifacts overwrite the AGX ones in place: `eval_results/*.json` (all now `"tone_mapper": "none"`), `compare_renders/v13_ep20_vs_baselines/` (grid + strips). AGX-only diagnostic kept at `compare_renders/v13_ep20_TONEMAP_none/` was the isolation test.
+
+Artifacts: `eval_results/v13_ep20_n20k_val.json`; comparison strips under `compare_renders/v13_ep{10,20}_vs_baselines/` (4-way GT|V10b|V12|V13, all at N=20k); checkpoints `checkpoints_v13/phase2_epoch_{5,10,15,20}.pt`.
+
+### V13b: LPIPS fine-tune of V13 — recovers the perceptual axis (2026-05-31)
+
+Mirrored the V9→V10b recipe: warm-start V13 ep20 weights (`--init_from`, fresh Phase 2, fresh cosine 5e-5), add LPIPS (`lpips_w 0.2`, `log_w 1.0`), 5 epochs, 8×g4 DDP, N=20k. The `--init_from` path was added to `training/train.py` (load weights only; no optimizer/scheduler/epoch carryover — distinct from `--resume`, which is crash recovery).
+
+Per-epoch full-val (alex LPIPS, `tone_mapper=none`), all monotonic-improving until a gentle PSNR/LPIPS trade settles:
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 1 | 31.25 | 0.02624 |
+| 2 | 31.91 | 0.02396 |
+| 3 | 32.30 | 0.02290 |
+| **4** | **32.83** | **0.02089** |
+
+**V13b ep4 = 32.83 dB / 0.0209 LPIPS** — beats production V10b (30.90 / 0.0283) on **both** axes. The FT recovered the perceptual sharpness V13's L1-in-log loss had blurred (LPIPS 0.0349→0.0209, −40%) for only −0.75 dB PSNR vs V13. Kept as the best model for the next several days. (The run was preempted mid-ep5 on a killable node; ep5 would have been a near-zero-LR no-op, so ep4 is the keeper — `checkpoints_v13b/evaluated_run1/phase2_epoch_4.pt`, md5-verified.)
+
+### V14: rope encoder + RoMa scene-rotation augmentation (plan, 2026-05-31)
+
+Two moves from a close read of the RenderFormer paper:
+1. **Back to RoPE-only position** (`pe_type=rope`). The paper (p.6) explicitly reports that NeRF-encoding triangle *positions* "is not stable, and it is prone to converge to a suboptimal local minimum" — exactly the V11 0.0138 plateau. Our entire rope lineage (V10b) was N=5k; **rope @ N=20k was the missing clean control.**
+2. **RoMa rotation augmentation.** The model is rotation-variant (relative PE → translation invariance only); the paper augments with on-the-fly scene+camera rotations. For our data this is *exactly image-preserving* (gsplat `sh_degree=None` → constant per-Gaussian color, no world-fixed lighting), verified by re-rasterizing rotated scene+camera and matching the unrotated render to **108–119 dB** PSNR. Implemented in `training/dataset.py` (`augment_rotation` flag; rotate `means`, compose rotation onto quats via the matrix path, `c2w'=R4@c2w`; WXYZ↔XYZW reorder at the RoMa boundary). Also added `--keep_last_n` rolling checkpoint prune + atomic saves.
+
+### V14 (rope @ N=20k, no-aug): nerf > rope — but the plateau was a clue (2026-06-02→03)
+
+Trained rope @ N=20k, log-L1, seeded from an aug-warmed Phase-1 ep10. **Phase 2 sat at the 0.0138 plateau for ~10 epochs, then broke out at ep11** and descended cleanly to 0.001473 train / 0.001631 val. Renders confirmed: at the plateau the model outputs *sparse* (~1% lit pixels), not a dead all-zero collapse; at break-out the geometry/silhouette appears first (grey blobs in the right shape), then color/texture fills in.
+
+Final full-val: **V14na = 31.49 dB / 0.0486 LPIPS.** vs V13 (nerf, no-aug) 33.58 / 0.0349 → **nerf beats rope by ~2.1 dB at N=20k.** So the paper's "NeRF-on-position unstable" caution did *not* translate to a problem for us; the richer NeRF position-lift actually helps organize 20k tokens. *Provisional verdict: keep nerf.* (This was later overturned — see below.) Process lesson banked: this recipe can plateau ~10 epochs before breaking out, so **don't judge a run at ep1–2.**
+
+### V14 with augmentation: the breakthrough — aug is transformative (2026-06-04)
+
+Re-ran rope @ N=20k **with augmentation**, extended to 30 Phase-2 epochs. **It broke out at ep1 (no plateau at all)** — the opposite of the no-aug run. The explanation reframes the whole plateau scare: both runs seeded from the *aug-warmed* Phase-1 ep10, so **aug Phase 2 = warmup-matched (instant break-out); no-aug Phase 2 = mismatched (10-epoch plateau while it un-learns rotation-invariance).** The plateau was a warmup/data-mismatch artifact, not a fundamental property.
+
+Val descended faster than no-aug throughout (aug ep14 val 0.001356 already beat no-aug's *final* 0.001631). The run hit a cluster-contention burst and stalled at ep20 (3 preemptions, the last two 35 min apart, 0 free 8-GPU nodes), so ep20 was taken as the result.
+
+**V14aug ep20 full-val = 33.70 dB / 0.0319 LPIPS — a new best-PSNR model:**
+- vs V14na (rope, no-aug) 31.49: **+2.2 dB** — augmentation single-handedly erases the rope-vs-nerf gap and more.
+- vs V13 (nerf, no-aug) 33.58: **V14aug WINS** (+0.12 dB, better LPIPS too).
+- **So rope+aug > nerf-no-aug: augmentation is a *bigger* lever than the encoder choice**, overturning the provisional "nerf > rope" verdict (true only without aug). Render confirms V14aug sharpest, wins PSNR on every test scene; V14na visibly softest.
+
+### V14aug-LPIPS: new best model on BOTH axes (2026-06-05)
+
+LPIPS fine-tune of V14aug ep20 (`--init_from`, aug ON, `lpips_w 0.2`, 5-epoch fresh cosine 5e-5). Classic over-shoot-then-recover trajectory (full-val, alex):
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 1 | 31.37 | 0.02484 |
+| 2 | 31.60 | 0.02338 |
+| 3 | 32.56 | 0.02200 |
+| 4 | 32.98 | 0.02044 |
+| **5** | **33.57** | **0.01948** |
+
+**V14aug-LPIPS ep5 = 33.57 dB / 0.01948 LPIPS — the new best model overall, beating V13b (32.83 / 0.0209) on PSNR by +0.74 dB *and* LPIPS by −0.0014.** It barely cost PSNR vs the base (33.70→33.57) while crushing LPIPS (0.0319→0.0195). Wins PSNR on every test scene in the comparison render. ep1's −2.3 dB PSNR dip is the normal LPIPS-FT over-shoot; it fully recovered by ep3–4 (lesson: don't judge an LPIPS FT at ep1).
+
+Crucially, **ep5 was still climbing** (+0.60 dB PSNR, −0.001 LPIPS from ep4) — the 5-epoch cosine cut it off mid-ascent. A **10-epoch FT** (same recipe, `phase2_epochs 10`) is running now (`runs/train_v14auglp10.sh`) to extend the runway and likely push PSNR past the base's 33.70 with LPIPS lower still.
+
+**Model leaderboard (full 183-scene val, `tone_mapper=none`):**
+
+| Model | encoder | aug | LPIPS-FT | PSNR | LPIPS |
+|---|---|---|---|---|---|
+| **V14aug-LPIPS ep5** | rope | yes | yes | **33.57** | **0.01948** |
+| V14aug ep20 | rope | yes | no | 33.70 | 0.0319 |
+| V13 ep20 | nerf | no | no | 33.58 | 0.0349 |
+| V13b ep4 | nerf | no | yes | 32.83 | 0.0209 |
+| V14na ep20 | rope | no | no | 31.49 | 0.0486 |
+
+**Headline takeaways:** (1) **augmentation is the dominant lever** — bigger than encoder choice, and it's free/image-preserving for our data; (2) **rope+aug+LPIPS-FT is the winning combo**; (3) the long Phase-2 plateau was a warmup-mismatch artifact, not a failure — patience + a matched warmup avoids it. Infra lessons banked along the way: `/dev/shm` dataset staging eliminates an NFS I/O bottleneck (3.0→1.2 s/step, ~3× speedup; the synthetic speed-probe had hidden it); killable jobs need `-c 32` not 64 (CPU was the scheduling blocker, not the 256 GB mem of which we use ~29); and `#!/bin/zsh` resume-aware launchers must build conditional args as zsh *arrays* (no scalar word-splitting).
+
+Artifacts: best model `checkpoints_v14aug_lpips/phase2_epoch_5.pt`; evals `eval_results/v14{na,aug,auglp}_*_n20k_val.json`; renders `compare_renders/v14auglp_ep5_FINAL/` (GT|pruned-GT|V13b|V14aug-LP) and `compare_renders/v14aug_ep20/` (5-way). 10-epoch FT in progress → `checkpoints_v14auglp10/`.
+
+### V14aug-LPIPS-10: the final best — more epochs paid off (2026-06-07)
+
+The 5-epoch LPIPS FT was still climbing at ep5, so re-ran it with a **10-epoch** cosine (same recipe: `--init_from` V14aug ep20, rope+aug, `lpips_w 0.2`, fresh cosine 5e-5, `/dev/shm`). The longer schedule's gentler anneal gave a milder ep1 over-shoot (32.38 vs the 5-ep run's 31.37) and kept climbing through the back half:
+
+| ep | PSNR | LPIPS |
+|---|---|---|
+| 5 | 33.11 | 0.02025 |
+| 6 | 33.23 | 0.01998 |
+| 7 | 33.40 | 0.01960 |
+| 8 | 33.50 | 0.01922 |
+| 9 | 33.75 | 0.01877 |
+| **10** | **33.835** | **0.01853** |
+
+**v14auglp10 ep10 = 33.835 dB / 0.01853 LPIPS — the definitive best model.** It beats the 5-epoch FT by +0.27 dB / −0.001, the old V13b by **+1.0 dB / −0.0024**, and even edges the V14aug *base* PSNR (33.70) while cutting LPIPS to a quarter of it (0.0319→0.0185) — a strict improvement on both axes over the base. So the "more epochs" call was right: the 5-epoch run was genuinely cut off mid-climb (+0.27 dB recovered), though the FT is now near its ceiling (~33.8 / ~0.0185, gains slowing to +0.08/epoch by ep10).
+
+**Final model leaderboard (full 183-scene val, `tone_mapper=none`):**
+
+| Model | encoder | aug | LPIPS-FT | PSNR | LPIPS |
+|---|---|---|---|---|---|
+| **v14auglp10 ep10 (BEST)** | rope | yes | 10-ep | **33.835** | **0.01853** |
+| V14aug-LPIPS ep5 | rope | yes | 5-ep | 33.57 | 0.01948 |
+| V14aug base | rope | yes | no | 33.70 | 0.0319 |
+| V13 base | nerf | no | no | 33.58 | 0.0349 |
+| V13b (prior best) | nerf | no | yes | 32.83 | 0.0209 |
+| V14na | rope | no | no | 31.49 | 0.0486 |
+
+**Campaign summary:** the winning recipe is **rope encoder + RoMa rotation augmentation + LPIPS fine-tune (~10 epochs)**. Augmentation was the dominant lever (bigger than the nerf-vs-rope encoder choice, and free/image-preserving for our data); the long Phase-2 plateau was a warmup/data-mismatch artifact, not a failure; and the LPIPS FT — given enough epochs — lifts both PSNR and LPIPS over the base. Best model: `checkpoints_v14auglp10/phase2_epoch_10.pt`.
+
+Artifacts: `checkpoints_v14auglp10/phase2_epoch_10.pt`; evals `eval_results/v14auglp10_phase2_epoch_{5..10}_n20k_val.json`; render `compare_renders/v14auglp10_ep10_BEST/` (GT|pruned-GT|V13b|V14best).
+
+## Side experiment: single-object overfit — capacity probe (2026-06-12, branch `exp/single-object-overfit`)
+
+**Why.** Every version through V14 leaves residual blur — even our best can't match the
+*pruned*-GT, and we keep debating whether the fix is **more data** or a **different
+architecture**. Before iterating further (V15/16…), step off the main line and answer the
+prior question directly: **is the model, at its current size/config and N=20k, even
+*capable* of representing high-frequency texture/colour detail?** Overfit a single object
+exclusively (augmentation OFF) long enough to memorise it, and read the ceiling off with
+generalisation removed entirely.
+
+**The decomposition.** Split the quality gap into two parts with opposite fixes:
+```
+real-GT --(pruning loss, fixed by N=20k)--> pruned-GT --(model loss)--> model output
+```
+- Overfit reaches **pruned-GT** → architecture *can* render the detail; bottleneck is
+  data/N → **scale up** (validates the ~50× Objaverse_Splats headroom plan).
+- Overfit plateaus **below pruned-GT** → architecture/decoder is the ceiling (most likely
+  the DPT band-limited upsampling) → **change architecture**, not data.
+- RF-base low but V14best higher → optimisation-limited, not capacity.
+The decisive number is **model-vs-pruned-GT**: pruned-GT is what the model's *own* 20k input
+can render, so failing it on one memorised object indicts the architecture.
+
+**Matrix (4 killable single-GPU jobs)** — two objects × two inits:
+- **objects**: `boxes` (Objaverse `scene_1441`, clean controlled, src-fit LPIPS 0.034) and
+  `tomatoes` (the V8–V14 hero benchmark, real captured texture). Both texture/colour-rich and
+  well-source-fit, so the detail genuinely lives in the 20k input.
+- **inits**: `base` (RF transfer → Phase 1 encoder warmup → Phase 2 joint) and `v14best`
+  (warm-start `checkpoints_v14auglp10/phase2_epoch_10.pt`; `--init_from` auto-skips Phase 1 —
+  confirms a low base ceiling is capacity, not optimisation).
+- **recipe**: `pe_type=rope`, aug **OFF**, in-train val **OFF**, bs=1, N=20k, Phase 1 50 ep /
+  Phase 2 1500 ep (~21k steps over 14 samples), `save_interval 250`, `keep_last_n 6`.
+
+**Infra.** Self-contained `experiments/overfit/` (`setup_data.sh` symlink-only,
+`run_overfit.sh` parameterised by `OBJ`/`INIT`, `eval_overfit.py` for the three-way, README).
+**Zero changes** to `train.py`/`render_compare.py`. Both objects' real-GT and pruned-GT are
+already on disk (Objaverse full-scene renders; tomatoes `gsplat_full` + `gsplat_n20000`), so
+prep = symlinks. tomatoes shares the exact orbit rig (radius 1.7, fov 45°, 14 views) as the
+Objaverse data → `render_compare --pruned_gt` works unchanged.
+
+**Status (2026-06-12, launched).** All 4 RUNNING on epona-01, healthy at ~24–27 s/epoch
+(~11 h/run). `v14best` inits start at the dataset-loss floor (0.0008–0.0015); `base` inits are
+warming the encoder. First evaluable checkpoint (ep250) ~2 h out. Eval pending →
+model-vs-pruned-GT / model-vs-real-GT / pruned-vs-real for both objects under both inits.
+Jobs: 30815617 `boxes_base`, 30815618 `boxes_v14best`, 30815619 `tomatoes_base`,
+30815620 `tomatoes_v14best`.
+
+### Results (2026-06-13, all converged at ep1500)
+
+Three of four runs converged to near-zero train loss (`tomatoes_v14best` 0.000067,
+`tomatoes_base` 0.000101, `boxes_v14best` 0.000136 — flat at LR-floor 5e-7 for the last
+epochs, i.e. converged, *not* cut short). `boxes_base` fell into the joint-unfreeze
+scene-blob plateau and sat flat at 0.0123 (LR-robust — a 4× rescue at 2e-4 also stuck);
+retired. Final three-way (`eval_overfit.py`, alex-LPIPS, all 14 views):
+
+| Run | model vs real-GT | model vs pruned-GT | pruned vs real-GT |
+|---|---|---|---|
+| `boxes_v14best` ep1500 | **51.81 dB** / 0.0009 | 37.53 / 0.0055 | 37.58 / 0.0057 |
+| `tomatoes_base` ep1500 | **49.13 dB** / 0.0008 | 29.65 / 0.0221 | 29.61 / 0.0219 |
+| `tomatoes_v14best` ep1500 | **53.04 dB** / 0.0003 | 29.62 / 0.0221 | 29.61 / 0.0219 |
+| `boxes_base` ep250 (stuck) | 17.77 / 0.2027 | 18.32 / 0.1973 | 37.58 / 0.0057 |
+
+**Verdict — the architecture is NOT the wall.** Overfit reaches **49–53 dB / LPIPS
+0.0003–0.0009 vs real-GT** (visually pixel-perfect; model column sharper than pruned-GT).
+The **DPT-band-limit hypothesis is falsified**: the decoder can output arbitrarily sharp
+high-frequency detail when fit. So the residual blur in every general model (V9–V14) is a
+**data/generalisation** problem, not an architectural ceiling → **scale the data** is the
+right direction.
+
+**Reframing — "model vs pruned-GT = ceiling" was the wrong lens.** Trained on real-GT, the
+model memorises it to ~50 dB and *transcends* the pruned-GT (model-vs-pruned ≈ pruned-vs-real
+because model ≈ real-GT). The decisive number is **model-vs-real-GT**, not model-vs-pruned.
+(`eval_overfit.py`'s "CAPACITY CEILING" label on the pruned column is misleading and should
+be relabelled.)
+
+**Honest caveat.** Overfit = *memorisation* of 14 (object, view) targets, so it proves
+**output capacity** (decoder can produce the detail), not that the model can *render* that
+detail *from the 20k input* in a generalising way. It rules out "architecture is fundamentally
+incapable"; it does not by itself guarantee data-scaling closes the generalisation gap.
+
+**Second finding — N=20k is itself a bottleneck for high-detail real scans.** `pruned vs
+real-GT` = the cap a perfect renderer of the 20k input could reach: **tomatoes 29.6 dB**
+(real captured texture — 20k Gaussians can't hold it) vs **boxes 37.6 dB** (cleaner synthetic
+object). So for detailed objects, raising N matters independently of the model. Boxes (simpler)
+loses far less to pruning.
+
+**Recipe finding.** The bs=1 two-phase recipe is **object-dependently fragile** at the joint
+unfreeze: `tomatoes_base` escaped the plateau instantly, `boxes_base` never did, and LR was
+not the lever (2e-4 sat at the same 0.0123 as 5e-5). `boxes_v14best` (warm-started) overfits
+boxes fine, so boxes is overfittable — the plateau is an optimisation artifact, not capacity.
+
+Artifacts: `experiments/overfit/eval/*_metrics.json` + `*_strip.png` (GT|pruned|model),
+hi-res `tomatoes_v14best_hires.png`. Branch `exp/single-object-overfit`.
+
+### Novel-view generalisation probe (2026-06-13) — resolves the memorisation caveat
+
+Rendered the converged tomatoes overfits at **held-out poses** (azimuths halfway between the 14
+training views, in-between elevation — `experiments/overfit/novel_view.py`), vs gsplat-full
+(real-GT) and gsplat-pruned (20k) at the same pose. Training-view controls reproduce the ~50 dB
+memorisation number, confirming the setup.
+
+| tomatoes | TRAIN views (seen) | NOVEL views (held out) | pruned-GT ceiling |
+|---|---|---|---|
+| `v14best` | 52.5 dB | **30.5 dB / LPIPS 0.012** | 29.7 dB |
+| `base` | 48.6 dB | 24.2 dB / LPIPS 0.039 | 29.7 dB |
+
+**The overfit was NOT pure memorisation.** Novel views are coherent and correct (not collapsed) —
+the model learned a *renderable 3D representation* from the 20k input. And **at novel views the
+model saturates the N=20k ceiling** (`v14best` 30.5 dB ≈ pruned-GT 29.7 dB): when it can't
+memorise, it renders the 20k Gaussians about as well as gsplat does. So **the test-time bottleneck
+for a known object is the pruning (N), not the model** → raise N for detailed objects. The
+`v14best` vs `base` gap (30.5 vs 24.2) shows full-dataset pretraining priors are what enable
+view-generalisation. *Still untested:* cross-**object** generalisation (rendering an unseen object)
+— that is what the data scale-up addresses, and the clean next experiment.
+
+**Infra lesson (banked).** `sbatch --wrap` runs under `/bin/sh`, where `source`/`module` don't
+exist, so `module load cuda` silently fails → gsplat's JIT CUDA backend can't load → `_C=None`
+("'NoneType' has no attribute 'CameraModelType'"). GPU jobs needing the CUDA toolkit (gsplat,
+nvcc) MUST use a real `#!/bin/zsh` sbatch script that sources `huji-lmod.sh`, never `--wrap`. The
+node-exclusion chase was a red herring. Artifacts: `experiments/overfit/eval/*_novelview_*`,
+script `experiments/overfit/{novel_view.py,run_novel.sh}`.
+
+## 5x data scale-up + pruning recovery (2026-06-13/14, branch `data/v10-scaleup`)
+
+### `data_v10/` — 5x additive dataset (full splats, rotation-fixed, un-pruned)
+Built a 5x additive dataset: **14,307 objects** (13,405 train + 902 val, 0 failures) with full
+**un-pruned** ~50k-gaussian splats (SH-stripped, ~2.8 MB each) + GT renders (14 views, 512).
+- **Rotation bug fixed**: Objaverse_Splats is Z-up, our orbit Y-up → objects rendered on their
+  side. Fix = **−90° about X (Rx-90)** on means+quats in `data_v10/process_full.py`; verified
+  upright across chair/robot/tank/bike/soldier/etc.
+- **Additive**: kept data_v9's 3,000+200 selection verbatim, added 12,800 disjoint new objects
+  (same PSNR≥32/LPIPS≤0.06/num_GS=50000 filter; 86,727 unused pass) → 15k train + 1k val entries.
+- **Un-pruned by design** so we can explore a better N=20k pruning. ~46 GB fulls + 28 GB renders.
+- Ran as 6 killable chunk-disjoint shards (~1.3 h). Scripts: `process_full.py`, `build_additive.py`,
+  `make_shards.py`, `run_process.sh`. All N uniform = 50,000.
+
+### Pruning: we were skipping LightGaussian's recovery step (2026-06-14)
+Studied LightGaussian (arXiv 2311.17245 + `prune_finetune.py`). Their method = **score → prune
+~60% → RECOVER** (fine-tune survivors, L1+SSIM, densification off, ~5k iters). **Our pipeline
+does score+prune and STOPS** — i.e. their "pruning only" baseline, which their own ablation shows
+is −1.36 dB; the recovery restores it to +0.17 over baseline. Our score
+(`Σ_views opacity·proj_radii² · max_scale^γ`) is a fine LightGaussian variant; the gap is the
+**missing recovery**. **Doubly important for us**: the novel-view probe showed GaussianFormer
+*saturates the pruned-GT ceiling*, so lifting pruned-GT via recovery lifts the model's achievable
+ceiling **at the same N=20k, no architecture/data/inference cost.**
+
+`data_v10/prune_recovery.py`: prune 50k→20k → recover (gsplat Adam on means/log-scale/quat/
+opacity-logit/color-logit, L1+SSIM vs full-splat renders at 64 views, no densification, exp-LR,
+~1500 iters), then eval naive-topk vs recovered vs full on **canonical (14) + strict held-out
+(16, unseen elevation)** views.
+
+**Initial 3 texture-rich objects (1500 iters):** gains far bigger than LightGaussian's (theirs
+starts from already-good gaussians; our naive top-k leaves *holes* the recovery fills):
+| scene | canon naive→rec | held-out naive→rec |
+|---|---|---|
+| boxes (1441) | 36.45 → 51.35 (**+14.9**) | 35.77 → 47.33 (+11.6) |
+| cannon (1196) | 37.11 → 51.28 (**+14.2**) | 36.77 → 50.46 (+13.7) |
+| helmet (2426) | 39.45 → 55.76 (**+16.3**) | 39.01 → 53.06 (+14.1) |
+Held-out gains confirm it's **not** recovery-view overfitting. Visually verified (full ≈ recovered,
+no artifacts). These 3 are geometrically simple → a **30-object diverse gate** (incl. detailed/
+high-freq) is running (6 killable shards) to get the true distribution before committing the full
+14k recovery. Scripts: `prune_recovery.py`, `run_recovery.sh`. **No pruning written to disk yet.**
+
+### Recovery gate PASSED — 30 diverse objects (2026-06-14)
+Across 30 diverse objects (incl. detailed/high-freq), recovery gain is large and consistent:
+- **held-out views: naive 35.0 → recovered 49.5 dB (mean +14.6, median +14.5, min +9.2, max +18.5)**
+- canonical: mean +15.8 dB. Worst (hardest) objects still +9.7..+14.8, reaching 43–45 dB.
+Decisive go for the **full-14k recovery** as data-prep. (Bigger than LightGaussian's +1.5 because
+our naive top-k leaves holes the 50k didn't have; the over-parameterised 50k re-fits to ~20k well.)
+
+### V14best on data_v10 — baseline before retrain (`model_on_v10.py`)
+Ran V14best (`checkpoints_v14auglp10/phase2_epoch_10.pt`) on naive-pruned 20k v10 objects incl.
+**unseen** ones (scene_idx>3000 — never trained). Rotation-fix + RoMA robustness CONFIRMED (clean
+on upright). Mean **33.3 dB** (unseen 32.6 ≈ seen 34.7 → modest cross-object generalisation). KEY:
+on unseen objects the model sits **~3 dB BELOW even its own naive pruned-GT** and **caps ~33–36 dB
+regardless of input quality** (where pruned-GT~39, model falls ~6 dB short) — the generalisation/
+blur gap (unlike the overfit probe which *saturated* pruned-GT on a memorised object).
+
+**Two quantified gaps → two validated levers:**
+```
+current model (unseen):  ~33 dB
+  gap1 model blur:       ~3 dB below naive pruned-GT  -> MORE DATA (5x) + training
+naive pruned-GT:         ~35 dB
+  gap2 pruning waste:    +14.6 dB                     -> RECOVERY (validated)
+recovered pruned-GT:     ~49.5 dB
+```
+
+### NEXT (pending user go-ahead on "step A"):
+**(A) Full-14k prune-and-recovery** — run `prune_recovery.py --save_h5_dir` over all 14,307 objects
+(parallel killable shards like the data gen; ~per-object gsplat fine-tune, tune iters down from
+1500 if the knee allows). Produces `data_v10/h5s_20k_rec/` (recovered 20k H5s) for training.
+**(B) Retrain** on 5x data + recovery-pruned 20k + **256→512 curriculum**, then re-measure on these
+same unseen objects (current baseline 33.3 dB) to see if closing both gaps lifts out of the low-30s.
+Branch `data/v10-scaleup`. Eval artifacts (gitignored): `data_v10/{recovery_eval,model_eval}/`.
+
+---
+
+## Session: 2026-06-15
+
+### Repo migration tomhope → sagieb (done)
+Migrated the live workspace from `/cs/labs/tomhope/shahaf_levy/gaussianformer` to
+`/cs/labs/sagieb/shahaf_levy/gaussianformer` (account `-A sagieb`). Tom's copy kept as a cold
+backup (nothing deleted). Data verified bit-identical (checkpoints, H5s, code, PROGRESS), `.venv`
+rebuilt via `uv sync --frozen` (torch 2.9.1+cu128 / gsplat 1.5.3 import-clean), memory copied to
+the sagieb project slug. All training scripts gained `#SBATCH --account=sagieb`.
+
+### Step A — full-14k prune-and-recovery (DONE)
+Ran `prune_recovery.py --save_*` over the whole dataset → recovered 20k H5s on disk:
+**`data_v10/h5s_20k_rec/` = 13,405 train + `h5s_20k_rec_val/` = 902 val = 14,307 objects.**
+Resume-safe shards (skip-existing) survived preemption/requeue; OOM-per-object fix (free GPU mem
+between objects) landed mid-run. These recovered H5s are the training input for V15 (input ceiling
+now ~49.5 dB held-out vs ~35 naive — gap2 closed in the data).
+
+### Step B — V15 256→512→LPIPS curriculum LAUNCHED (chained)
+Three SLURM jobs submitted as an `afterok` dependency chain (8×g4, `--killable --requeue`,
+`-c 32`, `--mem 200GB`; /dev/shm staging of the 66 GB recovered H5s+renders):
+
+| Stage | Script | Res | Phase budget | LPIPS w | Job | Trigger |
+|---|---|---|---|---|---|---|
+| 1 bulk | `train_v15_256.sh` | 256² | P1 5ep @1e-3, P2 10ep @5e-5 | 0.0 | 30837514 | — (running) |
+| 2 refine | `train_v15_512.sh` | 512² | P2 3ep @5e-5 (`--init_from` 256) | 0.0 | 30837515 | afterok:…514 |
+| 3 LPIPS FT | `train_v15_lpips.sh` *(new)* | 512² | P2 10ep @5e-5 (`--init_from` 512) | **0.2** | 30837516 | afterok:…515 |
+
+Stage 3 mirrors the v14auglp10 recipe (rope + RoMa aug + 10-epoch LPIPS FT @0.2 — the stage that
+produced every prior best; v14auglp10 ep10 = 33.835 dB / 0.0185, still climbing). `--init_from`
+loads weights-only and skips Phase 1 → fresh Phase 2 cosine from 5e-5. `keep_last_n 10` so every
+LPIPS epoch is an eval candidate. Chain is preemption-safe: requeue keeps dependents waiting; a
+terminal crash leaves downstream blocked (`DependencyNeverSatisfied`) rather than seeding from a
+bad checkpoint.
+
+**bs/LR NOT adjusted per resolution (deliberate).** All three stages use `batch_size 1` (×8 GPU =
+eff batch 8 == V14) and the same LRs (P1 1e-3 / P2 5e-5), to reuse V14's tuned LR pair and keep the
+curriculum a pure resolution change. Keeping LR fixed across resolutions is correct at fixed
+effective batch (LR tracks batch size, not resolution). The one unexploited lever: at 256² there's
+~4× activation-memory headroom, so a larger bs there could speed the bulk stage — but that would
+require LR re-tuning, so it was left for a later pass.
+
+**Eval is run independently** (`model_on_v10.py`, baseline 33.3 dB on unseen v10 objects) against
+`checkpoints_v15_lpips/phase2_epoch_*.pt` once the chain produces them — not part of the launch.
+
+---
+
+## Session: 2026-06-17 .. 2026-06-21 — V15 diagnostic, V16 retrain, and the blur diagnosis
+
+### V15 = under-trained diagnostic
+The 5×-data + recovered-20k + 256→512→LPIPS chain ran end-to-end (V15) but came out soft:
+phase-2 loss still descending, LPIPS ~2× V14best. Cause: epoch budget too small for 4.7× data
+(~9× less per-object exposure than V14) + a 3-epoch 512 stage. Kept as reference.
+
+### Infra wins (reused by V16)
+- **tar-staging**: the per-job `cp -r` of ~214k tiny render files sat at ~1.8 MB/s over NFS
+  (~4.5 h/job). `data_v10/build_tars.sh` packs them into 27 shard-tars once (~12 min, parallel),
+  each job extracts a few big tars → staging dropped to ~5 min.
+- **view-subsampling** (`--views_per_epoch 4`): the dataset emits one sample per (scene,view), so
+  a full-views epoch is 187,670 samples (~7.5 h @256). K=4 reslices the epoch ~14/K with finer
+  checkpoints; the **batch probe proved training is compute-bound on the 20k attention** (256 bs1
+  6.2 ≈ bs2 6.5 samples/s; bs>1 no gain, 256 maxes bs2 / 512 bs1 on 46 GB), so bigger batch is no
+  lever. Multi-node (12 GPU) failed (NCCL inter-node); khan 96 GB nodes too contended to pin.
+
+### V16 = bigger-budget retrain (256 P2 20, 512 P2 12, LPIPS 12), bs=1 + K=4
+**V16's phase-1 silently failed to train** (val 0.0135 vs V15's 0.0038 — pinned with the
+standalone `data_v10/diag_val.py`), starving phase-2 (frozen at 0.0126 for 16 epochs). Earlier
+DDP/resume theories were wrong. **Fix**: seed phase-2 via `--init_from checkpoints_v15_256/
+phase1_epoch_5.pt` (V15's known-good warmup). Then it converged cleanly: 256→0.00103, 512→0.000956
+(both beat V15). Lesson: verify phase-1 val converges before trusting phase-2.
+
+### THE BLUR DIAGNOSIS — whole-image PSNR is a lying metric
+Shahaf flagged the renders look soft despite "+2.6 dB over V14best". Confirmed: objects are on
+black bg and are only **2–5 % of pixels** (skull 1.7 %), so whole-image PSNR is ~95–98 % "match the
+black" → inflated, blind to object sharpness. Added **`model_on_v10.py --crop_fg`** (crop to GT
+object bbox, metric there, zoom the crop). Object-only, V16-512-L1 is ~27.7 dB / LPIPS 0.31 on the
+skull vs the recovered-input ceiling ~40 dB → a real ~13 dB model-blur gap the metric hid. **Eval
+everything `--crop_fg` from now on.**
+
+### CAPACITY PROBE v2 — the blur is a GENERALISATION gap, not architecture or loss
+Overfit ONE detailed object (skull 9869) from v16_512, L1 vs high-LPIPS
+(`experiments/overfit/run_overfit_lpips.sh`). **Both arms reproduce the fine engravings**
+(converged: L1 35.3 dB/0.062, hi-LPIPS 33.9 dB/**0.022**; general model 0.311). → the architecture
+CAN render fine detail at N=20k; the general model smears it only because it can't *generalise* the
+sharp mapping. **High-LPIPS is a real lever** (0.31→0.022 memorised).
+
+### Acting on it — LPIPS-weight sweep on the full model (running)
+The planned LPIPS@0.2 stage FAILED at ep3 (node fault, no requeue). Pivoted to a perceptual-weight
+sweep, all `--init_from` v16_512, eval `--crop_fg`:
+- **hi** `train_v16_lpips_hi.sh` — log_w 0.5 / **lpips_w 1.0** (job 30891156). ep2 on unseen skull:
+  **LPIPS 0.31→0.159** (transfers to generalisation!) but grainy (ep1-2 over-shoot); statue (low
+  detail) slightly worse — 1.0 may be too strong there.
+- **mid** `train_v16_lpips_mid.sh` — log_w 0.5 / **lpips_w 0.5** (job 30894280), same log anchor so
+  only lpips_w differs. Tests detail-gain-vs-graininess sweet spot.
+Re-eval both ~ep5–6 (past over-shoot) `--crop_fg` to pick the winner. Deeper fix for the
+generalisation gap remains more/better data.
+
+---
+
+## Session: 2026-07-12 — LPIPS sweep verdict, V14-vs-V16 apples-to-apples, and "we under-trained"
+
+Picking up after a ~3-week gap (the Claude SLURM node died mid-sweep). Both sweep arms had
+actually finished 12 epochs and been eval'd on 06-23; nobody had read the results.
+
+### LPIPS-weight sweep — settled: w=0.5, and 1.0 buys nothing
+Foreground-cropped (`--crop_fg`, `--input_mode recovered`), 3 unseen objects (10916 statue /
+9869 skull / 10751 honeypot):
+
+| model | statue | skull | honeypot | mean PSNR |
+|---|---|---|---|---|
+| V16-512 (L1 only) | 28.5 / 0.035 | 27.5 / **0.311** | 27.0 / 0.120 | 27.7 dB |
+| LPIPS **hi** (w=1.0) | 27.0 / 0.031 | 26.2 / 0.129 | 26.8 / 0.070 | 26.7 dB |
+| LPIPS **mid** (w=0.5) | 27.3 / **0.030** | 26.5 / **0.128** | 27.0 / **0.067** | 26.9 dB |
+
+**mid ≥ hi on both axes on every scene** → cranking lpips_w past 0.5 is pure PSNR cost, no
+perceptual gain. LPIPS FT halves LPIPS on the hard objects for ~1 dB PSNR — a real, cheap win.
+**`checkpoints_v16_lpips_mid/phase2_epoch_12.pt` is the new best model.**
+Caveat that keeps it honest: on the skull the FT renders *invented* carved texture, not the
+actual engraving. Perceptual loss bought texture, not fidelity.
+
+### V14best vs V16, apples-to-apples in object space (the missing number)
+Every V14-era metric was whole-image, i.e. from the lying-metric era. Ran V14best
+(`checkpoints_v14auglp10/phase2_epoch_10.pt`) `--crop_fg` on the same 3 scenes, both input modes:
+
+| model (input) | statue | skull | honeypot | mean |
+|---|---|---|---|---|
+| V14best (naive — its own training distribution) | 22.6 / 0.061 | 26.5 / 0.183 | 25.5 / 0.091 | **24.88 dB** |
+| V14best (recovered input) | 23.2 / 0.058 | 25.2 / 0.183 | 25.3 / 0.093 | 24.55 dB |
+| **V16 + LPIPS mid** | 27.3 / 0.030 | 26.5 / 0.128 | 27.0 / 0.067 | **26.94 dB** |
+
+**The v10 scale-up paid off: +2.1 dB and ~½ the LPIPS on every object.** Renders confirm —
+V14best's skull is nearly featureless and it drops the honeypot's small props entirely.
+
+Two structural findings:
+- **The naive-pruned ceiling is meaningless.** V14best's naive input ceiling is only 25–29 dB
+  (vs 40–43 recovered). V14best's skull *scores above its own ceiling* (26.5 > 25.0) — not
+  because it's good, but because the naive input is so degraded that a smooth blob lands nearer
+  the true GT than the input render does. Discount every naive-ceiling comparison.
+- **Recovered input does NOT help a model that wasn't trained on it** (V14best: 24.55 rec vs
+  24.88 naive — slightly *worse*). The gain is from the retrain, not from nicer eval-time
+  Gaussians. You must train on recovered data to benefit from it.
+
+### THE BIG ONE — V16 was never converged; we under-trained by a wide margin
+Every stage's val loss was **still descending monotonically at its final epoch**, no plateau,
+no overfitting signal (val tracked down throughout):
+- 256 P2: ep19 0.001039 → ep20 0.001034 (cut at the budget, not at convergence)
+- 512 P2: ep10 0.000979 → ep11 0.000962 → ep12 **0.000956**
+- LPIPS mid: lpips term ep11 0.017998 → ep12 **0.017893**
+
+**CORRECTION (same session, after launching V17): hardware, not budget, sets the wall-clock.**
+I first read V16's `sacct` times (256: 7h35/20ep = 23 min/ep · 512: 4h43/12ep · LPIPS: 2h25/12ep)
+and concluded "the whole V16 chain was ~15 h, we rationed a budget we didn't need to ration."
+**That was wrong — the entire V16 chain ran on `khan-01` (RTX Pro 6000, 128 cores).** V17 landed on
+`firefoot-11` (L40S, 64 cores) and measures **80 min/epoch, 3.5× slower**, on identical config
+(1.39 steps/s/rank; 11.1 samples/s over 8 GPUs; epoch = 53,620 samples = 6,702 steps/rank). So the
+original "multi-day, compute-bound" read was closer to right than my correction of it. **Never quote
+a min/epoch without naming the node.** khan is normally 8/8 allocated by non-preemptible jobs, so a
+killable job cannot bump it — getting khan is luck, not a plan.
+
+Per-object exposure math: the whole V16 chain = ~12.5 passes over the 187,670-sample set. V14
+got ~30 passes over its 3k objects. So V16 has seen each object-view **less than half** as often
+as V14 did — on 4.5× more objects. **The "generalisation gap" and "under-trained" may be the
+same problem: the model hasn't finished digesting the data it already has.** This reframes the
+"need more data" conclusion — before buying more data, spend the training we already can afford.
+
+### Next
+V17 = V16 recipe, much longer, with LPIPS(w=0.5) folded into the 512 stage from the start rather
+than bolted on as a 12-epoch tail FT. Gate on the LPIPS val term + periodic `--crop_fg` renders,
+NOT on log-L1 (V4/V5/V6 precedent: log-L1 improvements do not reliably translate to perceptual
+gain).
+
+## 2026-07-23 — V17 finished; NEW BEST MODEL; skull-fidelity ceiling; scale-up prep + paper renders
+
+### V17 completed — `checkpoints_v17_512lp/phase2_epoch_36.pt` is the new best model
+Two-stage chain, all 8×g4 killable, seeded from V15's known-good phase1:
+- **Stage A** (`train_v17_256.sh`) — 60 phase-2 epochs @256, pure log-L1. Converged flat at
+  val log-L1 **0.000765** (~25% below V16's 0.001034 floor).
+- **Stage B** (`train_v17_512lp.sh`) — 36 epochs @512 with LPIPS(0.5)+log(0.5) from epoch 1.
+  LPIPS val term descended monotonically the whole way: 0.02061 (ep1) → 0.01783 (ep5) →
+  0.01701 (ep10) → 0.01559 (ep17) → 0.01440 (ep27) → **0.01397 (ep36)**, cosine LR to 5e-7,
+  converged. Final is **~22% below V16's 0.017893**.
+- Wall-clock: 65.9 min/epoch on khan-01. Ran clean for 29 epochs, then got preempted twice
+  (first preemptions of the run) and sat PENDING ~1.5 days on a fully-saturated g4 partition
+  (all 22 g4 nodes 8/8; the one idle node was DRAINed). Requeue resumed from per-epoch ckpts,
+  **zero work lost**. Confirms the killable trade-off: cheap when the cluster is free, unbounded
+  wait when it's not.
+
+### Object-space verdict (`--crop_fg --input_mode recovered`, scenes_profcompare, 3 unseen)
+| model | statue | skull | honeypot | **mean PSNR** |
+|---|---|---|---|---|
+| V14best | 22.6 / 0.061 | 26.5 / 0.183 | 25.5 / 0.091 | 24.88 |
+| V16+LPIPS-mid ep12 | 27.3 / 0.030 | 26.5 / 0.128 | 27.0 / 0.067 | 26.94 |
+| V17 ep6 (over-shoot) | 25.0 / 0.038 | 25.7 / 0.129 | 25.5 / 0.068 | 25.40 |
+| V17 ep17 | 28.3 / 0.025 | 25.6 / 0.126 | 27.6 / 0.052 | 27.17 |
+| **V17 ep36** | **30.5 / 0.020** | **26.5 / 0.110** | **28.5 / 0.044** | **28.49** |
+
+**V17 ep36 wins on every axis: +1.55 dB mean PSNR over V16, better LPIPS on all three objects.**
+The ep6 reading (1.5 dB *behind*) was the documented fresh-cosine LPIPS over-shoot window — do
+not judge an LPIPS run before ~ep15. "Train longer + LPIPS-throughout" was a real win.
+
+### THE CEILING — longer training does NOT fix high-frequency fidelity
+The skull LPIPS moved 0.128 → 0.110 (−14%) and the render is visibly sharper/higher-contrast,
+**but it still renders *invented* swirly carving, not the true engraving** — same failure mode as
+V16, just prettier. This is exactly what the June capacity probe predicted: overfitting the skull
+alone reproduces the real engraving at 0.022 LPIPS, so the architecture CAN render it; the general
+model can't *generalise* the sharp mapping. The two levers we picked (perceptual loss, more epochs)
+are now both spent on this: LPIPS did 0.311→0.128, all of V17's extra epochs did 0.128→0.110.
+**Faithful high-freq detail is the open problem, and it is NOT an epochs problem.** Next lever is
+data curation (does the training set even contain enough high-freq surface detail?), not more training.
+The input ceiling holds the engraving fine at ~40 dB, so the information is in the Gaussians — the
+model is losing it, not the data.
+
+### Scale-up storage check (Sagie volume `/cs/labs/sagieb`)
+462 G free (2.0 T total, 1.6 T used, 78%; group quota 1587/2048 G — agrees). Current footprint:
+`data_v10` = 117 G / ~13.4k scenes (incl. 25 G redundant `tars` staging) → ~8.7 MB/object all-in;
+v17 ckpts ~39 G; **~113 G of stale v15/v16 experiment ckpts** (v16_lpips_hi/mid are 32 G each).
+Scale-up headroom: **2× (~+117 G data +40 G ckpt) fits comfortably today**; 3× fits but tight;
+4× needs cleanup first. Reclaiming the stale v15/v16 ckpts (~113 G) → ~575 G, makes 3–4× easy.
+**Storage is not the bottleneck — data-generation compute is** (re-running prune+recovery, the
+~1500-iter gsplat FT/object that bought +14.6 dB, as a long swarm on a saturated g4 cluster).
+
+### Paper renders BEFORE pruning v15/v16 (`data_v10/showcase_versions.py`, `run_showcase.sh`)
+To preserve the cross-generation visual comparison before reclaiming the v15/v16 ckpts, generating
+raw per-render PNGs over **200 random unseen objects** (idx>3000, pool=10,737): each rendered by
+V14best (naive input) / V16-LPIPS-mid (recovered) / V17-ep36 (recovered) at 4 views → **~2,400
+renders** named `data_v10/showcase/s{scene:05d}_v{view:02d}_{model}.png`. Clean, unlabeled,
+full-frame — **no grids/strips** (those are composed later). Each model fed its NATIVE input
+distribution (feeding all the same input would mis-state the leap). Per-shard PSNR/LPIPS manifests
+written for later selection. 8 killable 1-GPU shards. Once complete, **pruning v15/v16 is safe** —
+their output is captured permanently.
+- Gotcha logged: `seq -w 0 7` pads to width 1 (max is single-digit) → looked for `shard_0.json`
+  not `shard_00.json`; first 8-job launch no-op'd on FileNotFound. Relaunched with explicit `00..07`.
+
+## 2026-07-24..26 — showcase renders, v15/v16 cleanup, 2× DATA SCALE-UP, V18 launch (no tars)
+
+### Paper showcase renders done, then reclaimed ~110 GB
+Rendered 200 random UNSEEN objects × {V14best(naive), V16+LPIPS-mid(recovered), V17-ep36(recovered)}
+at 4 views → **~2,400 clean per-render PNGs** in `data_v10/showcase/` (`showcase_versions.py`,
+`run_showcase.sh`). Each model fed its NATIVE input; raw/unlabeled/full-frame so any grid can be
+composed later. With the cross-generation comparison captured permanently, deleted the stale
+v15/v16 checkpoints — **~110 GB reclaimed** (kept `checkpoints_v15_256/phase1_epoch_5.pt`, the
+reusable phase-1 seed, + its HF export). Free space 462 → 556 GB.
+
+### 2× DATA SCALE-UP — data_v10 doubled in place (train 13,405→26,820, val 902→1,806)
+Three stages, all resume-safe:
+1. **Select** (`build_expand_2x.py`, SEED=2): excluded all 16k current uids, drew +15k train /
+   +1k val from a 73,927-object pool passing PSNR≥32/LPIPS≤0.06/num_GS=50k. New scene_idx
+   continues after the max (train 15000–29999, val 1000–1999). 24 fresh chunks (~79 GB transient).
+2. **Process** (`run_process.sh` → `process_full.py`): downloaded chunks, normalized (Rx-90),
+   14-view 512 GT renders + full ~50k-splat h5. **13,415 new train + 904 val** survived (rest
+   low-opacity/degenerate). Total: **26,820 train / 1,806 val**.
+3. **Recover** (`run_recovery.sh` → `prune_recovery.py`): prune 50k→20k + gsplat FT ~1500 iters,
+   **~9.6 s/object** (much faster than the 60 s feared → ~36 GPU-h, not 220). All 13,415 new train
+   + 904 val recovered into `h5s_20k_rec` / `h5s_20k_rec_val`. **0 missing.**
+
+### THE DATA-GEN GOTCHA (cost several hours) — gsplat co-tenancy "invalid device ordinal"
+Two single-GPU gsplat sbatch jobs packed on ONE node → the 2nd dies `CUDA error: invalid device
+ordinal` at first rasterization; a job ALONE on a node always works. Chased two false leads first:
+- `--export=ALL` from the claude_node leaks parent SLURM GPU context → contributes; fix = submit
+  clean `--export=<vars>` only (needs `export PATH=$HOME/.local/bin:$PATH` for uv). See memory.
+- Pinning `CUDA_VISIBLE_DEVICES=$SLURM_JOB_GPUS` (physical idx) → "No CUDA GPUs available", which
+  PROVED the gg:g4 gres IS cgroup-isolated (allocated GPU = device 0). So CVD=0 was right all along.
+- Real robust fix for the tail: run remaining work as ONE consolidated sweep (a lone process can't
+  self-pack). Also `--exclude=firefoot-08` (separate gsplat shared-memory bug on that node).
+**Lesson: prefer FEW big sweeps over wide swarms for gsplat data-gen.** `run_process.sh` /
+`run_recovery.sh` now strip `--killable` (queue policy per-submit: `--account=sagieb` vs
+`--killable`), pin PATH, echo the GPU binding, and warn against `--export=ALL`.
+
+### V18 — V17 recipe on 2× data, STANDARD setup (tars retired)
+User: the `/dev/shm` tar-staging doesn't scale as the dataset grows → **ditched tars**.
+`train_v18_256.sh` / `train_v18_512lp.sh` (copies of V17) now read DIRECTLY from NFS
+(`data_v10/h5s_20k_rec` + `renders`, 8 ranks × `--num_workers 8`). Training is compute-bound
+(~6 samples/s) so on-demand small-file reads should hide behind compute — **watch first-epoch time;
+bump workers if I/O-bound.** Deleted `data_v10/tars` (~25 GB). Stage A (job 31136104, 60ep@256)
++ Stage B (31136105, afterok, 36ep@512+LPIPS0.5) submitted 8×g4 killable; both PENDING on the
+strained cluster. Gate on LPIPS val + `--crop_fg` vs **V17-ep36 (28.49 dB / skull 0.110)**.
+
+### OPEN DISCUSSION — 4-GPU Sagie fallback vs 8-GPU killable (comparability)
+Cluster strained; 4-GPU Sagie may get an allocation more reliably than 8-GPU killable. But
+`training/train.py` has NO gradient accumulation, so effective batch = #GPU × bs = **8 (V17) vs 4
+(V18 on 4 GPU)** — a real confound. At micro-batch sizes the effect is modest (total data/epochs/
+per-step LR/aug unchanged; 4 GPU just takes 2× more, slightly noisier steps at the same epoch-based
+cosine LR), but not nothing. Airtight fix if forced to 4 GPU: `batch_size=2` (→ effective 8), but
+bs2@512 with N=20k may OOM (test first; bs2@256 likely fits). Wall-clock: 4 GPU ≈ 2× slower, and 2×
+data already ≈ 2× V17/epoch → 4-GPU V18 ≈ 4× V17 per epoch (~2 weeks). **Decision: leave the 8-GPU
+killable queued for now; revisit 4-GPU Sagie if it hasn't landed by ~a day.**
+
+## 2026-08-02..05 — THE DIAGNOSIS ARC: ceiling at scale, three hypotheses killed, N-sweep → capacity floor
+
+The week the project's framing changed. Sequence: Sagie meeting (Aug 2) → "treat rec-GT as an
+asset; measure it at scale; hunt peculiar cases" → five measurements, each killing a live
+hypothesis. Everything below is FG-cropped (`_fg_crop`), `--input_mode recovered`, per-OBJECT means
+(views of one object are correlated — never count renders as samples).
+
+### 0. Correction first: our "unseen object" numbers were TRAINING objects
+`training/dataset.py` globs the whole h5 dir; V16/V17 trained on ALL of `h5s_20k_rec` (idx<15000 —
+V17's log says "13405 scenes", exactly that count). The skull (9869), statue (10916), honeypot
+(10751) and all 200 showcase scenes were in V16/V17's training set; only V14 (trained idx<3000) was
+genuinely out-of-sample on them. The real held-out split is `h5s_20k_rec_val`+`renders_val` (1,806
+objects, own 0–1999 index space) — never evaluated before this week. The old 3-object 28.49 dB
+headline was actually PESSIMISTIC: true held-out mean is **30.29 dB** (the hand-picked objects were
+harder than average). Everything below uses the proper splits.
+
+### 1. rec-GT ceiling measured at scale (27,224 renders; `ceiling_eval.py` + `ceiling_report.py`)
+Three slices, 4 matched views (0/4/7/11) each: TEST = all 1,806 held-out; TRAIN = 3,000 of V17's
+own training objects; UNSEEN-2x = 2,000 of the idx≥15000 expansion (unseen by V17).
+
+| slice | n | rec-GT | V17 | margin |
+|---|---|---|---|---|
+| TEST | 1806 | 44.94 | 30.29 | **14.65** |
+| TRAIN | 3000 | 45.02 | 30.90 | **14.11** |
+| UNSEEN-2x | 2000 | 44.91 | 30.21 | **14.70** |
+
+- Ceiling is ~45 dB and remarkably uniform. The oft-quoted "~10 dB gap" was an underestimate.
+- **Train→test gap = 0.55 dB → the blur is UNDER-FITTING, not a generalisation failure.** V17 is
+  14 dB below the ceiling on data it saw ~27×/view. (Corroborated: train LPIPS 0.0113 vs val
+  0.0140 at fully-annealed LR.) This overturns the "generalisation gap" framing we'd used since June.
+- rec-GT is a hard practical ceiling: V17 ≥ rec-GT in **2 of 27,224** renders (one is a pruning
+  hole in rec-GT that V17 smooths over).
+- Whole-image PSNR inflates both rec-GT and V17 by ~6.3 dB — metric argument, quantified.
+- Peculiar-case strips: `meeting_material/ceiling_cases/`. Smallest margins = LOW-ceiling objects
+  (pruning-damaged inputs), not model strength. Largest margins (25–35 dB) = emissive objects.
+
+### 2. Content stratification (`ceiling_content.py`, CPU-only): detail, not brightness
+The emissive lead from the tails was a SELECTION ARTIFACT (sorted by tails, reasoned from tails):
+only 2.57% of objects have any saturated pixel; excluding them moves the mean ~0.03 dB. The real
+driver is **fine-detail content**: margin +2.9 dB per hf_energy tercile IN EVERY SIZE BAND
+(hf_energy × fg_frac are −0.62 correlated; 2D table disentangles). Key asymmetry: **rec-GT is flat
+44.7–45.6 dB across detail quintiles while V17 falls 33.98 → 28.51** — input carries the detail at
+constant fidelity; only the model degrades with it.
+
+### 3. Spectral probe (`spectrum_probe.py` + coherence): it isn't even BLUR
+- MTF (model power / GT power per radial frequency, native 512 grid): V17 retains **65–95% of GT's
+  power at every frequency down to 2 px**. No knee at the 8-px patch scale (0.125 cyc/px) — the
+  ray-token tokenisation hypothesis is dead (also refuted by: 4× overcomplete token capacity, and
+  the June overfit hitting 49–53 dB at 512 with the same patch size).
+- Coherence (phase alignment with GT): on high-detail objects at ~4 px, **MTF 1.05–1.14 with
+  coherence 0.27–0.33** → the model emits MORE fine structure than GT containing, essentially
+  uncorrelated with truth. **The failure is misplaced/invented detail, not missing detail.**
+  "Blur" was the wrong word all along; error energy in that band is ~1.5× GT energy.
+- Lineage check: V14→V16→V17 improved BOTH MTF and coherence at every frequency — training
+  progress was real placement learning, not cosmetics. A ~4 px MTF>1 anomaly appears in all three
+  models (checkerboard signature at the DPT ConvTranspose stride — untested lead).
+
+### 4. N-SWEEP (`train_nsweep.sh` / `run_nsweep_eval.sh`): the floor is architectural
+Nested subsets 10⊂100⊂1000 (idx<15000), same init (`checkpoints_v18_256/phase2_epoch_30.pt` — see
+V18 note below), same 30k optimizer steps, 4×bs1@512+LPIPS0.5. Evaluated vs ceiling on OWN training
+objects (fit) + common 300 held-out (disjoint from the val100 used in-training):
+
+| N | margin on OWN train | margin on heldout |
+|---|---|---|
+| 1 (June probe, different setup) | ~0 | — |
+| 10 | **7.57** | 20.47 |
+| 100 | **13.40** | 17.93 |
+| 1000 | **15.79** | 16.70 |
+| 13,405 (V17; ~8× steps, eff.batch 8 — reference not curve) | 14.11 | 14.65 |
+
+- **The model cannot fit even 10 objects to the ceiling** (12,000 passes each, still 7.6 dB short).
+- **Train and heldout curves CONVERGE to ~14–15 dB.** More data moves along the curve toward the
+  floor; it cannot cross it. **The "more data" thesis is retired.**
+- Shape = capacity signature (fixed weights spread over more objects), but routing (below) fits too.
+
+### V18 status: stage A done and REPURPOSED; stage B not run (deliberately)
+Stage A (256, 30ep on 2× data) finished Aug 4 (val log-L1 0.000793) but exited 7 (benign teardown
+artifact — same class as the eval arrays) → `afterok` auto-cancelled stage B, which was anyway
+spooled with the OOM bs2 config. Given §4, stage B's premise (more data) is dead; NOT resubmitted.
+Stage A's checkpoint became the common init for the N-sweep. bs1@512 CONFIRMED fits on 45 GB nodes
+(never previously validated off khan-01).
+
+### Infra lessons that cost real time (all in memory + fixed in scripts)
+- `uv run --frozen` still RECONCILES the venv every call (flash-attn version-string churn) → 45-job
+  array raced the shared NFS venv: ImportErrors + silent FlashAttention→SDPA fallbacks. Fix:
+  `--no-sync` everywhere parallel.
+- torch JIT extension cache keys on py+CUDA but NOT GPU arch → heterogeneous g4 pool clobbers its
+  own gsplat build; then two same-arch jobs raced too. Fix: per-arch `TORCH_EXTENSIONS_DIR`, and
+  per-JOB dirs (seeded from arch cache) for anything parallel.
+- Trailing `echo` in sbatch scripts masks python exit codes → jobs report COMPLETED 0:0 with zero
+  output rows. Always `exit $rc`.
+- Killable-pool preemption waves kill ALL killable jobs at once; jobs whose checkpoint interval ≈
+  survival window make no net progress (N=10 thrashed). Guaranteed-quota chaining
+  (`--dependency=afterany`) fixed it.
+
+### WHERE THIS LEAVES US — the one live fork
+Five hypotheses measured, five killed: not generalisation, not emissive/HDR, not tokenisation, not
+blur, not data quantity. Remaining candidates, discriminated by the next experiment:
+- **CAPACITY**: weights can't hold many objects' worth of detail-placement. Test: scale model
+  (width/depth/scene tokens) at FIXED N=100, watch the train-fit margin.
+- **ROUTING**: cross-attention can't resolve which of 20k Gaussians land in which 8×8 ray patch
+  (rasterisation does this trivially by sort+splat — exactly why rec-GT is flat across detail).
+  If wider models don't close the train-fit margin, this is it.

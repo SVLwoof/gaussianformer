@@ -15,26 +15,9 @@ class ViewTransformer(nn.Module):
         self.config = config
 
         # --- Positional Encoding Setup ---
-        if config.pe_type == 'nerf':
-            # This PE is for the ray tokens, based on the camera origin.
-            self.pos_pe = NeRFEncoding(
-                in_dim=config.pos_dim,
-                num_frequencies=config.pos_pe_num_freqs,
-                include_input=True
-            )
-            self.pe_token_proj = nn.Linear(
-                self.pos_pe.get_out_dim(),
-                config.view_transformer_latent_dim
-            )
-            if config.norm_type == 'layer_norm':
-                self.token_pos_pe_norm = nn.LayerNorm(config.view_transformer_latent_dim)
-            elif config.norm_type == 'rms_norm':
-                self.token_pos_pe_norm = nn.RMSNorm(config.view_transformer_latent_dim)
-            else:
-                raise ValueError(f"Unsupported normalization type: {config.norm_type}")
-            self.rope_dim = None
-        elif config.pe_type == 'rope':
-            # RoPE dimension is configured for the TransformerDecoder
+        # The ray decoder is pure RoPE for both pe_types ('nerf' differs from 'rope' only
+        # in the scene encoder; its ray decoder is identical).
+        if config.pe_type in ('rope', 'nerf'):
             self.rope_dim = config.pos_pe_num_freqs
         else:
             raise ValueError(f"Unsupported positional encoding type: {config.pe_type}")
@@ -122,10 +105,6 @@ class ViewTransformer(nn.Module):
         ray_tokens = self.ray_map_patch_token + self.ray_map_encoder_norm(self.ray_map_encoder(ray_tokens))  # [B, N_PATCHES, D]
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
-
-        # Apply positional encoding for the 'nerf' type
-        if self.config.pe_type == 'nerf':
-            ray_tokens = ray_tokens + self.token_pos_pe_norm(self.pe_token_proj(self.pos_pe(ray_pos)))
 
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.

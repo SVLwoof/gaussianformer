@@ -38,7 +38,9 @@ class GaussianFormerConfig:
 
     # --- Positional Encoding Config ---
     pe_type: Literal['nerf', 'rope'] = 'rope'
-    """The type of positional encoding to use."""
+    """The type of positional encoding to use. 'rope': raw Gaussian -> Linear, position
+    via RoPE only. 'nerf': NeRF-lifted position concatenated with the raw remaining
+    fields -> single Linear, RoPE still on."""
     rope_double_max_freq: bool = False
     """Whether to double the max frequency for RoPE."""
     pos_pe_num_freqs: int = 12
