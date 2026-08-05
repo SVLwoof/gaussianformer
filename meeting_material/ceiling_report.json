@@ -1,0 +1,14 @@
+{
+ "train": {
+  "objects": 3000,
+  "rows": 12000
+ },
+ "unseen2x": {
+  "objects": 2000,
+  "rows": 8000
+ },
+ "val": {
+  "objects": 1806,
+  "rows": 7224
+ }
+}
