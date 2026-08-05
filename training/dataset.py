@@ -1,5 +1,6 @@
 """Dataset for pairing Gaussian H5 scene data with ground-truth rendered images."""
 
+import random
 from pathlib import Path
 
 import h5py
@@ -7,6 +8,7 @@ import imageio
 import numpy as np
 import roma
 import torch
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 
@@ -61,7 +63,9 @@ class GaussianRenderDataset(Dataset):
                 # Skip views with no matching render
 
         if max_samples is not None and len(self.samples) > max_samples:
-            self.samples = self.samples[:max_samples]
+            # Seeded random subset, NOT a prefix: the sample list is scene-sorted, so
+            # truncation would silently keep only the lowest-index scenes.
+            self.samples = sorted(random.Random(0).sample(self.samples, max_samples))
 
         # Group sample indices by scene for per-epoch view subsampling.
         self._by_scene: dict[Path, list[int]] = {}
@@ -84,7 +88,6 @@ class GaussianRenderDataset(Dataset):
         if not self.views_per_epoch:
             self._active = list(range(len(self.samples)))
             return
-        import random
         rng = random.Random(epoch)
         active: list[int] = []
         for idxs in self._by_scene.values():
@@ -157,19 +160,21 @@ class GaussianRenderDataset(Dataset):
         img = imageio.v3.imread(render_path).astype(np.float32)
         if render_path.suffix == ".png":
             img = img / 255.0
-        # Resize render to the target resolution (e.g. 512 GT downscaled to 256 for the
-        # curriculum's bulk stage). Bilinear -- verified bit-exact vs an independent resize.
-        if img.shape[0] != self.resolution or img.shape[1] != self.resolution:
-            from PIL import Image
-            pil_img = Image.fromarray((img * 255).clip(0, 255).astype(np.uint8) if img.max() <= 1.0
-                                      else (img.clip(0, 65535)).astype(np.uint16))
-            pil_img = pil_img.resize((self.resolution, self.resolution), Image.BILINEAR)
-            img = np.array(pil_img, dtype=np.float32) / 255.0
-        # Ensure 3 channels
+        # Ensure 3 channels (before resize, so the resize sees a fixed layout)
         if img.ndim == 2:
             img = np.stack([img] * 3, axis=-1)
         elif img.shape[-1] == 4:
             img = img[..., :3]
+        # Resize to the target resolution (e.g. 512 GT downscaled to 256 for the curriculum's
+        # bulk stage). Float bilinear with antialias, matching PIL's filtering. The old PIL
+        # path round-tripped through uint8 (re-quantizing the interpolated target) and, for
+        # HDR inputs with max > 1, cast to uint16 WITHOUT scaling then divided by 255 --
+        # a silent corruption for any future EXR target.
+        if img.shape[0] != self.resolution or img.shape[1] != self.resolution:
+            t = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
+            t = F.interpolate(t, size=(self.resolution, self.resolution),
+                              mode="bilinear", align_corners=False, antialias=True)
+            img = t.squeeze(0).permute(1, 2, 0).numpy()
 
         gaussians_t = torch.from_numpy(gaussians)               # [N, 14]
         c2w_t = torch.from_numpy(c2w_view)                      # [4, 4]

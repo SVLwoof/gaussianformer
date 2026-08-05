@@ -67,15 +67,6 @@ def wrap_ddp(module: torch.nn.Module, world_size: int, local_rank: int) -> torch
     return module
 
 
-def reduce_metric(value: float, device: torch.device) -> float:
-    """Average a scalar across ranks. No-op when single-process."""
-    if not dist.is_initialized():
-        return value
-    t = torch.tensor(value, device=device, dtype=torch.float32)
-    dist.all_reduce(t, op=dist.ReduceOp.AVG)
-    return t.item()
-
-
 def training_forward(
     model: torch.nn.Module,
     ray_generator: RayGenerator,
@@ -220,26 +211,24 @@ def run_phase(
         # before the dataloader spawns workers so the fresh forks inherit this selection.
         dataloader.dataset.set_epoch(epoch)
         model.train()
-        epoch_loss = 0.0
-        epoch_log = 0.0
-        epoch_lpips = 0.0
+        # On-device accumulators: the old `epoch_x += term.item()` forced a GPU sync on every
+        # step (three of them). Sums stay on-device; the only per-step sync left is the
+        # log_interval print.
+        epoch_sums = torch.zeros(3, device=device)
         epoch_steps = 0
         t0 = time.time()
 
         for batch in dataloader:
-            gaussians = batch["gaussians"].to(device)
-            mask = batch["mask"].to(device)
-            c2w = batch["c2w"].to(device)
-            fov = batch["fov"].to(device)
-            target = batch["target"].to(device)
+            b = {k: batch[k].to(device, non_blocking=True)
+                 for k in ("gaussians", "mask", "c2w", "fov", "target")}
 
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 pred = training_forward(
-                    model, ray_generator, gaussians, mask, c2w, fov,
+                    model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
                     config.resolution, model_config,
                 )
                 loss, log_term, lpips_term = compute_loss(
-                    pred, target, log_loss_weight, lpips_loss_weight, device,
+                    pred, b["target"], log_loss_weight, lpips_loss_weight, device,
                 )
 
             optimizer.zero_grad()
@@ -248,9 +237,8 @@ def run_phase(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
             optimizer.step()
 
-            epoch_loss += loss.item()
-            epoch_log += log_term.item()
-            epoch_lpips += lpips_term.item()
+            with torch.no_grad():
+                epoch_sums += torch.stack([loss.detach(), log_term.detach(), lpips_term.detach()])
             epoch_steps += 1
             global_step += 1
 
@@ -263,10 +251,11 @@ def run_phase(
 
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
-        # Reduce per-epoch averages across ranks so the printed numbers are global.
-        avg_loss = reduce_metric(epoch_loss / max(epoch_steps, 1), device)
-        avg_log = reduce_metric(epoch_log / max(epoch_steps, 1), device)
-        avg_lpips = reduce_metric(epoch_lpips / max(epoch_steps, 1), device)
+        # One cross-rank reduce + one sync per epoch. AVG of per-rank sums equals the global
+        # average because DistributedSampler pads ranks to identical step counts.
+        if dist.is_initialized():
+            dist.all_reduce(epoch_sums, op=dist.ReduceOp.AVG)
+        avg_loss, avg_log, avg_lpips = (epoch_sums / max(epoch_steps, 1)).tolist()
         elapsed = time.time() - t0
         if is_main_process():
             print(
@@ -279,33 +268,25 @@ def run_phase(
         # Validation
         if val_dataloader is not None and (epoch + 1) % save_interval == 0:
             model.eval()
-            val_loss = 0.0
-            val_log = 0.0
-            val_lpips = 0.0
+            val_sums = torch.zeros(3, device=device)
             val_steps = 0
             with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 for batch in val_dataloader:
-                    gaussians = batch["gaussians"].to(device)
-                    mask = batch["mask"].to(device)
-                    c2w = batch["c2w"].to(device)
-                    fov = batch["fov"].to(device)
-                    target = batch["target"].to(device)
-
+                    b = {k: batch[k].to(device, non_blocking=True)
+                         for k in ("gaussians", "mask", "c2w", "fov", "target")}
                     pred = training_forward(
-                        model, ray_generator, gaussians, mask, c2w, fov,
+                        model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
                         config.resolution, model_config,
                     )
                     total, log_term, lpips_term = compute_loss(
-                        pred, target, log_loss_weight, lpips_loss_weight, device,
+                        pred, b["target"], log_loss_weight, lpips_loss_weight, device,
                     )
-                    val_loss += total.item()
-                    val_log += log_term.item()
-                    val_lpips += lpips_term.item()
+                    val_sums += torch.stack([total, log_term, lpips_term])
                     val_steps += 1
 
-            avg_val_loss = reduce_metric(val_loss / max(val_steps, 1), device)
-            avg_val_log = reduce_metric(val_log / max(val_steps, 1), device)
-            avg_val_lpips = reduce_metric(val_lpips / max(val_steps, 1), device)
+            if dist.is_initialized():
+                dist.all_reduce(val_sums, op=dist.ReduceOp.AVG)
+            avg_val_loss, avg_val_log, avg_val_lpips = (val_sums / max(val_steps, 1)).tolist()
             if is_main_process():
                 print(
                     f"[{phase_name}] Epoch {epoch + 1}/{num_epochs}, "
@@ -377,6 +358,8 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--weight_decay", type=float, default=0.01,
+                        help="AdamW weight decay for phase 2 (0 disables; used by memorization controls)")
     parser.add_argument("--num_workers", type=int, default=None,
                         help="DataLoader num_workers per rank. None = use TrainingConfig default. "
                         "DDP runs with num_workers=0 saturate one main thread per rank on disk IO; "
@@ -463,7 +446,7 @@ def main():
             sampler=val_sampler,
             shuffle=False,
             num_workers=num_workers,
-        persistent_workers=(num_workers > 0),
+            persistent_workers=(num_workers > 0),
             pin_memory=device.type == "cuda",
             collate_fn=collate_fn,
         )
@@ -554,7 +537,7 @@ def main():
     optimizer = torch.optim.AdamW(
         p2.parameters(),
         lr=config.phase2_lr,
-        weight_decay=0.01,
+        weight_decay=args.weight_decay,
     )
     scheduler = CosineAnnealingLR(
         optimizer,
