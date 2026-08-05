@@ -1986,3 +1986,107 @@ cosine LR), but not nothing. Airtight fix if forced to 4 GPU: `batch_size=2` (�
 bs2@512 with N=20k may OOM (test first; bs2@256 likely fits). Wall-clock: 4 GPU ≈ 2× slower, and 2×
 data already ≈ 2× V17/epoch → 4-GPU V18 ≈ 4× V17 per epoch (~2 weeks). **Decision: leave the 8-GPU
 killable queued for now; revisit 4-GPU Sagie if it hasn't landed by ~a day.**
+
+## 2026-08-02..05 — THE DIAGNOSIS ARC: ceiling at scale, three hypotheses killed, N-sweep → capacity floor
+
+The week the project's framing changed. Sequence: Sagie meeting (Aug 2) → "treat rec-GT as an
+asset; measure it at scale; hunt peculiar cases" → five measurements, each killing a live
+hypothesis. Everything below is FG-cropped (`_fg_crop`), `--input_mode recovered`, per-OBJECT means
+(views of one object are correlated — never count renders as samples).
+
+### 0. Correction first: our "unseen object" numbers were TRAINING objects
+`training/dataset.py` globs the whole h5 dir; V16/V17 trained on ALL of `h5s_20k_rec` (idx<15000 —
+V17's log says "13405 scenes", exactly that count). The skull (9869), statue (10916), honeypot
+(10751) and all 200 showcase scenes were in V16/V17's training set; only V14 (trained idx<3000) was
+genuinely out-of-sample on them. The real held-out split is `h5s_20k_rec_val`+`renders_val` (1,806
+objects, own 0–1999 index space) — never evaluated before this week. The old 3-object 28.49 dB
+headline was actually PESSIMISTIC: true held-out mean is **30.29 dB** (the hand-picked objects were
+harder than average). Everything below uses the proper splits.
+
+### 1. rec-GT ceiling measured at scale (27,224 renders; `ceiling_eval.py` + `ceiling_report.py`)
+Three slices, 4 matched views (0/4/7/11) each: TEST = all 1,806 held-out; TRAIN = 3,000 of V17's
+own training objects; UNSEEN-2x = 2,000 of the idx≥15000 expansion (unseen by V17).
+
+| slice | n | rec-GT | V17 | margin |
+|---|---|---|---|---|
+| TEST | 1806 | 44.94 | 30.29 | **14.65** |
+| TRAIN | 3000 | 45.02 | 30.90 | **14.11** |
+| UNSEEN-2x | 2000 | 44.91 | 30.21 | **14.70** |
+
+- Ceiling is ~45 dB and remarkably uniform. The oft-quoted "~10 dB gap" was an underestimate.
+- **Train→test gap = 0.55 dB → the blur is UNDER-FITTING, not a generalisation failure.** V17 is
+  14 dB below the ceiling on data it saw ~27×/view. (Corroborated: train LPIPS 0.0113 vs val
+  0.0140 at fully-annealed LR.) This overturns the "generalisation gap" framing we'd used since June.
+- rec-GT is a hard practical ceiling: V17 ≥ rec-GT in **2 of 27,224** renders (one is a pruning
+  hole in rec-GT that V17 smooths over).
+- Whole-image PSNR inflates both rec-GT and V17 by ~6.3 dB — metric argument, quantified.
+- Peculiar-case strips: `meeting_material/ceiling_cases/`. Smallest margins = LOW-ceiling objects
+  (pruning-damaged inputs), not model strength. Largest margins (25–35 dB) = emissive objects.
+
+### 2. Content stratification (`ceiling_content.py`, CPU-only): detail, not brightness
+The emissive lead from the tails was a SELECTION ARTIFACT (sorted by tails, reasoned from tails):
+only 2.57% of objects have any saturated pixel; excluding them moves the mean ~0.03 dB. The real
+driver is **fine-detail content**: margin +2.9 dB per hf_energy tercile IN EVERY SIZE BAND
+(hf_energy × fg_frac are −0.62 correlated; 2D table disentangles). Key asymmetry: **rec-GT is flat
+44.7–45.6 dB across detail quintiles while V17 falls 33.98 → 28.51** — input carries the detail at
+constant fidelity; only the model degrades with it.
+
+### 3. Spectral probe (`spectrum_probe.py` + coherence): it isn't even BLUR
+- MTF (model power / GT power per radial frequency, native 512 grid): V17 retains **65–95% of GT's
+  power at every frequency down to 2 px**. No knee at the 8-px patch scale (0.125 cyc/px) — the
+  ray-token tokenisation hypothesis is dead (also refuted by: 4× overcomplete token capacity, and
+  the June overfit hitting 49–53 dB at 512 with the same patch size).
+- Coherence (phase alignment with GT): on high-detail objects at ~4 px, **MTF 1.05–1.14 with
+  coherence 0.27–0.33** → the model emits MORE fine structure than GT containing, essentially
+  uncorrelated with truth. **The failure is misplaced/invented detail, not missing detail.**
+  "Blur" was the wrong word all along; error energy in that band is ~1.5× GT energy.
+- Lineage check: V14→V16→V17 improved BOTH MTF and coherence at every frequency — training
+  progress was real placement learning, not cosmetics. A ~4 px MTF>1 anomaly appears in all three
+  models (checkerboard signature at the DPT ConvTranspose stride — untested lead).
+
+### 4. N-SWEEP (`train_nsweep.sh` / `run_nsweep_eval.sh`): the floor is architectural
+Nested subsets 10⊂100⊂1000 (idx<15000), same init (`checkpoints_v18_256/phase2_epoch_30.pt` — see
+V18 note below), same 30k optimizer steps, 4×bs1@512+LPIPS0.5. Evaluated vs ceiling on OWN training
+objects (fit) + common 300 held-out (disjoint from the val100 used in-training):
+
+| N | margin on OWN train | margin on heldout |
+|---|---|---|
+| 1 (June probe, different setup) | ~0 | — |
+| 10 | **7.57** | 20.47 |
+| 100 | **13.40** | 17.93 |
+| 1000 | **15.79** | 16.70 |
+| 13,405 (V17; ~8× steps, eff.batch 8 — reference not curve) | 14.11 | 14.65 |
+
+- **The model cannot fit even 10 objects to the ceiling** (12,000 passes each, still 7.6 dB short).
+- **Train and heldout curves CONVERGE to ~14–15 dB.** More data moves along the curve toward the
+  floor; it cannot cross it. **The "more data" thesis is retired.**
+- Shape = capacity signature (fixed weights spread over more objects), but routing (below) fits too.
+
+### V18 status: stage A done and REPURPOSED; stage B not run (deliberately)
+Stage A (256, 30ep on 2× data) finished Aug 4 (val log-L1 0.000793) but exited 7 (benign teardown
+artifact — same class as the eval arrays) → `afterok` auto-cancelled stage B, which was anyway
+spooled with the OOM bs2 config. Given §4, stage B's premise (more data) is dead; NOT resubmitted.
+Stage A's checkpoint became the common init for the N-sweep. bs1@512 CONFIRMED fits on 45 GB nodes
+(never previously validated off khan-01).
+
+### Infra lessons that cost real time (all in memory + fixed in scripts)
+- `uv run --frozen` still RECONCILES the venv every call (flash-attn version-string churn) → 45-job
+  array raced the shared NFS venv: ImportErrors + silent FlashAttention→SDPA fallbacks. Fix:
+  `--no-sync` everywhere parallel.
+- torch JIT extension cache keys on py+CUDA but NOT GPU arch → heterogeneous g4 pool clobbers its
+  own gsplat build; then two same-arch jobs raced too. Fix: per-arch `TORCH_EXTENSIONS_DIR`, and
+  per-JOB dirs (seeded from arch cache) for anything parallel.
+- Trailing `echo` in sbatch scripts masks python exit codes → jobs report COMPLETED 0:0 with zero
+  output rows. Always `exit $rc`.
+- Killable-pool preemption waves kill ALL killable jobs at once; jobs whose checkpoint interval ≈
+  survival window make no net progress (N=10 thrashed). Guaranteed-quota chaining
+  (`--dependency=afterany`) fixed it.
+
+### WHERE THIS LEAVES US — the one live fork
+Five hypotheses measured, five killed: not generalisation, not emissive/HDR, not tokenisation, not
+blur, not data quantity. Remaining candidates, discriminated by the next experiment:
+- **CAPACITY**: weights can't hold many objects' worth of detail-placement. Test: scale model
+  (width/depth/scene tokens) at FIXED N=100, watch the train-fit margin.
+- **ROUTING**: cross-attention can't resolve which of 20k Gaussians land in which 8×8 ray patch
+  (rasterisation does this trivially by sort+splat — exactly why rec-GT is flat across detail).
+  If wider models don't close the train-fit margin, this is it.
