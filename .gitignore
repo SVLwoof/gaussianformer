@@ -412,3 +412,14 @@ runs/*.out
 data_v9_n20k/
 # 4-way comparison render strips (large)
 compare_renders/
+
+# Ceiling-diagnosis raw result rows (32M jsonl; scripts + reports are tracked)
+data_v10/ceiling/
+data_v10/ceiling_ref/
+
+# N-sweep: symlink farms into h5s_20k_rec (scene-list JSONs are tracked)
+data_v10/nsweep/*_h5/
+data_v10/nsweep/*_renders/
+
+# N-sweep checkpoints (large; regenerated)
+checkpoints_nsweep_*/
