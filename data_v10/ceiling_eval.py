@@ -118,6 +118,8 @@ def main() -> None:
                     help="stamped into every row and the output filename, so a later V18 sweep "
                     "lands alongside V17's rows instead of colliding with them")
     ap.add_argument("--pe_type", default="rope")
+    ap.add_argument("--encoder_layers", type=int, default=12)
+    ap.add_argument("--view_layers", type=int, default=6)
     ap.add_argument("--views", default="all", help="'all' (0..13) or comma-separated indices")
     args = ap.parse_args()
 
@@ -142,7 +144,22 @@ def main() -> None:
 
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
-    pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type), device)
+    if args.encoder_layers != 12 or args.view_layers != 6:
+        # depth-pruned checkpoints need a matching config; render_compare.load_model hardcodes
+        # the default depth, so build the pipeline inline for this case
+        from gaussianformer.models.config import GaussianFormerConfig
+        from gaussianformer.models.gaussianformer import GaussianFormer
+        from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
+        cfg = GaussianFormerConfig(pe_type=args.pe_type, num_layers=args.encoder_layers,
+                                   view_transformer_n_layers=args.view_layers)
+        model = GaussianFormer(cfg)
+        ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
+        model.load_state_dict(ckpt["model_state_dict"])
+        model.eval()
+        pipe = GaussianFormerRenderingPipeline(model)
+        pipe.to(device)
+    else:
+        pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type), device)
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device).eval()
 
     def lp_many(pairs: list[tuple[np.ndarray, np.ndarray]]) -> list[float]:

@@ -373,6 +373,11 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--encoder_layers", type=int, default=12,
+                        help="View-independent encoder depth. Non-default depths need an init "
+                        "made by data_v10/make_pruned_ckpt.py (or --from_scratch).")
+    parser.add_argument("--view_layers", type=int, default=6,
+                        help="View-transformer depth. See --encoder_layers.")
     parser.add_argument("--latent_dim", type=int, default=768,
                         help="Transformer width (encoder + view transformer; FFNs scale 4x). "
                         "Non-default widths cannot load RenderFormer weights -> use --from_scratch.")
@@ -484,6 +489,8 @@ def main():
     gf_config = GaussianFormerConfig(
         pe_type=args.pe_type,
         latent_dim=args.latent_dim,
+        num_layers=args.encoder_layers,
+        view_transformer_n_layers=args.view_layers,
         dim_feedforward=args.latent_dim * 4,
         view_transformer_latent_dim=args.latent_dim,
         view_transformer_ffn_hidden_dim=args.latent_dim * 4,
