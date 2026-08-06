@@ -26,10 +26,10 @@ ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | he
 export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 
-SEED=checkpoints_depthprune/init_e6v3.pt
+SEED=checkpoints_depthprune/init_e6v4.pt
 SAVE=checkpoints_nsweep_n100_depth6
 EPOCHS=300      # 100 scenes x 4 views / 4 ranks = 100 steps/epoch -> 30k steps, same as sweep
-echo "DEPTH6: 6L enc + 3L view, warm-pruned init | 4 GPUs, $EPOCHS epochs, node=$(hostname) sm_${ARCH}"
+echo "DEPTH6: 6L enc + 4L view, warm-pruned init | 4 GPUs, $EPOCHS epochs, node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
 p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )
@@ -48,7 +48,7 @@ uv run --no-sync torchrun --standalone --nproc_per_node=4 -m training.train \
   --save_dir $SAVE \
   --batch_size 1 --resolution 512 \
   --pe_type rope --augment_rotation --views_per_epoch 4 \
-  --encoder_layers 6 --view_layers 3 \
+  --encoder_layers 6 --view_layers 4 \
   --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
   --save_interval 20 --keep_last_n 2 \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 \

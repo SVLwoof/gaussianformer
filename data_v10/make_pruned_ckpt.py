@@ -23,14 +23,17 @@ import torch
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", type=Path, required=True)
-    ap.add_argument("--enc", type=int, default=6, help="encoder layers to keep (from 12)")
-    ap.add_argument("--view", type=int, default=3, help="view-transformer layers to keep (from 6)")
+    ap.add_argument("--enc_keep", default="0,2,4,6,8,10",
+                    help="encoder layer indices to keep (renumbered densely)")
+    ap.add_argument("--view_keep", default="0,2,4,5",
+                    help="view-transformer layer indices to keep. NOTE: the DPT taps the LAST 4 "
+                    "view layers (view_transformer.py out_layers), so keep >= 4.")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
     sd = torch.load(args.src, map_location="cpu", weights_only=True)["model_state_dict"]
-    keep_enc = {2 * i: i for i in range(args.enc)}    # even indices, renumbered densely
-    keep_view = {2 * i: i for i in range(args.view)}
+    keep_enc = {old: new for new, old in enumerate(int(x) for x in args.enc_keep.split(","))}
+    keep_view = {old: new for new, old in enumerate(int(x) for x in args.view_keep.split(","))}
 
     out, dropped = {}, 0
     for k, v in sd.items():
@@ -49,8 +52,8 @@ def main() -> None:
     torch.save({"model_state_dict": out}, args.out)
     n_in = sum(v.numel() for v in sd.values())
     n_out = sum(v.numel() for v in out.values())
-    print(f"kept enc layers {sorted(keep_enc)} -> 0..{args.enc-1}, "
-          f"view {sorted(keep_view)} -> 0..{args.view-1}")
+    print(f"kept enc layers {sorted(keep_enc)} -> 0..{len(keep_enc)-1}, "
+          f"view {sorted(keep_view)} -> 0..{len(keep_view)-1}")
     print(f"{len(sd)} -> {len(out)} tensors ({dropped} dropped), "
           f"{n_in/1e6:.1f}M -> {n_out/1e6:.1f}M params")
     print(f"wrote {args.out}")
