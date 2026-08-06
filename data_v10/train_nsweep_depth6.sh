@@ -27,29 +27,40 @@ export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 
 SEED=checkpoints_depthprune/init_e6v4.pt
-SAVE=checkpoints_nsweep_n100_depth6
-EPOCHS=300      # 100 scenes x 4 views / 4 ranks = 100 steps/epoch -> 30k steps, same as sweep
-echo "DEPTH6: 6L enc + 4L view, warm-pruned init | 4 GPUs, $EPOCHS epochs, node=$(hostname) sm_${ARCH}"
+SAVE_R=checkpoints_nsweep_n100_depth6_256
+SAVE_B=checkpoints_nsweep_n100_depth6
+echo "DEPTH6v2: 6L enc + 4L view | stage R 256x100 -> stage B 512x300 | node=$(hostname) sm_${ARCH}"
 
-RESUME_ARG=()
-p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )
-if [ ${#p2} -gt 0 ]; then
-  RESUME_ARG=(--resume ${p2[1]}); echo "RESUME from ${p2[1]}"
-else
-  [ -f $SEED ] || { echo "FATAL: missing $SEED"; exit 1; }
-  RESUME_ARG=(--init_from $SEED); echo "INIT from $SEED"
+# --- Stage R: 256 log-L1 recovery from the pruned init ---
+if [ ! -f $SAVE_R/phase2_epoch_100.pt ]; then
+  RES_R=()
+  pR=( ${SAVE_R}/phase2_epoch_*.pt(Nom) )
+  if [ ${#pR} -gt 0 ]; then RES_R=(--resume ${pR[1]}); echo "stage R RESUME from ${pR[1]}";
+  else RES_R=(--init_from $SEED); fi
+  uv run --no-sync torchrun --standalone --nproc_per_node=4 -m training.train \
+    --gaussian_h5_dir data_v10/nsweep/n100_h5 --renders_dir data_v10/nsweep/n100_renders \
+    --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders \
+    --save_dir $SAVE_R --batch_size 1 --resolution 256 \
+    --pe_type rope --augment_rotation --views_per_epoch 4 \
+    --encoder_layers 6 --view_layers 4 \
+    --phase2_epochs 100 --phase2_lr 5e-5 \
+    --save_interval 10 --keep_last_n 2 \
+    --log_loss_weight 1.0 --lpips_loss_weight 0.0 \
+    --num_workers 8 $RES_R || exit 1
 fi
 
+# --- Stage B: the standard N=100 schedule ---
+RES_B=()
+pB=( ${SAVE_B}/phase2_epoch_*.pt(Nom) )
+if [ ${#pB} -gt 0 ]; then RES_B=(--resume ${pB[1]}); echo "stage B RESUME from ${pB[1]}";
+else RES_B=(--init_from $SAVE_R/phase2_epoch_100.pt); echo "stage B INIT from stage R"; fi
 uv run --no-sync torchrun --standalone --nproc_per_node=4 -m training.train \
-  --gaussian_h5_dir data_v10/nsweep/n100_h5 \
-  --renders_dir     data_v10/nsweep/n100_renders \
-  --val_h5_dir      data_v10/nsweep/val100_h5 \
-  --val_renders_dir data_v10/nsweep/val100_renders \
-  --save_dir $SAVE \
-  --batch_size 1 --resolution 512 \
+  --gaussian_h5_dir data_v10/nsweep/n100_h5 --renders_dir data_v10/nsweep/n100_renders \
+  --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders \
+  --save_dir $SAVE_B --batch_size 1 --resolution 512 \
   --pe_type rope --augment_rotation --views_per_epoch 4 \
   --encoder_layers 6 --view_layers 4 \
-  --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
+  --phase2_epochs 300 --phase2_lr 5e-5 \
   --save_interval 20 --keep_last_n 2 \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 \
-  --num_workers 8 $RESUME_ARG
+  --num_workers 8 $RES_B
