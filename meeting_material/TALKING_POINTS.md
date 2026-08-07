@@ -1,5 +1,25 @@
 # GaussianFormer — progress since late June
 
+> ## ⚠ SUPERSEDED IN KEY PARTS — corrections as of 2026-08-07
+> This document was prepared for the Aug-2 meeting and is kept as presented. The measurement
+> campaign that followed (see `ceiling_report.md`, `ceiling_content.md`, PROGRESS 2026-08-02..07)
+> overturns several claims below:
+> 1. **The "unseen objects" here were TRAINING objects.** The skull/statue/honeypot and all 200
+>    showcase scenes were in V16/V17's training set. True held-out mean for V17 is **30.29 dB**
+>    (better than the 28.49 quoted — the hand-picked objects were harder than average).
+> 2. **Point 2 ("the blur is a generalization failure") is FALSIFIED.** V17's train→test margin
+>    gap is 0.55 dB; the model under-fits its own training data by ~14 dB. Mechanism established:
+>    **capacity-limited memorization** (fit falls with N at fixed capacity AND with capacity at
+>    fixed N; from-scratch is untrainable → the RenderFormer pretraining is load-bearing).
+> 3. The real gap to the rec-GT ceiling is **~14.5 dB**, not ~10; the ceiling is ~45 dB, uniform.
+> 4. It is not blur: MTF 0.65–0.95 at all frequencies with coherence ~0.3 at 4 px on detailed
+>    objects — detail is **invented/misplaced**, not missing.
+> 5. The pruning-score hypothesis (bottom of this doc) is deprioritised: rec-GT is flat across
+>    detail content, so the information survives pruning; the model loses it.
+> 6. Ask #1 (GPUs for stage B) and the 2×-data bet are retired: V18 stage B was never run — the
+>    N-sweep showed more data moves along the fit curve toward a ~14–15 dB floor, never below it.
+
+
 Meeting with Sagie, Sun 2026-08-02. Figures: `fig1_generations.png`, `fig2_detail.png`.
 
 > **On the figure numbers:** every LPIPS/PSNR printed in the figures is computed **on the crop
