@@ -384,6 +384,8 @@ def main():
     parser.add_argument("--from_scratch", action="store_true",
                         help="Random init (no RenderFormer transfer, no phase 1). Required for "
                         "non-default --latent_dim; use with a matched from-scratch baseline.")
+    parser.add_argument("--input_mlp_hidden", type=int, default=0)
+    parser.add_argument("--ffn_mult", type=int, default=4)
     parser.add_argument("--log_scale_input", action="store_true",
                         help="Feed log10(scale)+3 instead of raw scales (train AND eval must match).")
     parser.add_argument("--fg_bg_weight", type=float, default=1.0,
@@ -495,9 +497,10 @@ def main():
         latent_dim=args.latent_dim,
         num_layers=args.encoder_layers,
         view_transformer_n_layers=args.view_layers,
-        dim_feedforward=args.latent_dim * 4,
+        dim_feedforward=args.latent_dim * args.ffn_mult,
         view_transformer_latent_dim=args.latent_dim,
-        view_transformer_ffn_hidden_dim=args.latent_dim * 4,
+        view_transformer_ffn_hidden_dim=args.latent_dim * args.ffn_mult,
+        input_mlp_hidden=args.input_mlp_hidden,
     )
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
