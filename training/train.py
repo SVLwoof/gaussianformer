@@ -384,6 +384,8 @@ def main():
     parser.add_argument("--from_scratch", action="store_true",
                         help="Random init (no RenderFormer transfer, no phase 1). Required for "
                         "non-default --latent_dim; use with a matched from-scratch baseline.")
+    parser.add_argument("--log_scale_input", action="store_true",
+                        help="Feed log10(scale)+3 instead of raw scales (train AND eval must match).")
     parser.add_argument("--fg_bg_weight", type=float, default=1.0,
                         help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
                         "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
@@ -439,6 +441,7 @@ def main():
         max_samples=args.max_samples,
         augment_rotation=args.augment_rotation,
         views_per_epoch=args.views_per_epoch,
+        log_scale_input=args.log_scale_input,
     )
     train_sampler: DistributedSampler | None = None
     if world_size > 1:
@@ -463,6 +466,7 @@ def main():
     if args.val_h5_dir and args.val_renders_dir:
         val_dataset = GaussianRenderDataset(
             args.val_h5_dir, args.val_renders_dir, config.resolution,
+            log_scale_input=args.log_scale_input,
         )
         val_sampler: DistributedSampler | None = None
         if world_size > 1:

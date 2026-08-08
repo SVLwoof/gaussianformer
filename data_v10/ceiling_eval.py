@@ -120,6 +120,8 @@ def main() -> None:
     ap.add_argument("--pe_type", default="rope")
     ap.add_argument("--encoder_layers", type=int, default=12)
     ap.add_argument("--view_layers", type=int, default=6)
+    ap.add_argument("--log_scale_input", action="store_true",
+                    help="must match the checkpoint's training-time input transform")
     ap.add_argument("--views", default="all", help="'all' (0..13) or comma-separated indices")
     args = ap.parse_args()
 
@@ -184,6 +186,8 @@ def main() -> None:
                 continue
 
             data = load_single_gaussian_h5_data(h5)
+            if args.log_scale_input:
+                data["gaussians"][:, 3:6] = torch.log10(data["gaussians"][:, 3:6].clamp(min=1e-8)) + 3.0
             for k in ("gaussians", "mask", "c2w", "fov"):
                 data[k] = data[k].to(device)
 
