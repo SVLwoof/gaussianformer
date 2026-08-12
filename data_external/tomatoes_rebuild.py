@@ -43,22 +43,25 @@ full_t = to_dev({"means": a["means"], "scales": a["scales"], "quats": a["rotatio
                  "colors": a["colors"], "opacities": a["opacities"]}, device)
 targets = torch.cat([rasterize(full_t, vm64, K64, list(range(i, min(i+8, 64))), 512)
                      for i in range(0, 64, 8)])
-rec = recover({"means": pruned["means"], "scales": pruned["scales"], "quats": pruned["rotations"],
-               "colors": pruned["colors"], "opacities": pruned["opacities"]},
-              targets, vm64, K64, 1500, device)
+pruned["opacities"] = np.asarray(pruned["opacities"]).reshape(-1)
+pruned = {k: (v.cpu().numpy() if hasattr(v, "cpu") else np.asarray(v)) for k, v in pruned.items()}
+rec = recover(pruned, targets, vm64, K64, 1500, device)
 out = D / "h5" / "tomatoes_rec20000.h5"
 with h5py.File(out, "w") as f:
     f.create_dataset("means", data=rec["means"]); f.create_dataset("scales", data=rec["scales"])
-    f.create_dataset("rotations", data=rec["quats"]); f.create_dataset("colors", data=rec["colors"])
+    f.create_dataset("rotations", data=rec["rotations"]); f.create_dataset("colors", data=rec["colors"])
     f.create_dataset("opacities", data=rec["opacities"].reshape(-1, 1))
     f.create_dataset("c2w", data=c2w); f.create_dataset("fov", data=fov)
 print(f"wrote {out}")
 # rec-GT renders on the 14 eval views
 vm14, K14 = make_orbit_views(14, 1.7, 45.0, 512, up_axis="y")
 vm14, K14 = torch.from_numpy(vm14).to(device), torch.from_numpy(K14).to(device)
-rp = to_dev({k: (rec[k] if isinstance(rec[k], np.ndarray) else rec[k]) for k in rec}, device) if isinstance(rec["means"], np.ndarray) else rec
-imgs = torch.cat([rasterize({k: torch.as_tensor(np.asarray(rec[k]), device=device) for k in rec},
-                            vm14, K14, list(range(i, min(i+7, 14))), 512) for i in (0, 7)])
+rp = {"means": torch.as_tensor(rec["means"], device=device),
+      "quats": torch.as_tensor(rec["rotations"], device=device),
+      "scales": torch.as_tensor(rec["scales"], device=device),
+      "colors": torch.as_tensor(rec["colors"], device=device),
+      "opacities": torch.as_tensor(rec["opacities"], device=device).reshape(-1)}
+imgs = torch.cat([rasterize(rp, vm14, K14, list(range(i, min(i+7, 14))), 512) for i in (0, 7)])
 od = D / "renders" / "gsplat_rec20000"; od.mkdir(parents=True, exist_ok=True)
 for i in range(14):
     iio.imwrite(od / f"view_{i:02d}.png", (imgs[i].clamp(0, 1).cpu().numpy() * 255).astype(np.uint8))
