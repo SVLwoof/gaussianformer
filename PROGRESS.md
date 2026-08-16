@@ -2200,3 +2200,34 @@ is a useful artifact. Train = 200 RANDOMIZED views (az/el free, radius 1.35-2.15
 full-splat renders, input = recovered 20k. Eval = disjoint random views + radius EXTRAPOLATION
 (1.15 / 2.45) so view-interpolation cannot masquerade as reading. Jobs 31272109 (datagen) →
 31272110 (train, Sagie 4x; no idle 8-GPU killable at submit). Gate: novel-view PSNR vs rec-GT 46.
+
+## 2026-08-13..16 — the CODEC arc: view coverage is a lever; near-parity with rasterization at N=1
+
+### The reading-ceiling revision (codec v1, 200 randomized views incl. zoom 1.35-2.15)
+Novel-view (in-range) 39.6 dB vs the 14-view overfit's 29.9 — **the "~30 dB reading ceiling" was
+substantially VIEW SPARSITY**, not a hard readout limit. But zoom EXTRAPOLATION collapsed
+(close 27.0 / far 27.4 vs rec-GT 38.7/45.8): the model learns the covered view MANIFOLD, not a
+camera-independent object. 0/40 views beat rec-GT.
+
+### v2 (500 views, radius 1.05-2.55 = eval interior): zoom collapse GONE
+40.7 / 36.1 / 42.0 (rand/close/far) — close +9.1, far +14.6 purely from radius coverage in
+training. First 3 individual novel-view wins over rec-GT.
+
+### v3 (1500 views + 2nd cosine cycle): NEAR-PARITY
+**42.38 / 38.60 / 43.83 vs rec-GT 44.00 / 38.66 / 45.79** — close-range statistical parity
+(-0.06 dB, wins 5/8); 11/40 views beat rec-GT overall; far-set LPIPS BETTER than rec-GT.
+Trajectory 39.6→40.7→42.4 not yet bent. Strips: data_external/tomatoes/renders/codec*_verdict*.
+User rationale: a per-scene model beating rasterization of its own compressed splat = useful
+artifact (neural codec for single Gaussian scenes). Remaining ~1.6-2.0 dB: more views/cycles
+(brute) vs geometry-biased attention (mechanistic) — direction call for Sagie.
+
+### IN FLIGHT: the codec method at N=10 (jobs 31286027→28→29→30, branch exp/tomato-codec)
+150 random views/object x the 10 nested objects (full-splat targets from the retained full_h5s),
+2 cycles = 60k steps; eval = the standard orbit views, which are NOVEL for this model. Question:
+does the coverage lever survive weight sharing? Ladder refs: N=10 ctrl train-view fit 5.72;
+reading regime ~30; codec-at-N=1 novel 42.4. If it transfers -> view-dense supervision (free via
+rasterization) joins the V19 recipe; if not -> coverage was substituting for per-object capacity
+and geometry-biased attention inherits the burden.
+
+### Standing V19 recipe facts (unchanged): fg-weighted loss + multi-cycle schedule; architecture
+changes all flat at N=100; geometry-biased cross-attention = flagged next architectural probe.
