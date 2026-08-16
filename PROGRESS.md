@@ -2231,3 +2231,9 @@ and geometry-biased attention inherits the burden.
 
 ### Standing V19 recipe facts (unchanged): fg-weighted loss + multi-cycle schedule; architecture
 changes all flat at N=100; geometry-biased cross-attention = flagged next architectural probe.
+
+### LATE-READ VERDICT (2026-08-16): fg-loss STACKS with cycling
+expand-r2+fg (60k steps + fg-weighted loss): train-fit margin **10.04 dB** — best of the campaign
+(vs 11.48 for 90k plain cycles, 11.77 for fg alone at 30k). The two validated levers are additive.
+Heldout 18.44 (vs 17.93): at fixed N=100 the extra fit is memorization-flavored — full-N behavior
+is the V19 question. V19 recipe: fg + multi-cycle, confirmed compound.
