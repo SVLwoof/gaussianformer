@@ -73,6 +73,10 @@ class GaussianFormerConfig:
     """Whether to include the alpha channel in the output."""
     use_dpt_decoder: bool = True
     """Whether to use DPT decoder for rendering."""
+    geom_bias: bool = False
+    """Add a zero-init-gated ray/Gaussian alignment bias to the view transformer's
+    cross-attention logits. RoPE gives every patch token the same position (the camera
+    origin), so without this the logits carry no per-patch geometry."""
     dpt_features: int = 128
     """The dim of internal features in the DPT decoder."""
     dpt_out_channels: List[int] = field(default_factory=lambda: [96, 192, 384, 768])

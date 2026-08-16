@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
@@ -61,6 +62,7 @@ class ViewTransformer(nn.Module):
             bias=self.config.bias,
             include_self_attn=self.config.view_transformer_include_self_attn,
             use_swin_attn=self.config.view_transformer_use_swin_attn,
+            geom_bias=self.config.geom_bias,
         )
 
         # --- Output Head ---
@@ -106,6 +108,21 @@ class ViewTransformer(nn.Module):
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
 
+        # --- Geometric cross-attention bias ---
+        # ray_pos above is the SAME camera origin for every patch, so RoPE contributes no
+        # per-patch geometry to the cross-attention logits. This alignment map does:
+        # cos(angle) between each patch's mean ray direction and the direction from the
+        # camera to each context item. Register tokens (first num_register_tokens slots
+        # of spatial_pos) sit at the scene center; their bias is zeroed.
+        geom_align = None
+        if self.config.geom_bias:
+            ps = self.config.patch_size
+            patch_dirs = ray_map.view(ray_map.size(0), patch_h, ps, patch_w, ps, 3).mean(dim=(2, 4))
+            patch_dirs = F.normalize(patch_dirs, dim=-1).view(ray_map.size(0), -1, 3)
+            ctx_dirs = F.normalize(spatial_pos - camera_o[:, None], dim=-1)  # [B, N_CTX, 3]
+            geom_align = patch_dirs @ ctx_dirs.transpose(1, 2)  # [B, N_PATCHES, N_CTX]
+            geom_align[:, :, :self.config.num_register_tokens] = 0.0
+
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.
         if self.config.use_dpt_decoder:
@@ -119,7 +136,8 @@ class ViewTransformer(nn.Module):
                     out_layers=self.out_layers,
                     tf32_mode=tf32_mode,
                     patch_h=patch_h,
-                    patch_w=patch_w
+                    patch_w=patch_w,
+                    geom_align=geom_align
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
             return self.out_proj_act(decoded_img)
@@ -132,7 +150,8 @@ class ViewTransformer(nn.Module):
                 ray_pos=ray_pos,  # For query RoPE
                 tf32_mode=tf32_mode,
                 patch_h=patch_h,
-                patch_w=patch_w
+                patch_w=patch_w,
+                geom_align=geom_align
             )  # [B, N_PATCHES, D]
             decoded_patches = self.out_proj_act(self.out_proj(seq))  # [B, N_PATCHES, P*P*3]
             decoded_img = rearrange(
