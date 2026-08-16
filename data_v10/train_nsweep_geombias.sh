@@ -1,10 +1,10 @@
 #!/bin/zsh
 #SBATCH --time=24:00:00
-#SBATCH -c 32
+#SBATCH -c 16
 #SBATCH --mem=64GB
 #SBATCH --output=runs/nsweep_geombias_%j.out
 #SBATCH --job-name=nswgeom
-#SBATCH --gres=gg:g4:8
+#SBATCH --gres=gg:g4:4
 #SBATCH --killable
 #SBATCH --requeue
 #SBATCH --exclude=cyril-01,firefoot-01,firefoot-08,khan-01,khan-02
@@ -15,10 +15,11 @@
 # are on my ray" must be inferred from features alone. This run adds a zero-init-gated
 # ray/Gaussian alignment bias to those logits (--geom_bias). Equivalence at gate=0
 # verified bit-exact vs the same seed, so epoch 0 IS v18_256-ep30.
-# Data/init/epochs = the N=100 sweep baseline (margin 13.40 dB), but on 8 GPUs (user
-# call, 2026-08-16): global batch 8 vs the baseline's 4, so 300 epochs = same data
-# passes in HALF the wall-clock but 15k optimizer steps instead of 30k (lr unchanged).
-# Read the margin with that caveat. Biased cross-attn layers run SDPA, not flash-attn.
+# Schedule = EXACTLY the N=100 sweep baseline (margin 13.40 dB): same data, same init,
+# same 30k-step budget (4xbs1, 300 epochs), aug ON, default wd. Any margin change is
+# attributable to the geometric routing alone. 8-GPU variant was attempted 2026-08-16
+# but no whole node was free (firefoot-13 drained). Biased cross-attn layers run SDPA,
+# not flash-attn -- expect slower steps than the baseline's.
 #   PROBE=1 sbatch ... -> 1-epoch VRAM/step-time probe (no checkpoint)
 #   sbatch data_v10/train_nsweep_geombias.sh
 
@@ -55,7 +56,7 @@ else
   RESUME_ARG=(--init_from $SEED); echo "INIT from $SEED"
 fi
 
-uv run --no-sync torchrun --standalone --nproc_per_node=8 -m training.train \
+uv run --no-sync torchrun --standalone --nproc_per_node=4 -m training.train \
   --gaussian_h5_dir data_v10/nsweep/n100_h5 \
   --renders_dir     data_v10/nsweep/n100_renders \
   --val_h5_dir      data_v10/nsweep/val100_h5 \
