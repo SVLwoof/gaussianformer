@@ -2237,3 +2237,17 @@ expand-r2+fg (60k steps + fg-weighted loss): train-fit margin **10.04 dB** — b
 (vs 11.48 for 90k plain cycles, 11.77 for fg alone at 30k). The two validated levers are additive.
 Heldout 18.44 (vs 17.93): at fixed N=100 the extra fit is memorization-flavored — full-N behavior
 is the V19 question. V19 recipe: fg + multi-cycle, confirmed compound.
+
+## 2026-08-16 (later): geometry-biased cross-attention BUILT + N=100 probe launched
+Branch exp/geom-bias-attn. Implementation surfaced the smoking gun: the view transformer's RoPE
+assigns EVERY patch token the same position (the camera origin), so cross-attention logits carry
+zero per-patch geometry — "which Gaussians lie on my ray" is inferred from direction features
+alone (consistent with the coherence probe: energy present, spatially misplaced). Change: per
+view layer, a zero-init scalar gate x cos(patch ray dir, camera->Gaussian dir) added to the
+cross-attn logits (--geom_bias, train + ceiling_eval). Gate=0 verified BIT-EXACT vs v18_256-ep30;
+biased layers run SDPA (~105 s/epoch, roughly baseline cost). Chain: probe 31287211 (passed,
+no OOM on 45G) -> main 31287212 (EXACT N=100 baseline schedule, 30k steps, killable) -> eval
+31287213 (TAG=nsweep_n100_geombias). Read: train-fit margin vs baseline 13.40; also read the
+learned gate values — gates parked at zero mean the model declined the hint. 8-GPU attempt
+abandoned: no whole node free (firefoot-13 IDLE+DRAIN bad GPU; khan excluded), and the 4-GPU
+fallback restores exact step-count comparability anyway.
