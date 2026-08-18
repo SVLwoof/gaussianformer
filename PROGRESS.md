@@ -2309,3 +2309,13 @@ Next in parallel: pick 10 scale-out objects with the user (color-rich + high-fre
 object as a convergence case study; NO HDR-streak/emissive objects). NOTE: data_v10/full_h5s
 was deleted 2026-08-17 — chosen objects need their FULL splats rebuilt via the data_v10
 pipeline before dense-view rasterization.
+
+### Scale-out object list LOCKED (user + Claude, 2026-08-18)
+10 objects from the 1806-object UNSEEN val pool (full splats in data_v10/full_h5s_val, recovered
+20k in h5s_20k_rec_val — nothing to rebuild). Rich: scene_0262 painted plate, scene_0772 sandal,
+scene_1078 anime figure, scene_1342 boxing ring, scene_0031 seahorse, scene_0223 circus tent,
+scene_1423 molecule toy, scene_1223 brain-hair doll. Simple (cycles-to-beat-rec-GT case study):
+scene_0959 apple, scene_0874 clay vase. All pass the HDR-streak screen (blown<2% + halo/core
+ratio + visual curation; the first auto-pick surfaced the chest & two glow objects — dim
+volumetric streaks evade a saturation-only filter). One model per object; recipe frozen after
+the codec5 verdict lands.
