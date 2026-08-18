@@ -2319,3 +2319,18 @@ scene_0959 apple, scene_0874 clay vase. All pass the HDR-streak screen (blown<2%
 ratio + visual curation; the first auto-pick surfaced the chest & two glow objects — dim
 volumetric streaks evade a saturation-only filter). One model per object; recipe frozen after
 the codec5 verdict lands.
+
+## 2026-08-18 (late): CODEC5 cycle 1 — ALL sets beat rec-GT; recipe FROZEN; fleet launched
+Codec5 c1 verdict (checkpoints_tomato_codec5/phase2_epoch_27.pt): rand **+0.56** (17/24) /
+close **+2.89** (7/8) / far **+0.28** (6/8) = **+0.97 dB view-weighted avg, 30/40 views won**
+(codec4: +0.36, 22/40). The grazing-view half did its job: the edge-on plate view went
+-3.5 -> -1.8 and both rand & far flipped positive. Cycle 2 (31296844) running for the margin.
+
+**RECIPE FROZEN for scale-out:** 9000 views (4500 uniform el -15..55 + 4500 grazing el
+-15..20, r 1.05-2.55), 8xbs1, ~30k-step cosine cycles (27 ep x 1125 steps, lr 5e-5, aug ON,
+LPIPS 0.5), 2 cycles, cold start from v18_256-ep30. Apple pilot (scene_0959, 31300959)
+already running this exact recipe on firefoot-10, save_interval 9 for crossing-point analysis.
+**9-object fleet launched** (killable + requeue; cluster saturated, they queue for freed
+GPUs): 0262/0772/1078/1342/0031/0223/1423/1223/0874, each c1 -> evals(9/18/27) -> c2 ->
+evals, jobs 31304895-31304963. Generic scripts: data_v10/train_codec_scaleout.sh,
+data_v10/codec_scaleout_eval.sh, data_external/codec_scaleout_eval.py.
