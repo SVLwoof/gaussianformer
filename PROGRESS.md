@@ -2334,3 +2334,12 @@ already running this exact recipe on firefoot-10, save_interval 9 for crossing-p
 GPUs): 0262/0772/1078/1342/0031/0223/1423/1223/0874, each c1 -> evals(9/18/27) -> c2 ->
 evals, jobs 31304895-31304963. Generic scripts: data_v10/train_codec_scaleout.sh,
 data_v10/codec_scaleout_eval.sh, data_external/codec_scaleout_eval.py.
+
+## 2026-08-19: CODEC5 FINAL — tomatoes decisively closed: +1.30 dB avg, 34/40 views
+Cycle-2 verdict (checkpoints_tomato_codec5_r2/phase2_epoch_27.pt): rand **+0.88** (20/24) /
+close **+3.23** (7/8) / far **+0.61** (7/8). Ladder: v3 -1.38 avg -> v4 +0.36 (22/40) -> v5c1
++0.97 (30/40) -> **v5 final +1.30 (34/40)**. Model LPIPS beats rec-GT on every set. The 6
+remaining losses are all small; the grazing plate view is down to -1.2 (from -3.5 at v4).
+The tomato squeeze directive (higher views-won) is satisfied; per-object codec DECISIVELY
+beats rasterizing its own compressed splat. Attention shifts to the 10-object scale-out
+fleet (running under the 2-slot GPU throttle per user request; first verdicts pending).
