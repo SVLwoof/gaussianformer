@@ -2272,3 +2272,23 @@ Both mechanistic escape routes just closed: not routing (geom-bias declined), no
 density (codec doesn't share). Confirmed levers remain fg-weighted loss + multi-cycle schedule
 (stack to 10.04 at N=100). Remaining open hypotheses: pruning-score bias (input quality) and
 raw optimization budget (cycles asymptote ~10 dB).
+
+## 2026-08-18: CODEC4 — GOAL MET on the tomatoes: model beats rec-GT on average
+Direction (Sagie + user, 2026-08-17): the per-object codec line IS the line — beat rec-GT on
+average on the tomatoes, then scale to other objects. Codec4 scaled v3's two validated levers:
+**3x views** (4500 randomized, r 1.05-2.55, seed 41, free supervision from the full 219k splat)
+and **cycle continuation** (seeded from codec3_r2 ep80, two more ~30k-step cosine cycles;
+27 ep x 1125 steps each). Branch exp/tomato-codec4; chain 31290091-95, flash-attn confirmed.
+
+**Cycle 1** (checkpoints_tomato_codec4/phase2_epoch_27.pt): rand -0.50 / close **+1.74** /
+far -0.81 — close-set flips positive for the first time; average gap -0.11 dB (v3 was -1.38).
+
+**Cycle 2 FINAL** (checkpoints_tomato_codec4_r2/phase2_epoch_27.pt): rand **-0.06** (13/24
+views won) / close **+2.29** (6/8) / far **-0.34** (3/8) = view-weighted average **+0.36 dB
+over rec-GT, 22/40 views won**; model LPIPS beats rec-GT on all three sets. Verdicts:
+data_external/tomatoes/renders/codec4{_c1,}_verdict.{png,json}.
+
+Both levers still deliver: 3x views alone was worth ~+1.3 dB average, the extra cycle ~+0.45.
+Residual loss is concentrated in ONE view — the grazing-angle plate view (close v1, -3.5);
+targeted view sampling near grazing elevations is the obvious next lever if we need margin.
+**Next per the direction: scale the recipe to other objects.**
