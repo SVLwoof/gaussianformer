@@ -2292,3 +2292,20 @@ Both levers still deliver: 3x views alone was worth ~+1.3 dB average, the extra 
 Residual loss is concentrated in ONE view — the grazing-angle plate view (close v1, -3.5);
 targeted view sampling near grazing elevations is the obvious next lever if we need margin.
 **Next per the direction: scale the recipe to other objects.**
+
+## 2026-08-18: CODEC5 launched — squeeze pass targeting views-won
+User directive: before scaling out, push the tomatoes further; the KPI is a higher views-won
+count (codec4: 22/40). Two changes: (1) **9000 views** = codec4's 4500 (reused via symlinks) +
+4500 new views drawn from GRAZING elevations (el -15..20 deg, same az/radius coverage) — the
+surviving losses concentrate there (close v1 = edge-on plate view, -3.5); (2) **8xbs1** on a
+whole idle node (firefoot-09/10/17 were free; runs on firefoot-17), so 9000/8 = the same 1125
+steps/epoch and each ~30k-step cosine cycle sweeps 2x the data at codec4's wall time (~8.5h).
+Seeded from codec4_r2 ep27 (cycle continuation). Effective batch 4->8 (user-approved).
+Chain: 31296841 datagen -> 31296842 cycle1 -> 31296843 eval-c1 (TAG codec5_c1) -> 31296844
+cycle2 -> 31296845 eval-c2 (TAG codec5). Eval sets FROZEN (codec_eval_*) for v1-v5
+comparability; evals reuse tomatoes_codec4_eval.py via CKPT/TAG env. Faster-iteration knob
+if needed: EPOCHS_OVR=14 = ~15k-step cycle in ~4.5h (untested annealing, kept at 30k for now).
+Next in parallel: pick 10 scale-out objects with the user (color-rich + high-freq, >=1 simple
+object as a convergence case study; NO HDR-streak/emissive objects). NOTE: data_v10/full_h5s
+was deleted 2026-08-17 — chosen objects need their FULL splats rebuilt via the data_v10
+pipeline before dense-view rasterization.
