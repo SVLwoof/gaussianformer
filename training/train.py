@@ -388,6 +388,10 @@ def main():
     parser.add_argument("--ffn_mult", type=int, default=4)
     parser.add_argument("--log_scale_input", action="store_true",
                         help="Feed log10(scale)+3 instead of raw scales (train AND eval must match).")
+    parser.add_argument("--geom_bias", action="store_true",
+                        help="Zero-init-gated ray/Gaussian alignment bias on the view transformer's "
+                        "cross-attention logits. Loads unbiased checkpoints via --init_from (the "
+                        "missing gates init to zero = exact baseline); eval must pass --geom_bias too.")
     parser.add_argument("--fg_bg_weight", type=float, default=1.0,
                         help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
                         "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
@@ -501,6 +505,7 @@ def main():
         view_transformer_latent_dim=args.latent_dim,
         view_transformer_ffn_hidden_dim=args.latent_dim * args.ffn_mult,
         input_mlp_hidden=args.input_mlp_hidden,
+        geom_bias=args.geom_bias,
     )
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
@@ -524,7 +529,13 @@ def main():
         # phase2_lr, global_step/start_epoch = 0). Phase 1 is skipped via the gate below.
         init_ckpt = torch.load(args.init_from, map_location="cpu", weights_only=True)
         module = GaussianFormer(gf_config)
-        module.load_state_dict(init_ckpt["model_state_dict"])
+        if args.geom_bias:
+            # unbiased seeds lack the gates; they stay at their zero init = exact baseline
+            missing, unexpected = module.load_state_dict(init_ckpt["model_state_dict"], strict=False)
+            bad = [k for k in missing if not k.endswith(".geom_gate")] + list(unexpected)
+            assert not bad, f"init_from mismatch beyond geom gates: {bad}"
+        else:
+            module.load_state_dict(init_ckpt["model_state_dict"])
         if is_main_process():
             print(f"Warm-start (weights only) from {args.init_from} "
                   f"-> fresh Phase 2 fine-tune", flush=True)

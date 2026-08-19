@@ -2237,3 +2237,38 @@ expand-r2+fg (60k steps + fg-weighted loss): train-fit margin **10.04 dB** — b
 (vs 11.48 for 90k plain cycles, 11.77 for fg alone at 30k). The two validated levers are additive.
 Heldout 18.44 (vs 17.93): at fixed N=100 the extra fit is memorization-flavored — full-N behavior
 is the V19 question. V19 recipe: fg + multi-cycle, confirmed compound.
+
+## 2026-08-16 (later): geometry-biased cross-attention BUILT + N=100 probe launched
+Branch exp/geom-bias-attn. Implementation surfaced the smoking gun: the view transformer's RoPE
+assigns EVERY patch token the same position (the camera origin), so cross-attention logits carry
+zero per-patch geometry — "which Gaussians lie on my ray" is inferred from direction features
+alone (consistent with the coherence probe: energy present, spatially misplaced). Change: per
+view layer, a zero-init scalar gate x cos(patch ray dir, camera->Gaussian dir) added to the
+cross-attn logits (--geom_bias, train + ceiling_eval). Gate=0 verified BIT-EXACT vs v18_256-ep30;
+biased layers run SDPA (~105 s/epoch, roughly baseline cost). Chain: probe 31287211 (passed,
+no OOM on 45G) -> main 31287212 (EXACT N=100 baseline schedule, 30k steps, killable) -> eval
+31287213 (TAG=nsweep_n100_geombias). Read: train-fit margin vs baseline 13.40; also read the
+learned gate values — gates parked at zero mean the model declined the hint. 8-GPU attempt
+abandoned: no whole node free (firefoot-13 IDLE+DRAIN bad GPU; khan excluded), and the 4-GPU
+fallback restores exact step-count comparability anyway.
+
+## 2026-08-17: BOTH probes land — two clean negatives
+### Geom-bias verdict: the model DECLINED the geometry hint
+nsweep_n100_geombias train-fit margin **13.40 dB — identical to baseline 13.40** (heldout 17.93,
+also identical). The learned gates settled at -0.005..-0.029, i.e. essentially zero: given a free,
+exact "which Gaussians are on your ray" signal in the cross-attn logits, 30k steps of training
+chose not to use it. The routing-prior hypothesis is falsified at this scale — the bandwidth
+bottleneck is NOT cross-attention routing. (Chain 31287211-13, branch exp/geom-bias-attn.)
+
+### N=10 codec verdict: view coverage does NOT survive weight sharing (at this budget)
+nsweep_n10codec on the standard orbit views (NOVEL for this model): model 30.21 dB, margin
+14.24 — parked exactly at the old ~30 dB reading regime, nowhere near codec-N=1's 42.4 novel.
+150 views/object at N=10 (vs 1500 at N=1) does not transfer; dense-view supervision was
+substituting per-object capacity, not teaching generalizable rendering. Heldout300 margin 20.76
+(worse than V17's 14.65 — expected, 10 training objects). (Chain 31286027-30.)
+
+### Where this leaves V19
+Both mechanistic escape routes just closed: not routing (geom-bias declined), not supervision
+density (codec doesn't share). Confirmed levers remain fg-weighted loss + multi-cycle schedule
+(stack to 10.04 at N=100). Remaining open hypotheses: pruning-score bias (input quality) and
+raw optimization budget (cycles asymptote ~10 dB).

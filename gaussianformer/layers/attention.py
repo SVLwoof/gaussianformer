@@ -113,10 +113,12 @@ class MultiHeadAttention(nn.Module):
             self.k_norm = nn.Identity()
 
     def forward(self, q, k, v, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False):
+                rope_ctx_sin=None, force_sdpa=False, attn_bias=None):
         # src_key_padding_mask: (B, N), key padding mask, things you want to attend to is True
+        # attn_bias: (B, 1, src_len, ctx_len) float, added to attention logits (SDPA only)
         bs, src_len = q.shape[0], q.shape[1]
         ctx_len = k.shape[1]
+        use_sdpa = ATTN == 'sdpa' or force_sdpa or attn_bias is not None
 
         if self.is_self_attn:
             q, k, v = self.in_proj(q).chunk(3, dim=-1)
@@ -141,9 +143,14 @@ class MultiHeadAttention(nn.Module):
                 q = apply_rotary_emb_one_cossin(q, rope_cos, rope_sin)
                 k = apply_rotary_emb_one_cossin(k, rope_ctx_cos, rope_ctx_sin)
 
-        if ATTN == 'sdpa' or force_sdpa:
+        if use_sdpa:
             # create attention mask
-            if src_key_padding_mask is not None:
+            if attn_bias is not None:
+                attn_mask = attn_bias.to(v.dtype)
+                if src_key_padding_mask is not None:
+                    attn_mask = attn_mask.masked_fill(
+                        ~src_key_padding_mask.view(bs, 1, 1, ctx_len), float('-inf'))
+            elif src_key_padding_mask is not None:
                 assert src_key_padding_mask.shape == (bs, ctx_len), \
                     f"expecting key_padding_mask shape of {(bs, ctx_len)}, but got {src_key_padding_mask.shape}"
                 attn_mask = (
@@ -400,6 +407,7 @@ class AttentionLayer(nn.Module):
             use_swin_attn: bool = False,
             window_size: int = 8,
             shift_size: int = 0,
+            geom_bias: bool = False,
     ):
         """
         Attention layer with feed forward and pre-norm.
@@ -432,6 +440,9 @@ class AttentionLayer(nn.Module):
             qk_norm=qk_norm,
             norm_type=norm_type
         )
+        if geom_bias:
+            # zero-init: the layer is exactly the unbiased baseline until training moves it
+            self.geom_gate = nn.Parameter(torch.zeros(1))
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
         if bias_kv:
@@ -493,7 +504,7 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = norm_module(query_dim, eps=EPS)
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None):
+                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, geom_align=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -520,10 +531,13 @@ class AttentionLayer(nn.Module):
             kv = self.kv_norm(kv)
             ctx_len = kv.shape[1]
 
-        # multihead attention
+        # multihead attention (geom bias applies to the cross-attention only)
+        attn_bias = None
+        if geom_align is not None and hasattr(self, 'geom_gate'):
+            attn_bias = (self.geom_gate * geom_align).unsqueeze(1)
         attn_output = self.dropout(
             self.multihead_attn(q, kv, kv, src_key_padding_mask, rope_cos, rope_sin, rope_ctx_cos, rope_ctx_sin,
-                                force_sdpa=force_sdpa))
+                                force_sdpa=force_sdpa, attn_bias=attn_bias))
         query = query + attn_output
 
         if self.add_self_attn:
@@ -622,6 +636,7 @@ class TransformerDecoder(nn.Module):
             rope_dim: Optional[int] = None,
             pos_dim: int = 3,
             rope_double_max_freq: bool = False,
+            geom_bias: bool = False,
     ):
         """
         Transformer decoder. Each layer has cross-attention and self-attention.
@@ -663,7 +678,8 @@ class TransformerDecoder(nn.Module):
                 add_self_attn=include_self_attn,
                 use_swin_attn=use_swin_attn,
                 window_size=window_size,
-                shift_size=0 if i % 2 == 0 else shift_size  # w-attn and swin-attn are on alternate layers
+                shift_size=0 if i % 2 == 0 else shift_size,  # w-attn and swin-attn are on alternate layers
+                geom_bias=geom_bias,
             ) for i in range(num_layers)
         ])
 
@@ -677,7 +693,7 @@ class TransformerDecoder(nn.Module):
             )
 
     def forward(self, x, ctx, src_key_padding_mask=None, spatial_pos=None, ray_pos=None, out_layers=[], tf32_mode=False,
-                patch_h=None, patch_w=None):
+                patch_h=None, patch_w=None, geom_align=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
             rope_freqs = self.rope_emb.get_spatial_freqs(ray_pos)
@@ -691,7 +707,7 @@ class TransformerDecoder(nn.Module):
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w)
+                      patch_w=patch_w, geom_align=geom_align)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list

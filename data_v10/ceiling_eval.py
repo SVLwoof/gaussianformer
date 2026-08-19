@@ -122,6 +122,8 @@ def main() -> None:
     ap.add_argument("--view_layers", type=int, default=6)
     ap.add_argument("--ffn_mult", type=int, default=4)
     ap.add_argument("--input_mlp_hidden", type=int, default=0)
+    ap.add_argument("--geom_bias", action="store_true",
+                    help="checkpoint was trained with the geometric cross-attention bias")
     ap.add_argument("--log_scale_input", action="store_true",
                     help="must match the checkpoint's training-time input transform")
     ap.add_argument("--views", default="all", help="'all' (0..13) or comma-separated indices")
@@ -149,7 +151,7 @@ def main() -> None:
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
     if (args.encoder_layers != 12 or args.view_layers != 6
-            or args.ffn_mult != 4 or args.input_mlp_hidden):
+            or args.ffn_mult != 4 or args.input_mlp_hidden or args.geom_bias):
         # depth-pruned checkpoints need a matching config; render_compare.load_model hardcodes
         # the default depth, so build the pipeline inline for this case
         from gaussianformer.models.config import GaussianFormerConfig
@@ -159,7 +161,8 @@ def main() -> None:
                                    view_transformer_n_layers=args.view_layers,
                                    dim_feedforward=768 * args.ffn_mult,
                                    view_transformer_ffn_hidden_dim=768 * args.ffn_mult,
-                                   input_mlp_hidden=args.input_mlp_hidden)
+                                   input_mlp_hidden=args.input_mlp_hidden,
+                                   geom_bias=args.geom_bias)
         model = GaussianFormer(cfg)
         ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
         model.load_state_dict(ckpt["model_state_dict"])
