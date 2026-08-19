@@ -35,11 +35,23 @@ def ksteps(scene, ckpt_path):
         return ep * 1.5
     return (30.0 if cyc2 else 0.0) + ep * 1.125
 
+def annealed(scene, ckpt_path):
+    """True only at a cycle's FINAL epoch, where the cosine LR has annealed back down.
+
+    Each cycle is a warm restart: LR jumps back to phase2_lr at epoch 1, so mid-cycle
+    checkpoints are measured mid-disruption and are NOT comparable to end-of-cycle
+    points (see the apple's c2-ep9 dip, 2026-08-20).
+    """
+    ep = int(re.search(r"phase2_epoch_(\d+)", ckpt_path).group(1))
+    final = 20 if (scene == "scene_0874" and "_r2/" not in ckpt_path) else 27
+    return ep == final
+
 traj = {}
 for f in sorted(ROOT.glob("*/*_verdict.json")):
     d = json.loads(f.read_text())
     avg, won, n = stats(d)
-    traj.setdefault(f.parent.name, []).append((ksteps(f.parent.name, d["ckpt"]), avg, won, n, d["ckpt"]))
+    traj.setdefault(f.parent.name, []).append((ksteps(f.parent.name, d["ckpt"]), avg, won, n,
+                                               d["ckpt"], annealed(f.parent.name, d["ckpt"])))
 
 TOMATO = [(60, -1.38), (120, +0.36), (150, +0.97), (180, +1.30)]
 
@@ -68,20 +80,25 @@ for gx in range(0, int(X1) + 1, 30):
 d.line([zx0, zy, zx1, zy], fill=(0, 0, 0), width=2)
 d.text((zx1 - 190, zy - 22), "rec-GT parity", fill=(0, 0, 0), font=fontb)
 
-def draw_line(pts, color, width=2):
+def draw_line(pts, color, width=2, marks=None):
     for a, b in zip(pts, pts[1:]):
         d.line([*px(*a), *px(*b)], fill=color, width=width)
-    for a in pts:
+    for i, a in enumerate(pts):
         x, y = px(*a)
-        d.ellipse([x - 4, y - 4, x + 4, y + 4], fill=color)
+        solid = True if marks is None else marks[i]
+        if solid:   # end of cycle: LR annealed, comparable across objects
+            d.ellipse([x - 5, y - 5, x + 5, y + 5], fill=color)
+        else:       # mid-cycle: measured inside the warm-restart dip
+            d.ellipse([x - 4, y - 4, x + 4, y + 4], outline=color, width=2, fill=(255, 255, 255))
 
 ly = MT
 print(f"{'object':14s} {'ksteps':>7s} {'avg dB':>8s} {'won':>6s}")
 for i, (scene, pts) in enumerate(sorted(traj.items())):
     pts.sort()
     c = COLORS[i % len(COLORS)]
-    draw_line([(p[0], p[1]) for p in pts], c, width=3 if scene in ("scene_0959", "scene_0874") else 2)
-    k, avg, won, n, ck = pts[-1]
+    draw_line([(p[0], p[1]) for p in pts], c, width=3 if scene in ("scene_0959", "scene_0874") else 2,
+              marks=[p[5] for p in pts])
+    k, avg, won, n, ck, _ann = pts[-1]
     lbl = f"{LABEL.get(scene, scene)}  {avg:+.2f} dB, {won}/{n}"
     d.rectangle([W - MR + 10, ly, W - MR + 26, ly + 14], fill=c)
     d.text((W - MR + 32, ly - 1), lbl, fill=(0, 0, 0), font=font)
@@ -93,5 +110,6 @@ d.text((W - MR + 32, ly - 1), "tomatoes (ref, +1.30)", fill=(0, 0, 0), font=font
 d.text((ML, 12), "Codec scale-out: avg PSNR delta vs rec-GT over cumulative optimizer ksteps",
        fill=(0, 0, 0), font=fontb)
 d.text((W // 2 - 90, H - 26), "cumulative ksteps", fill=(0, 0, 0), font=font)
+d.text((ML, 30), "solid = end of cycle (LR annealed, comparable);  hollow = mid-cycle (warm-restart dip, NOT comparable)", fill=(90, 90, 90), font=font)
 img.save("data_v10/codec_scaleout_dashboard.png")
 print("-> data_v10/codec_scaleout_dashboard.png")

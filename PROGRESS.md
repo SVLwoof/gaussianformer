@@ -2371,3 +2371,27 @@ backup but deliberately NOT PR'd yet — the fleet is still producing verdicts o
 under data_v2/, data_v9/ and gaussian_h5s/ (the bulk data there was gitignored, the scripts
 and demo h5s were not). Restored via `git checkout` — 142 MB, 25 files. Lesson: `rm -rf` on a
 data directory needs a `git status` check afterwards.
+
+## 2026-08-20: warm-restart dip — mid-cycle evals are NOT comparable
+Evaluated the apple's cycle-2 epoch-9 checkpoint early (job 31332255) instead of waiting for
+the cycle to finish. Result looked alarming: **41.35/39.03/39.83 vs rec-GT 50.17/46.03/53.07
+= -9.34 avg, 0/40** — a ~7 dB REGRESSION from cycle 1's end (47.96/45.65/49.17, -2.18, 6/40).
+The rec-GT baseline is byte-identical across all four apple evals, so this is not an eval bug.
+
+**Cause: the cosine warm restart.** Each cycle re-instantiates CosineAnnealingLR at
+phase2_lr=5e-5, so epoch 1 of a cycle yanks LR back to peak and knocks the model out of the
+minimum it had annealed into; it re-anneals over the cycle. Epoch 9/27 is measured near peak
+LR, i.e. at the worst point. This retro-explains why every END-of-cycle number in the tomato
+ladder improved monotonically (-1.38 -> +0.36 -> +0.97 -> +1.30) while nothing mid-cycle was
+ever measured.
+
+**Consequences:**
+- Only END-of-cycle checkpoints (epoch 27; epoch 20 for the 6-GPU vase c1) are comparable
+  across objects/cycles. Intra-cycle points measure schedule phase, not capability.
+- My earlier extrapolation ("apple crosses rec-GT early-to-mid cycle 2", from the +2 dB/9
+  epochs trend inside cycle 1) was WRONG for this reason — within-cycle slope cannot be
+  extended across a restart boundary. Expect the crossing at the END of cycle 2.
+- The fleet's scheduled epoch-9/18 evals still run (they cost ~15 min on a killable GPU) but
+  should be read as progress traces only, never as cross-object comparisons.
+- Dashboard updated: end-of-cycle points draw solid, mid-cycle points hollow, with a legend
+  note (data_v10/codec_scaleout_dashboard.py).
