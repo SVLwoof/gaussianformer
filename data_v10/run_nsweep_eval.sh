@@ -45,6 +45,7 @@ N=${N:?N required}
 TAG=${TAG:-nsweep_n${N}}   # override for variants (ctrl, fgloss, scratch) -- rows and resume
                            # state are keyed by output file, so variants MUST NOT share one
 CKPT=${CKPT:-$(ls -t checkpoints_nsweep_n${N}/phase2_epoch_*.pt 2>/dev/null | head -1)}
+EXTRA=${EXTRA:-}   # e.g. "--encoder_layers 6 --view_layers 3" for depth-pruned ckpts
 [ -z "$CKPT" ] && { echo "FATAL: no checkpoint for N=$N"; exit 1; }
 echo "N=$N ckpt=$CKPT node=$(hostname) sm_${ARCH}"
 
@@ -56,13 +57,13 @@ rc=0
 uv run --no-sync python -m data_v10.ceiling_eval \
   --split train --scenes_file data_v10/nsweep/n${N}_scenes.json \
   --out data_v10/ceiling/${TAG}_train.jsonl \
-  --model_tag ${TAG}_train --views 0,4,7,11 --ckpt "$CKPT" || rc=1
+  --model_tag ${TAG}_train --views 0,4,7,11 --ckpt "$CKPT" ${=EXTRA} || rc=1
 
 # Common held-out set -- generalisation.
 uv run --no-sync python -m data_v10.ceiling_eval \
   --split val --scenes_file data_v10/nsweep/heldout300_scenes.json \
   --out data_v10/ceiling/${TAG}_heldout.jsonl \
-  --model_tag ${TAG}_heldout --views 0,4,7,11 --ckpt "$CKPT" || rc=1
+  --model_tag ${TAG}_heldout --views 0,4,7,11 --ckpt "$CKPT" ${=EXTRA} || rc=1
 
 echo "DONE_NSWEEP_EVAL rc=$rc"
 exit $rc

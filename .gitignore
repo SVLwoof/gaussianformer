@@ -423,3 +423,4 @@ data_v10/nsweep/*_renders/
 
 # N-sweep checkpoints (large; regenerated)
 checkpoints_nsweep_*/
+checkpoints_depthprune/
