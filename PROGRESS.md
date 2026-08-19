@@ -2162,3 +2162,78 @@ capacity via warm depth-EXPANSION (layer duplication; width is closed — scratc
 khan-01/02 insta-fail all jobs at prolog (0–1 s, no output file) while sinfo reports healthy —
 excluded everywhere, report to admins. Killable preemptions register FAILED (not requeued) —
 resubmit manually; checkpoint cadence must beat the preemption interval or a run thrashes.
+
+## 2026-08-08..13 — capacity fully eliminated; the READING CEILING isolated; tomato-codec pivot
+
+### The elimination table completed (all N=100, vs baseline train-fit margin 13.40)
+Depth 18/9 (287M) 13.43 | enc-only 13.38 | view-only 13.42 | FFN x8 (322M) 13.35 | input-head MLP
+13.43 | log-scale input 13.43 — **all exactly flat**. From-scratch untrainable at any width (LPIPS
+~0.092 attractor; only intact pretrained inits escape; 256-ramp required for any damaged init).
+What DID move fit: **fg-weighted loss 11.77** and **cosine-cycle restarts**: 30k→60k→90k steps =
+13.40→12.26→11.48, IDENTICAL for 195M and 287M at every point (capacity dead at all budgets);
+decelerating toward an extrapolated ~10 dB optimization asymptote.
+
+### Tomatoes rebuilt with the modern pipeline (219k-Gaussian real scan, 11x prune)
+Recovery lifts the ceiling 29.61 → **46.05 dB** — its biggest validated win; the June "20k can't
+hold real scans" cap was pruning quality, not representation. 4-way (same rec input to both
+models): GT | rec-GT 46.05 | **plain V17 32.44** | **overfit 53.02** (train views).
+
+### THE KEYSTONE: the ~30 dB reading ceiling (novel-view overfit probe, user-suggested)
+Overfit on train views 52.8 dB; on NOVEL views **29.9 dB while the input holds 44.9 dB at those
+same angles**. June's 30.5-vs-29.7 was input-starved and ambiguous; now input +15 dB → output +0.
+Convergence across regimes: overfit-novel 29.9 ≈ V17-on-tomatoes 32.4 ≈ general-model 30.9.
+**Reading scenes from tokens caps at ~30 dB regardless of training regime, data, capacity,
+optimization, conditioning, or input quality. Weights-recall (train views, N=1) bypasses it.**
+The bottleneck is the cross-attention readout (ray tokens must approximate projection+occlusion
+with learned dot-products; rasterization does it exactly — why rec-GT is flat at ~45-46).
+
+### NEXT ARCHITECTURE DIRECTION (flagged for after the codec work): geometry-biased cross-attention
+Add computed projection proximity as a zero-init-gated bias on view-transformer attention logits
+(camera-space positions already available as gaussians_view_tf). Warm-safe by construction;
+falsifiable on the tomatoes-novel-view harness (prediction: 30 → toward 45). Alternatives ranked:
+projection-restricted top-k keys; splat-then-refine hybrid (rasterized canvas as conditioning);
+transmittance/occlusion bias. See session notes 2026-08-13.
+
+### IN FLIGHT: tomato "neural codec" overfit (branch exp/tomato-codec)
+Rationale (user): a per-scene model that beats rasterizing its own compressed splat on EVERY view
+is a useful artifact. Train = 200 RANDOMIZED views (az/el free, radius 1.35-2.15 zoom) targeted on
+full-splat renders, input = recovered 20k. Eval = disjoint random views + radius EXTRAPOLATION
+(1.15 / 2.45) so view-interpolation cannot masquerade as reading. Jobs 31272109 (datagen) →
+31272110 (train, Sagie 4x; no idle 8-GPU killable at submit). Gate: novel-view PSNR vs rec-GT 46.
+
+## 2026-08-13..16 — the CODEC arc: view coverage is a lever; near-parity with rasterization at N=1
+
+### The reading-ceiling revision (codec v1, 200 randomized views incl. zoom 1.35-2.15)
+Novel-view (in-range) 39.6 dB vs the 14-view overfit's 29.9 — **the "~30 dB reading ceiling" was
+substantially VIEW SPARSITY**, not a hard readout limit. But zoom EXTRAPOLATION collapsed
+(close 27.0 / far 27.4 vs rec-GT 38.7/45.8): the model learns the covered view MANIFOLD, not a
+camera-independent object. 0/40 views beat rec-GT.
+
+### v2 (500 views, radius 1.05-2.55 = eval interior): zoom collapse GONE
+40.7 / 36.1 / 42.0 (rand/close/far) — close +9.1, far +14.6 purely from radius coverage in
+training. First 3 individual novel-view wins over rec-GT.
+
+### v3 (1500 views + 2nd cosine cycle): NEAR-PARITY
+**42.38 / 38.60 / 43.83 vs rec-GT 44.00 / 38.66 / 45.79** — close-range statistical parity
+(-0.06 dB, wins 5/8); 11/40 views beat rec-GT overall; far-set LPIPS BETTER than rec-GT.
+Trajectory 39.6→40.7→42.4 not yet bent. Strips: data_external/tomatoes/renders/codec*_verdict*.
+User rationale: a per-scene model beating rasterization of its own compressed splat = useful
+artifact (neural codec for single Gaussian scenes). Remaining ~1.6-2.0 dB: more views/cycles
+(brute) vs geometry-biased attention (mechanistic) — direction call for Sagie.
+
+### IN FLIGHT: the codec method at N=10 (jobs 31286027→28→29→30, branch exp/tomato-codec)
+150 random views/object x the 10 nested objects (full-splat targets from the retained full_h5s),
+2 cycles = 60k steps; eval = the standard orbit views, which are NOVEL for this model. Question:
+does the coverage lever survive weight sharing? Ladder refs: N=10 ctrl train-view fit 5.72;
+reading regime ~30; codec-at-N=1 novel 42.4. If it transfers -> view-dense supervision (free via
+rasterization) joins the V19 recipe; if not -> coverage was substituting for per-object capacity
+and geometry-biased attention inherits the burden.
+
+### Standing V19 recipe facts (unchanged): fg-weighted loss + multi-cycle schedule; architecture
+changes all flat at N=100; geometry-biased cross-attention = flagged next architectural probe.
+
+### LATE-READ VERDICT (2026-08-16): fg-loss STACKS with cycling
+expand-r2+fg (60k steps + fg-weighted loss): train-fit margin **10.04 dB** — best of the campaign
+(vs 11.48 for 90k plain cycles, 11.77 for fg alone at 30k). The two validated levers are additive.
+Heldout 18.44 (vs 17.93): at fixed N=100 the extra fit is memorization-flavored — full-N behavior
+is the V19 question. V19 recipe: fg + multi-cycle, confirmed compound.
