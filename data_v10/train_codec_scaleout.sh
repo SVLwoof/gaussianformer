@@ -34,10 +34,11 @@ REN=experiments/overfit/data/codec_scaleout/$SCENE/renders
 SEED=checkpoints_v18_256/phase2_epoch_30.pt
 SAVE=checkpoints_codec_so_${SCENE}${CYCLE2:+_r2}
 if [ -n "$CYCLE2" ] && [ ! -d checkpoints_codec_so_${SCENE}_r2 ]; then
-  SEED_OVERRIDE=checkpoints_codec_so_${SCENE}/phase2_epoch_27.pt
+  SEED_OVERRIDE=checkpoints_codec_so_${SCENE}/phase2_epoch_${C1_FINAL:-27}.pt
 fi
-EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=9
-echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs (1125 steps/epoch, 8xbs1), node=$(hostname) sm_${ARCH}"
+NPROC=${NPROC:-8}
+EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-9}
+echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs, ${NPROC}xbs1 ($((9000/NPROC)) steps/epoch), node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
 p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )
@@ -49,7 +50,7 @@ else
   RESUME_ARG=(--init_from $SEED_USE); echo "INIT from $SEED_USE"
 fi
 
-uv run --no-sync torchrun --standalone --nproc_per_node=8 -m training.train \
+uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train \
   --gaussian_h5_dir $GH5 --renders_dir $REN \
   --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders \
   --save_dir $SAVE --batch_size 1 --resolution 512 \
