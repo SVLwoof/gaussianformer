@@ -30,7 +30,11 @@ class GaussianRenderDataset(Dataset):
         max_samples: int | None = None,
         augment_rotation: bool = False,
         views_per_epoch: int | None = None,
+        log_scale_input: bool = False,
     ):
+        # log10(scale)+3: median scale ~0.004 spans ~3 decades in a sliver of the raw input
+        # range; log spreads it to O(1) (0.004 -> 0.6, 0.1 -> 2). Must match eval-side loading.
+        self.log_scale_input = log_scale_input
         self.gaussian_h5_dir = Path(gaussian_h5_dir)
         self.renders_dir = Path(renders_dir)
         self.resolution = resolution
@@ -149,6 +153,8 @@ class GaussianRenderDataset(Dataset):
             fov = np.array(f["fov"], dtype=np.float32)   # [num_views]
 
         # Assemble 14-dim Gaussian tensor
+        if self.log_scale_input:
+            scales = np.log10(np.clip(scales, 1e-8, None)) + 3.0
         gaussians = np.concatenate([means, scales, rotations, colors, opacities], axis=-1)
         mask = np.ones(gaussians.shape[0], dtype=np.bool_)
 

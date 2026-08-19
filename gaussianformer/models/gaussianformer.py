@@ -20,6 +20,15 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         # RoPE stays ON for both pe_types: the RenderFormer backbone is RoPE-pretrained.
         self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
+        if self.config.input_mlp_hidden:
+            # Residual input-head MLP, zero-init output -> exactly the baseline at init.
+            self.gaussian_encoder_mlp = nn.Sequential(
+                nn.Linear(self.config.latent_dim, self.config.input_mlp_hidden),
+                nn.GELU(),
+                nn.Linear(self.config.input_mlp_hidden, self.config.latent_dim),
+            )
+            nn.init.zeros_(self.gaussian_encoder_mlp[-1].weight)
+            nn.init.zeros_(self.gaussian_encoder_mlp[-1].bias)
         self.rope_dim = self.config.pos_pe_num_freqs
 
         if self.config.pe_type == 'nerf':
@@ -97,10 +106,16 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             rest = gaussians[..., 6:14]  # quat(4) + color(3) + opacity(1)
             log_scale = torch.log(scale.clamp(min=1e-6))
             feat = torch.cat([self.gaussian_pos_pe(pos), log_scale, rest], dim=-1)
-            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(feat))
+            e = self.gaussian_encoder(feat)
+            if self.config.input_mlp_hidden:
+                e = e + self.gaussian_encoder_mlp(e)
+            gaussian_emb = self.gaussian_encoder_norm(e)
             tokens.append(self.gaussian_token + gaussian_emb)
         else:  # rope
-            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(gaussians))
+            e = self.gaussian_encoder(gaussians)
+            if self.config.input_mlp_hidden:
+                e = e + self.gaussian_encoder_mlp(e)
+            gaussian_emb = self.gaussian_encoder_norm(e)
             tokens.append(self.gaussian_token + gaussian_emb)
 
         seq = torch.cat(tokens, dim=1)

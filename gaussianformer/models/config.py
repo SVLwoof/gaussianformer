@@ -17,6 +17,8 @@ class GaussianFormerConfig:
     """The number of layers in the transformer."""
     num_heads: int = 6
     """The number of heads in the transformer."""
+    input_mlp_hidden: int = 0
+    """Hidden dim of the residual input-head MLP (0 = single-linear baseline)."""
     dim_feedforward: int = 768 * 4
     """The dimension of the feedforward network in the transformer."""
     num_register_tokens: int = 16

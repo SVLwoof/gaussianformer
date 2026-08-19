@@ -33,7 +33,9 @@ export PATH="$HOME/.local/bin:$PATH"
 # ~5 min compile per job and cannot race anything.
 ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 SHARED="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
-export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_job${SLURM_JOB_ID}"
+# node-local /tmp, NOT ~/.cache: the volume backing ~/.cache (tomhope) hit 100% and evals died
+# on makedirs. /tmp is per-node, faster, and freed on reboot; seed still read from the shared dir.
+export TORCH_EXTENSIONS_DIR="${TMPDIR:-/tmp}/torch_ext_job${SLURM_JOB_ID}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 # Seed from the shared per-arch cache if it holds a complete build, to skip the compile.
 if [ -f "$SHARED/gsplat_cuda/gsplat_cuda.so" ]; then
