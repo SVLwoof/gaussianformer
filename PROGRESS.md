@@ -1873,6 +1873,8 @@ gain).
 
 ## 2026-07-23 — V17 finished; NEW BEST MODEL; skull-fidelity ceiling; scale-up prep + paper renders
 
+> **[CORRECTION 2026-08-06]** The "unseen object" evaluations in this and earlier V16/V17 sections were measured on objects that were in the models' TRAINING set (`dataset.py` globs the whole h5 dir). True held-out mean for V17 is **30.29 dB**. The "generalisation gap" framing is also superseded: the blur is UNDER-fitting (capacity-limited memorisation). See the 2026-08-02..05 and 2026-08-05..07 sections.
+
 ### V17 completed — `checkpoints_v17_512lp/phase2_epoch_36.pt` is the new best model
 Two-stage chain, all 8×g4 killable, seeded from V15's known-good phase1:
 - **Stage A** (`train_v17_256.sh`) — 60 phase-2 epochs @256, pure log-L1. Converged flat at
@@ -2090,3 +2092,73 @@ blur, not data quantity. Remaining candidates, discriminated by the next experim
 - **ROUTING**: cross-attention can't resolve which of 20k Gaussians land in which 8×8 ray patch
   (rasterisation does this trivially by sort+splat — exactly why rec-GT is flat across detail).
   If wider models don't close the train-fit margin, this is it.
+
+## 2026-08-05..07 — THE CONTROL CAMPAIGN: the floor is CAPACITY
+
+Follow-up to the diagnosis arc: five controlled experiments that turned "architectural floor"
+from a diagnosis into a mechanism. All N=* runs share the nested subsets
+(1 ⊂ 10 ⊂ 100 ⊂ 1000, `data_v10/nsweep/`), the v18_256-ep30 init, 512+LPIPS(0.5), and equal
+optimizer steps unless stated; readout = FG-cropped margin vs the rec-GT ceiling on each run's
+OWN training objects (fit) + a common 300-object held-out set.
+
+### Training-code cleanup first (semantics-preserving, PR'd)
+`train.py`/`dataset.py`: EXR-resize corruption fixed, uint8 target re-quantization removed,
+`--max_samples` prefix bias → seeded subset, per-step `.item()` syncs → on-device accumulators,
+`--weight_decay`/`--fg_bg_weight`/`--latent_dim`/`--encoder_layers`/`--view_layers`/
+`--from_scratch` flags added. Same-node OLD/NEW bench: **identical 117.4 s/epoch** (sync removal
+is NOT a speedup at production shape — GPU-bound) with loss curves matching to 3 decimals.
+
+### Recipe controls: aug + weight decay are EXONERATED at scale
+| arm (N=100 unless noted) | train-fit margin | heldout margin |
+|---|---|---|
+| baseline (V17 recipe) | 13.40 | 17.93 |
+| N=10 baseline → aug off + wd 0 | 7.57 → **5.72** | 20.47 → 20.55 |
+| N=100 aug off + wd 0 | **13.13** | 17.90 |
+| N=100 **fg-weighted loss** (`--fg_bg_weight 0.05`) | **11.77** | **17.66** |
+
+- The aug/wd effect is −1.85 dB at N=10 but **−0.27 dB at N=100** — a small-N artifact
+  (rotation-equivariance is a big relative burden on 10 objects). Not a lever at scale; keep both.
+- **fg-weighted loss is the only intervention improving BOTH columns** (−1.63 fit, +0.27
+  heldout; eval LPIPS unchanged → real pixel accuracy). The loss had the same whole-image
+  dilution as the metric we already distrusted: objects are 2–7% of pixels, and the log-L1 val
+  "floors" sit at the 8-bit target quantization noise. **Production-recipe candidate.**
+- N=10 ctrl also exposed a perceptual/pixel split: train LPIPS reaches ~N=1 level (0.0011)
+  while PSNR stays 5.7 dB short — fits perceptually, not pixel-precisely (coherence story).
+
+### From-scratch is UNTRAINABLE — RenderFormer pretraining is load-bearing
+Width pair (d768-scratch control vs d384-scratch, depth preserved): both arms — straight to 512
+AND with a matched 256 log-L1 warmup — park at **LPIPS ≈ 0.092–0.093** and never move (d384 ran
+its full 600-epoch schedule flat; from-scratch 256 converges only to log 0.013 vs warm 0.0008).
+**The 0.092 plateau is a degenerate attractor** that swallowed four inits this week; only intact
+pretrained weights escape it, and the 512+LPIPS objective supplies no useful gradient until the
+output is roughly right. Width capacity comparison therefore unanswerable from scratch — but
+"pretraining is structural, not convenience" is a finding.
+
+### Depth-pruned probe: CAPACITY BINDS
+d=768 kept (weights load), enc 12→6 + view 6→4 (**DPT taps the LAST 4 view layers — view depth
+≥4 is an architectural minimum**; take-1 died on the unpack), warm layer-drop init
+(`make_pruned_ckpt.py`, even layers, 114.6M vs 194.9M), 256-recovery stage R (escapes the
+attractor; recovered to 0.0011 vs intact 0.0008 → init damage bounded small), then the exact
+N=100 baseline schedule:
+**train-fit margin 17.23 vs 13.40 (−40% params → −3.8 dB fit), heldout 22.75 vs 17.93.**
+
+### N=1 controls (user-requested): anchors validated, and the model BEATS the ceiling
+Under the CURRENT recipe (aug ON, wd ON, 30k steps): objav scene_0387 margin **−2.15 dB**
+(48.47 vs rec-GT 46.31, LPIPS 0.001 — it corrects pruning artifacts toward true GT; **rec-GT is
+an information bound, not a pixel bound**); tomatoes train LPIPS 0.00007 ≈ the June probe.
+Heldout collapses to 19 dB (catastrophic forgetting, as expected).
+
+### SYNTHESIS — the mechanism of the 14 dB floor
+- fit vs **N** at fixed capacity: **−2.15 → 7.57 → 13.40 dB** (N=1→10→100)
+- fit vs **capacity** at fixed N=100: **13.40 → 17.23 dB** (194.9M → 114.6M)
+
+Both axes move together: GaussianFormer is a **capacity-limited memorizer** — per-object
+fidelity tracks objects-per-parameter. That is why V17 under-fits its own training set by 14 dB
+and why 2× data (V18) could never have helped. **V19 levers, evidence-backed:** (1) more
+capacity via warm depth-EXPANSION (layer duplication; width is closed — scratch untrainable);
+(2) fg-weighted loss; (3) keep aug/wd, keep the pretrained init.
+
+### Infra (memory + scripts updated)
+khan-01/02 insta-fail all jobs at prolog (0–1 s, no output file) while sinfo reports healthy —
+excluded everywhere, report to admins. Killable preemptions register FAILED (not requeued) —
+resubmit manually; checkpoint cadence must beat the preemption interval or a run thrashes.
