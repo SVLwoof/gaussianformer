@@ -2343,3 +2343,31 @@ remaining losses are all small; the grazing plate view is down to -1.2 (from -3.
 The tomato squeeze directive (higher views-won) is satisfied; per-object codec DECISIVELY
 beats rasterizing its own compressed splat. Attention shifts to the 10-object scale-out
 fleet (running under the 2-slot GPU throttle per user request; first verdicts pending).
+
+## 2026-08-19: branch/PR hygiene — the campaign stack is now reviewable
+Local `main` was stale at the public-release commit (87fce5e) while origin/main had already
+merged PR #5 (data/v10-scaleup). Measured against the *real* origin/main (8109ae6) the whole
+experiment stack is **42 commits / ~3.2K insertions**, not the ~310K the stale baseline
+implied — the giant diff was entirely data_v10/object_list_train.json (240K lines), already
+upstream. Local main fast-forwarded.
+
+The nine branches are strictly nested (each contains its predecessors), so they were opened
+as a **stacked PR chain**, each based on the one below — merge in numeric order:
+  #6  exp/capacity-controls    -> main            N=100 memorization control (aug off, wd 0)
+  #7  exp/fg-weighted-loss     -> #6              --fg_bg_weight; 13.40 -> 11.77 (surviving lever)
+  #8  exp/width-capacity       -> #7              --latent_dim/--from_scratch; width FLAT
+  #9  exp/depth-capacity       -> #8              layer-pruned probes + N=1 controls; depth FLAT
+                                                  (+ real fix: view transformer needs >=4 layers,
+                                                   DPT taps the last 4)
+  #10 docs/campaign-log        -> #9              campaign log; corrects superseded claims
+  #11 exp/v19-depth-expansion  -> #10             growth arms FLAT; r2 gain was steps not capacity;
+                                                  tomato rec-20k rebuild (ceiling 29.61 -> 46.05)
+  #12 exp/tomato-codec         -> #11             codec v1-v3 (near-parity) + N=10 NEGATIVE
+  #13 exp/geom-bias-attn       -> #12             --geom_bias FALSIFIED (gates ~0); bit-exact off
+`exp/tomato-codec4` (codec4/codec5 + the 10-object scale-out, 11 commits) is pushed as a
+backup but deliberately NOT PR'd yet — the fleet is still producing verdicts on it.
+
+**Repo fix while doing this:** the 2026-08-18 storage cleanup had deleted *tracked source*
+under data_v2/, data_v9/ and gaussian_h5s/ (the bulk data there was gitignored, the scripts
+and demo h5s were not). Restored via `git checkout` — 142 MB, 25 files. Lesson: `rm -rf` on a
+data directory needs a `git status` check afterwards.
