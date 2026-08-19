@@ -373,6 +373,12 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--latent_dim", type=int, default=768,
+                        help="Transformer width (encoder + view transformer; FFNs scale 4x). "
+                        "Non-default widths cannot load RenderFormer weights -> use --from_scratch.")
+    parser.add_argument("--from_scratch", action="store_true",
+                        help="Random init (no RenderFormer transfer, no phase 1). Required for "
+                        "non-default --latent_dim; use with a matched from-scratch baseline.")
     parser.add_argument("--fg_bg_weight", type=float, default=1.0,
                         help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
                         "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
@@ -477,6 +483,10 @@ def main():
     from gaussianformer.models.gaussianformer import GaussianFormer
     gf_config = GaussianFormerConfig(
         pe_type=args.pe_type,
+        latent_dim=args.latent_dim,
+        dim_feedforward=args.latent_dim * 4,
+        view_transformer_latent_dim=args.latent_dim,
+        view_transformer_ffn_hidden_dim=args.latent_dim * 4,
     )
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
@@ -504,6 +514,10 @@ def main():
         if is_main_process():
             print(f"Warm-start (weights only) from {args.init_from} "
                   f"-> fresh Phase 2 fine-tune", flush=True)
+    elif args.from_scratch:
+        module = GaussianFormer(gf_config)
+        if is_main_process():
+            print(f"FROM SCRATCH: random init, latent_dim={args.latent_dim}", flush=True)
     else:
         module = transfer_weights(config.renderformer_model_id, gf_config)
 
@@ -519,7 +533,7 @@ def main():
     # DDP is constructed per phase, AFTER requires_grad is set. Freezing the backbone
     # before the wrap means DDP's reducer registers only the trainable encoder params,
     # so find_unused_parameters=False is correct (no Phase-1 crash, no corruption).
-    if resume_phase != "phase2" and args.init_from is None:
+    if resume_phase != "phase2" and args.init_from is None and not args.from_scratch:
         trainable_names = freeze_backbone(module)
         if is_main_process():
             print(f"Phase 1 trainable params: {trainable_names}", flush=True)
