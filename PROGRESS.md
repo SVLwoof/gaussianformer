@@ -2395,3 +2395,14 @@ ever measured.
   should be read as progress traces only, never as cross-object comparisons.
 - Dashboard updated: end-of-cycle points draw solid, mid-cycle points hollow, with a legend
   note (data_v10/codec_scaleout_dashboard.py).
+
+### Checkpoint cadence vs preemption window (2026-08-20)
+The ring and vase killables spent ~12 h making ZERO durable progress: the cluster was handing
+out slots shorter than their save intervals (9 ep ~3 h, 5 ep ~2.5 h), so every preemption
+discarded the whole slot's work. Neither had written a checkpoint since Aug 19.
+**Rule: save_interval must be shorter than the typical preemption window, and must DIVIDE the
+epoch count** (else the final epoch gets no numbered checkpoint — 27 admits 1/3/9/27, 20
+admits 1/2/4/5/10/20). Rebuilt both chains: ring saves every 3 ep (~1 h, resumes from ep 18),
+vase every 2 ep (~1 h on 6 GPUs, resumes from ep 15). Mid-cycle evals dropped — per the
+warm-restart finding only end-of-cycle checkpoints are comparable, so each cycle now has
+exactly one eval. Jobs: ring 31333331/33, vase 31333335/37.
