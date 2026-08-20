@@ -16,7 +16,9 @@ import h5py
 
 SCENE = os.environ["SCENE"]
 CKPT = Path(os.environ["CKPT"])
-TAG = os.environ.get("TAG") or f"{SCENE}_{CKPT.stem}"
+# Include the checkpoint DIR in the default tag: cycle 1 and cycle 2 both end at
+# phase2_epoch_27, so a scene+epoch tag silently overwrites the earlier cycle's verdict.
+TAG = os.environ.get("TAG") or f"{CKPT.parent.name.replace('checkpoints_codec_so_', '')}_{CKPT.stem}"
 D = Path(f"experiments/overfit/data/codec_scaleout/{SCENE}")
 device = "cuda"; RES, FOV = 512, 45.0
 
