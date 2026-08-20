@@ -2406,3 +2406,32 @@ admits 1/2/4/5/10/20). Rebuilt both chains: ring saves every 3 ep (~1 h, resumes
 vase every 2 ep (~1 h on 6 GPUs, resumes from ep 15). Mid-cycle evals dropped — per the
 warm-restart finding only end-of-cycle checkpoints are comparable, so each cycle now has
 exactly one eval. Jobs: ring 31333331/33, vase 31333335/37.
+
+## 2026-08-20: apple cycle 2 — FLAT, and the "simple object" premise inverts
+Apple (scene_0959) end-of-cycle results: **c1 −2.18 dB / 6-of-40 → c2 −2.14 dB / 7-of-40**.
+A full second 30k-step cycle bought +0.04 dB and one view. Cycles have SATURATED for this
+object, unlike the tomato ladder where every cycle paid (−1.38 → +0.36 → +0.97 → +1.30).
+
+**Why — the bar, not the model.** Per set the apple's c2 is model 48.00/45.64/49.26 against
+rec-GT **50.17/46.03/53.07**. Compare the finished tomato: model 44.88/41.89/46.40 against
+rec-GT 44.00/38.66/45.79. **The apple's model is ~3 dB BETTER in absolute PSNR than the
+tomato's and still loses**, because a smooth simple object is rasterized almost perfectly by
+its recovered 20k splat, putting rec-GT ~6 dB higher.
+
+So "beat rec-GT" difficulty is governed by **how well the compressed splat represents the
+object**, not by how hard the object is to render:
+- SIMPLE/smooth (apple): model renders it superbly (48 dB) but rec-GT is near-perfect (50) → hard.
+- RICH/detailed (plate, sandal, figure at ~−8.5): rec-GT is beatable in principle, but the
+  MODEL cannot yet render the detail → hard for the opposite reason.
+- TOMATOES: the sweet spot — a real scan detailed enough to handicap the 20k splat (rec-GT
+  44.0) yet learnable to 44.9 with 180k steps + 9000 views.
+
+This reframes the scale-out: the tomato win may sit in a middle band rather than generalising
+uniformly, and the simple-object case study answers its own question — a simple object is NOT
+the quick win we assumed. Open question for the remaining objects: where does the crossover
+band actually lie, measured as (rec-GT quality) vs (model attainable PSNR)?
+
+**Bug fixed while reading this:** the eval's default TAG was scene+epoch, so cycle-2 verdicts
+silently OVERWROTE cycle-1's (both end at phase2_epoch_27). Cycle-1 apple JSON/PNG were lost
+and are being regenerated with cycle-qualified tags; the numbers themselves survived in this
+log. Tag now includes the checkpoint dir (data_external/codec_scaleout_eval.py).
