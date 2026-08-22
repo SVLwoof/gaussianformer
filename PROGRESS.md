@@ -2435,3 +2435,19 @@ band actually lie, measured as (rec-GT quality) vs (model attainable PSNR)?
 silently OVERWROTE cycle-1's (both end at phase2_epoch_27). Cycle-1 apple JSON/PNG were lost
 and are being regenerated with cycle-qualified tags; the numbers themselves survived in this
 log. Tag now includes the checkpoint dir (data_external/codec_scaleout_eval.py).
+
+## 2026-08-22: cycle-2 seed bug — empty _r2 dir cold-started c2 from v18
+The c2 seed check tested `[ ! -d ..._r2 ]`. A preempted first slot mkdir's the r2 dir
+before saving anything, so the requeue found the dir, skipped SEED_OVERRIDE, and
+cold-started from v18_256 — i.e. re-ran cycle 1 labelled as cycle 2. Bit **plate 0262**
+(its r2 ep9, quarantined as TAINTED_*.pt.bad) and **sandal 0772** (caught at ~1.2k steps,
+requeued). Fix (ca42da4): cycle 2 always sets SEED_OVERRIDE (the resume glob still wins
+when checkpoints exist), and default save_interval 9→3 per the preemption-cadence rule.
+0959/0874/1342 r2 runs predate the empty-dir path and their c2 numbers improved over c1 —
+lineages clean.
+
+**Fleet standing (end-of-cycle only, view-weighted avg / views won):**
+apple −2.14 7/40 (c2, SATURATED) · vase −5.49 0/40 (c2) · boxing ring −7.18 3/40 (c2) ·
+plate −8.61 0/40 (c1) · sandal −8.21 0/40 (c1) · figure −8.80 0/40 (c1).
+No scale-out object beats rec-GT yet; cycles pay ~+1 dB on the rich objects (ring c1→c2
+−8.13→−7.18, vase −6.66→−5.49). 0031/0223/1423/1223 still user-held (2-slot throttle).
