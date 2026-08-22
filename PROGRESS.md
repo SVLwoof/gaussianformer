@@ -2451,3 +2451,14 @@ apple −2.14 7/40 (c2, SATURATED) · vase −5.49 0/40 (c2) · boxing ring −7
 plate −8.61 0/40 (c1) · sandal −8.21 0/40 (c1) · figure −8.80 0/40 (c1).
 No scale-out object beats rec-GT yet; cycles pay ~+1 dB on the rich objects (ring c1→c2
 −8.13→−7.18, vase −6.66→−5.49). 0031/0223/1423/1223 still user-held (2-slot throttle).
+
+## 2026-08-22: two real-scan objects added — octopus & crocs slipper (superspl.at, CC BY 4.0)
+Octopus `f9063eda` (1.84M g, fine sucker detail + Rubik's cube color patch) and "new_gopro"
+`6bc0df7c` (actually a fuzzy Crocs slipper, 1.17M g, high-freq fleece texture). Found the
+scriptable download path: the viewer's SOG bundle is public on CloudFront, and the site's
+official PLY download is generated FROM it (MD5-identical) — no lossless original exists.
+Both need the tomato flip_x (superspl.at gravity-down); probes confirmed. New generic prep
+(data_external/prep_external_codec.{py,sh}): raw PLY -> normalize -> 20k prune+recovery ->
+codec_scaleout layout (seed bases 200000/200100). Prep jobs 31351309/10; training chains
+submitted HELD per the 2-slot throttle: octopus c1 31351312 / c2 31351314, gopro c1
+31351316 / c2 31351318, end-of-cycle evals chained (31351313/15/17/19).
