@@ -12,8 +12,8 @@
 # One scale-out object's codec training (2026-08-18 locked 10-object list). Cold start
 # from the generalist v18_256 seed (unlike the tomato lineage) -- whether that suffices
 # IS part of the scale-out question. 9000 views (uniform+grazing), 8xbs1, ~30k-step
-# cosine cycles; save every 9 epochs (keep 3) so the rec-GT crossing point can be
-# located at sub-cycle granularity, esp. for the SIMPLE objects (apple/vase).
+# cosine cycles; save every 3 epochs (keep 3) -- cadence must beat the preemption
+# window (~1h), and 3 divides 27 so the final epoch gets a numbered checkpoint.
 #   sbatch --export=SCENE=scene_0959 data_v10/train_codec_scaleout.sh          # cycle 1
 #   sbatch --export=SCENE=scene_0959,CYCLE2=1 data_v10/train_codec_scaleout.sh # cycle 2
 
@@ -33,11 +33,14 @@ GH5=experiments/overfit/data/codec_scaleout/$SCENE/h5s
 REN=experiments/overfit/data/codec_scaleout/$SCENE/renders
 SEED=checkpoints_v18_256/phase2_epoch_30.pt
 SAVE=checkpoints_codec_so_${SCENE}${CYCLE2:+_r2}
-if [ -n "$CYCLE2" ] && [ ! -d checkpoints_codec_so_${SCENE}_r2 ]; then
+# Seed cycle 2 from cycle 1's final whenever there is nothing to resume from. Testing
+# the DIR here (not its contents) cold-started 0262/0772 c2 from v18 after a preemption
+# that had mkdir'd the r2 dir but not yet saved a checkpoint (2026-08-22).
+if [ -n "$CYCLE2" ]; then
   SEED_OVERRIDE=checkpoints_codec_so_${SCENE}/phase2_epoch_${C1_FINAL:-27}.pt
 fi
 NPROC=${NPROC:-8}
-EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-9}
+EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-3}
 echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs, ${NPROC}xbs1 ($((9000/NPROC)) steps/epoch), node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
