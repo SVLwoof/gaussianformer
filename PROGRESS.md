@@ -2462,3 +2462,14 @@ Both need the tomato flip_x (superspl.at gravity-down); probes confirmed. New ge
 codec_scaleout layout (seed bases 200000/200100). Prep jobs 31351309/10; training chains
 submitted HELD per the 2-slot throttle: octopus c1 31351312 / c2 31351314, gopro c1
 31351316 / c2 31351318, end-of-cycle evals chained (31351313/15/17/19).
+
+## 2026-08-23: c2 sweep COMPLETE — rich objects converge to −7.0…−7.4, none crosses
+All six active objects now have two full 30k-step cycles (end-of-cycle verdicts, weighted
+avg / won-of-40): plate **−6.99** 0 · sandal **−7.13** 0 · ring −7.18 3 · figure **−7.37**
+0 · vase −5.49 0 · apple −2.14 7 (saturated). Cycle-2 gains: plate +1.62, figure +1.43,
+vase +1.17, sandal +1.08, ring +0.95, apple +0.04 — NO decay yet on rich objects, and the
+four rich ones converged to a 0.4 dB band from an 0.7 dB-wide c1 spread. The quota burst
+(user-approved, then rescinded: lab strained, killable-only until further notice) ran the
+three c2s in ~1 day. Proposed next: c3 on vase+ring to measure cycle-gain decay before
+concluding whether cycles can close the gap or the band is bandwidth-limited.
+Octopus c1 (killable, epona-02) training; slipper c1 held.
