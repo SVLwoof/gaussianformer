@@ -11,6 +11,7 @@ Usage:
 import argparse
 import os
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
@@ -206,6 +207,7 @@ def run_phase(
     train_sampler: DistributedSampler | None = None,
     start_epoch: int = 0,
     keep_last_n: int | None = None,
+    grad_accum: int = 1,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
@@ -231,29 +233,39 @@ def run_phase(
         epoch_steps = 0
         t0 = time.time()
 
-        for batch in dataloader:
+        optimizer.zero_grad()
+        for micro, batch in enumerate(dataloader):
             b = {k: batch[k].to(device, non_blocking=True)
                  for k in ("gaussians", "mask", "c2w", "fov", "target")}
 
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                pred = training_forward(
-                    model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
-                    config.resolution, model_config,
-                )
-                loss, log_term, lpips_term = compute_loss(
-                    pred, b["target"], log_loss_weight, lpips_loss_weight, device,
-                    fg_bg_weight=fg_bg_weight,
-                )
-
-            optimizer.zero_grad()
-            loss.backward()
-            if config.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
-            optimizer.step()
+            # Gradient accumulation: `grad_accum` micro-batches per optimizer step, so
+            # world_size x grad_accum x batch_size is the effective batch (e.g. 4 GPUs x 2 == 8 GPUs x 1).
+            # DDP all-reduce is skipped on non-final micro-steps via no_sync().
+            is_last_micro = (micro + 1) % grad_accum == 0
+            sync_ctx = (model.no_sync() if (grad_accum > 1 and not is_last_micro
+                                            and hasattr(model, "no_sync")) else nullcontext())
+            with sync_ctx:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    pred = training_forward(
+                        model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
+                        config.resolution, model_config,
+                    )
+                    loss, log_term, lpips_term = compute_loss(
+                        pred, b["target"], log_loss_weight, lpips_loss_weight, device,
+                        fg_bg_weight=fg_bg_weight,
+                    )
+                (loss / grad_accum).backward()
 
             with torch.no_grad():
                 epoch_sums += torch.stack([loss.detach(), log_term.detach(), lpips_term.detach()])
             epoch_steps += 1
+            if not is_last_micro:
+                continue
+
+            if config.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
+            optimizer.step()
+            optimizer.zero_grad()
             global_step += 1
 
             if global_step % log_interval == 0 and is_main_process():
@@ -353,6 +365,8 @@ def main():
     parser.add_argument("--phase2_epochs", type=int, default=TrainingConfig.phase2_epochs)
     parser.add_argument("--phase2_lr", type=float, default=TrainingConfig.phase2_lr)
     parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--grad_accum", type=int, default=1,
+                        help="Micro-batches per optimizer step (effective batch = world x batch_size x grad_accum)")
     parser.add_argument("--max_samples", type=int, default=None, help="Limit dataset to N samples (for quick experiments)")
     parser.add_argument("--resume", type=Path,
                         help="Escape hatch for crash recovery: resume from a phase1/phase2 "
@@ -584,7 +598,7 @@ def main():
             config.log_interval, args.save_interval,
             args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
             model_config, global_step, val_dataloader=val_dataloader,
-            train_sampler=train_sampler, start_epoch=phase1_start,
+            train_sampler=train_sampler, start_epoch=phase1_start, grad_accum=args.grad_accum,
             keep_last_n=args.keep_last_n,
         )
         del p1  # drop the Phase-1 DDP wrapper; its reducer hooks go inert once unused
@@ -613,7 +627,7 @@ def main():
         config.log_interval, args.save_interval,
         args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
         model_config, global_step, val_dataloader=val_dataloader,
-        train_sampler=train_sampler, start_epoch=phase2_start,
+        train_sampler=train_sampler, start_epoch=phase2_start, grad_accum=args.grad_accum,
         keep_last_n=args.keep_last_n,
     )
 

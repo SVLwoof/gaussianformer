@@ -40,8 +40,11 @@ if [ -n "$CYCLE2" ]; then
   SEED_OVERRIDE=checkpoints_codec_so_${SCENE}/phase2_epoch_${C1_FINAL:-27}.pt
 fi
 NPROC=${NPROC:-8}
+# Effective batch is pinned to 8 samples/step: fewer GPUs -> more grad accumulation.
+# Submit 4-GPU variant with: sbatch --gres=gg:g4:4 -c 16 --export=SCENE=...,NPROC=4 <script>
+GRAD_ACCUM=${GRAD_ACCUM:-$((8/NPROC))}
 EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-3}
-echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs, ${NPROC}xbs1 ($((9000/NPROC)) steps/epoch), node=$(hostname) sm_${ARCH}"
+echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM} ($((9000/NPROC/GRAD_ACCUM)) steps/epoch), node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
 p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )
@@ -56,7 +59,7 @@ fi
 uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train \
   --gaussian_h5_dir $GH5 --renders_dir $REN \
   --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders \
-  --save_dir $SAVE --batch_size 1 --resolution 512 \
+  --save_dir $SAVE --batch_size 1 --grad_accum $GRAD_ACCUM --resolution 512 \
   --pe_type rope --augment_rotation \
   --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
   --save_interval $SAVE_INT --keep_last_n 3 \
