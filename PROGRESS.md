@@ -2482,3 +2482,21 @@ steps. Fleet objects sat at −8…−12 at the same budget. Cause per the rec-G
 (fleet: 43–53) — while the model's 34.9/29.9/38.0 absolute is unbothered by scan density.
 Crossover band reframed: not "tomato-like objects" but "scans dense enough to break their
 own 20k compression." c2 released (killable). Slipper (~60×) is the obvious next test.
+
+## 2026-08-24 (eve): OCTOPUS c2 −1.68 — first regime crossing; 4-GPU accum recipe validated
+Octopus c2 (31351314, 60k steps, seeded from c1 ep27): rand −2.43 (1/24) / close **+0.07
+(4/8)** / far −1.16 (0/8) = **−1.68 avg, 5/40** (c1 −2.44, gain +0.76). Close-range is the
+first eval regime on any scale-out object with a positive delta. Gain per cycle is smaller
+than the rich objects' +0.95…+1.62 — expected since it started nearer the bar.
+
+**4-GPU runs.** Full 8-GPU killable nodes are rare (only firefoot-01/khan-01 free, both
+inside the debian13 upgrade reservation 5787), 4-free slots exist. bs=2 is out (OOM @512 on
+45 GB, no speedup @256 — attention is compute-bound), so `training/train.py` gained
+`--grad_accum` (DDP no_sync on inner micro-steps) and the scale-out script pins the
+effective batch to 8 via `GRAD_ACCUM=8/NPROC` (c41f2a9, 77f4109 adds SAVE_OVR). Sanity
+(31374203, octopus, 4×L40S×accum2, same schedule): ep1 0.015988 / ep2 0.011319 vs the 8×A40
+c1's 0.016186 / 0.011448 — ~1% match. Wall time 2210 s/epoch vs 2257 s on 8×A40 (L40S ≈ 2×
+A40), so 4×L40S costs nothing vs 8×epona. Slipper chain resubmitted as 4-GPU killable:
+c1 31374518 (running epona-02) → eval 31374519 → c2 31374520 → eval 31374521.
+Cluster upgrades to debian13 on 2026-10-05 (test via --reservation=5787); smoke test with an
+isolated venv pending. Standing policy: killable only.
