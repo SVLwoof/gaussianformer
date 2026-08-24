@@ -2473,3 +2473,12 @@ four rich ones converged to a 0.4 dB band from an 0.7 dB-wide c1 spread. The quo
 three c2s in ~1 day. Proposed next: c3 on vase+ring to measure cycle-gain decay before
 concluding whether cycles can close the gap or the band is bandwidth-limited.
 Octopus c1 (killable, epona-02) training; slipper c1 held.
+
+## 2026-08-24: OCTOPUS c1 — best cold-start in the campaign: −2.44 avg after ONE cycle
+First from-the-wild scan verdict (octopus f9063eda, 1.84M g → 20k rec = 92× compression):
+rand −3.18 (0/24) / close **−0.75** (1/8) / far −1.91 (0/8) = **−2.44 avg, 1/40** at 30k
+steps. Fleet objects sat at −8…−12 at the same budget. Cause per the rec-GT thesis: the
+92× squeeze wrecks the recovered splat — rec-GT bars 38.1/30.6/39.9 are the lowest yet
+(fleet: 43–53) — while the model's 34.9/29.9/38.0 absolute is unbothered by scan density.
+Crossover band reframed: not "tomato-like objects" but "scans dense enough to break their
+own 20k compression." c2 released (killable). Slipper (~60×) is the obvious next test.
