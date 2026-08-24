@@ -32,7 +32,7 @@ SCENE=${SCENE:?SCENE required, e.g. scene_0959}
 GH5=experiments/overfit/data/codec_scaleout/$SCENE/h5s
 REN=experiments/overfit/data/codec_scaleout/$SCENE/renders
 SEED=checkpoints_v18_256/phase2_epoch_30.pt
-SAVE=checkpoints_codec_so_${SCENE}${CYCLE2:+_r2}
+SAVE=${SAVE_OVR:-checkpoints_codec_so_${SCENE}${CYCLE2:+_r2}}
 # Seed cycle 2 from cycle 1's final whenever there is nothing to resume from. Testing
 # the DIR here (not its contents) cold-started 0262/0772 c2 from v18 after a preemption
 # that had mkdir'd the r2 dir but not yet saved a checkpoint (2026-08-22).
