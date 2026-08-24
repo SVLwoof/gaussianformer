@@ -24,8 +24,18 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 export PATH="$HOME/.local/bin:$PATH"
+# debian13 nodes (cluster upgrade 2026-10-05; test via --reservation=5787): isolated venv + caches,
+# driver libs live in /etc/lib64/nvidia (stale ld.so.cache), nvidia-smi absent -> arch via torch.
+EXT_TAG=
+if grep -q '^13' /etc/debian_version 2>/dev/null; then
+  export UV_PROJECT_ENVIRONMENT=/cs/labs/sagieb/shahaf_levy/venvs/gf-deb13
+  export UV_CACHE_DIR=/cs/labs/sagieb/shahaf_levy/uv_cache_deb13
+  export LD_LIBRARY_PATH=/etc/lib64/nvidia${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+  EXT_TAG=deb13_
+fi
 ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
-export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
+[ -n "$ARCH" ] || ARCH=$(uv run --no-sync python -c "import torch;print('%d%d'%torch.cuda.get_device_capability())" 2>/dev/null)
+export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_${EXT_TAG}sm${ARCH:-unknown}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 
 SCENE=${SCENE:?SCENE required, e.g. scene_0959}
