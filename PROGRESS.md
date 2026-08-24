@@ -2500,3 +2500,16 @@ A40), so 4×L40S costs nothing vs 8×epona. Slipper chain resubmitted as 4-GPU k
 c1 31374518 (running epona-02) → eval 31374519 → c2 31374520 → eval 31374521.
 Cluster upgrades to debian13 on 2026-10-05 (test via --reservation=5787); smoke test with an
 isolated venv pending. Standing policy: killable only.
+
+## 2026-08-25: debian13 reservation nodes put to work — 16 idle GPUs claimed (killable)
+The cluster upgrades to debian13-5787 on 2026-10-05; the upgraded test nodes (firefoot-01
+8×L40S, khan-01 8×RTX Pro 6000) sit idle behind `--reservation=5787`. Smoke test
+(`data_v10/deb13_smoke.sh`, isolated venv `/cs/labs/sagieb/shahaf_levy/venvs/gf-deb13`):
+first run failed "no NVIDIA driver" — the 595.80 user-space libs exist in
+`/etc/lib64/nvidia` but ld.so.cache is stale and nvidia-smi is absent; `module load nvidia
+cuda` (nvidia/595.80, cuda/13.3) + `LD_LIBRARY_PATH=/etc/lib64/nvidia` fixes it. Octopus c2
+eval on debian13 reproduces the debian12 verdict to 0.002 dB. Scripts now auto-detect
+debian13 (c7aee4b: venv/cache/lib path/arch-from-torch). Chains launched on the reservation:
+scene_0031 c1 31375607 → 08 → c2 31375609 → 10 (firefoot-01), scene_0223 c1 31375611 → 12 →
+c2 31375616 → 17 (khan-01, sm_120 — flash_attn works). Slipper c1 31374518 (4×A40) running.
+Stale held 8-GPU chains for 0031/0223 (31304927–34, 31304935–42) still queued-held; cancel.
