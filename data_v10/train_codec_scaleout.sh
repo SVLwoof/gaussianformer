@@ -42,19 +42,22 @@ SCENE=${SCENE:?SCENE required, e.g. scene_0959}
 GH5=experiments/overfit/data/codec_scaleout/$SCENE/h5s
 REN=experiments/overfit/data/codec_scaleout/$SCENE/renders
 SEED=checkpoints_v18_256/phase2_epoch_30.pt
-SAVE=${SAVE_OVR:-checkpoints_codec_so_${SCENE}${CYCLE2:+_r2}}
-# Seed cycle 2 from cycle 1's final whenever there is nothing to resume from. Testing
-# the DIR here (not its contents) cold-started 0262/0772 c2 from v18 after a preemption
-# that had mkdir'd the r2 dir but not yet saved a checkpoint (2026-08-22).
-if [ -n "$CYCLE2" ]; then
-  SEED_OVERRIDE=checkpoints_codec_so_${SCENE}/phase2_epoch_${C1_FINAL:-27}.pt
+# Cycle N (CYCLE=N; CYCLE2=1 kept as an alias for N=2) trains in _rN and seeds from cycle N-1's
+# final. Seed only when there is nothing to resume from. Testing the DIR here (not its
+# contents) cold-started 0262/0772 c2 from v18 after a preemption that had mkdir'd the r2
+# dir but not yet saved a checkpoint (2026-08-22).
+CYCLE=${CYCLE:-${CYCLE2:+2}}; CYCLE=${CYCLE:-1}
+cyc_suffix() { [ "$1" -ge 2 ] && echo "_r$1"; return 0; }
+SAVE=${SAVE_OVR:-checkpoints_codec_so_${SCENE}$(cyc_suffix $CYCLE)}
+if [ "$CYCLE" -ge 2 ]; then
+  SEED_OVERRIDE=checkpoints_codec_so_${SCENE}$(cyc_suffix $((CYCLE-1)))/phase2_epoch_${C1_FINAL:-27}.pt
 fi
 NPROC=${NPROC:-8}
 # Effective batch is pinned to 8 samples/step: fewer GPUs -> more grad accumulation.
 # Submit 4-GPU variant with: sbatch --gres=gg:g4:4 -c 16 --export=SCENE=...,NPROC=4 <script>
 GRAD_ACCUM=${GRAD_ACCUM:-$((8/NPROC))}
 EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-3}
-echo "CODEC-SO $SCENE${CYCLE2:+ cycle2}: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM} ($((9000/NPROC/GRAD_ACCUM)) steps/epoch), node=$(hostname) sm_${ARCH}"
+echo "CODEC-SO $SCENE cycle$CYCLE: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM} ($((9000/NPROC/GRAD_ACCUM)) steps/epoch), node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
 p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )

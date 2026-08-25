@@ -2531,3 +2531,11 @@ Ops: the debian13 health check flags the RUNNING job's own slurm_script as "fugi
 DRAINs the node (firefoot-01 01:31, khan-01 07:27) → chained jobs pinned there hung. Unpinned
 the evals (scontrol update ReqNodeList= Reservation=), seahorse c2 resubmitted 4×L40S
 killable off-reservation (31377176 → eval 31377177). Reported to system group.
+
+## 2026-08-25 (eve): TENT c2 −0.78, 17/40 — closest scale-out object yet; c3 queued
+tent c2 (31377511; resumed from ep21 after the disk-full truncation of ep24/27): rand −0.57
+(**10/24**) / close **+1.00 (7/8)** / far −3.21 (0/8) = **−0.78 avg, 17/40**. Gain +1.24 over c1
+(−2.02) — the largest c2 gain so far. Model 43.2/39.9/43.3 is the highest absolute PSNR of any
+object; far (bar 46.5) is the whole deficit. Script generalised to CYCLE=N (_rN, seeds from
+_r{N-1}); tent c3 submitted 4-GPU killable. Lab share hit 100 % at ~11:00 (2 TB quota, mine
+351 GB): freed ~80 GB by dropping intermediate ckpts of finished cycles; keep_last_n 2.
