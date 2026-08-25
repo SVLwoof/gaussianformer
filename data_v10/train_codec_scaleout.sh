@@ -72,6 +72,6 @@ uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train
   --save_dir $SAVE --batch_size 1 --grad_accum $GRAD_ACCUM --resolution 512 \
   --pe_type rope --augment_rotation \
   --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
-  --save_interval $SAVE_INT --keep_last_n 3 \
+  --save_interval $SAVE_INT --keep_last_n 2 \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 \
   --num_workers 3 $RESUME_ARG
