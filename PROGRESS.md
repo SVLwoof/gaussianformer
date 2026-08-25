@@ -2513,3 +2513,10 @@ debian13 (c7aee4b: venv/cache/lib path/arch-from-torch). Chains launched on the 
 scene_0031 c1 31375607 → 08 → c2 31375609 → 10 (firefoot-01), scene_0223 c1 31375611 → 12 →
 c2 31375616 → 17 (khan-01, sm_120 — flash_attn works). Slipper c1 31374518 (4×A40) running.
 Stale held 8-GPU chains for 0031/0223 (31304927–34, 31304935–42) still queued-held; cancel.
+
+## 2026-08-25: scene_0223 c1 −2.02 (best c1 in the campaign) — khan-01 runs a cycle in 5 h
+scene_0223 c1 (31375611, khan-01 RTX Pro 6000 ×8, 657 s/epoch ≈ 3.4× A40): rand −1.90 (1/24) /
+close −0.21 (3/8) / far −4.19 (0/8) = **−2.02 avg, 4/40** after one cycle — better than octopus
+c1 (−2.44) with a HIGH rec-GT bar (43.8/38.9/46.5), i.e. the model's absolute PSNR (41.9/
+38.7/42.4) is the highest seen; far-range is the whole deficit. c2 31375616 seeded from c1
+ep27, running on khan-01. scene_0031 (firefoot-01) at ep16/27, 1118 s/epoch.
