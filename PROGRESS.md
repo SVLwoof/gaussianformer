@@ -2520,3 +2520,14 @@ close −0.21 (3/8) / far −4.19 (0/8) = **−2.02 avg, 4/40** after one cycle 
 c1 (−2.44) with a HIGH rec-GT bar (43.8/38.9/46.5), i.e. the model's absolute PSNR (41.9/
 38.7/42.4) is the highest seen; far-range is the whole deficit. c2 31375616 seeded from c1
 ep27, running on khan-01. scene_0031 (firefoot-01) at ep16/27, 1118 s/epoch.
+
+## 2026-08-25: seahorse (scene_0031) c1 −10.4 — highest rec-GT bar yet; debian13 HC drains nodes
+seahorse c1 (31375607, firefoot-01, 8.5 h): rand −10.84 (0/24) / close −8.06 (0/8) / far −11.41
+(0/8) = **−10.4 avg, 0/40**. Model 40.2/36.6/40.4 is ordinary; the bar is 51.0/44.7/51.8 — the
+highest in the campaign (simple object → near-perfect 20k rasterization; cf. apple/vase).
+Confirms the rec-GT-bar thesis from the other side: the fleet spread (−1.7 … −10.4) is bar
+spread, not model spread (model absolute sits at 35–42 for every object).
+Ops: the debian13 health check flags the RUNNING job's own slurm_script as "fugitive" and
+DRAINs the node (firefoot-01 01:31, khan-01 07:27) → chained jobs pinned there hung. Unpinned
+the evals (scontrol update ReqNodeList= Reservation=), seahorse c2 resubmitted 4×L40S
+killable off-reservation (31377176 → eval 31377177). Reported to system group.
