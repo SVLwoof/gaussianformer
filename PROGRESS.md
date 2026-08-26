@@ -2544,3 +2544,11 @@ _r{N-1}); tent c3 submitted 4-GPU killable. Lab share hit 100 % at ~11:00 (2 TB 
 seahorse c2 (31377491, 4×L40S): rand −9.66 / close −6.35 / far −10.19 = **−9.11 avg, 0/40**
 (c1 −10.4). Same +1.3 dB cycle gain as the rich objects; with a 51 dB bar it is the clearest
 case for the K-sweep (rate–distortion) framing: the model, not the bar, is the constant.
+
+## 2026-08-26: SLIPPER c1 −0.55, 14/40 — best c1 ever; close-range sweep 8/8 (+1.64)
+gopro/crocs slipper c1 (31374518, 4×A40 accum2, 33 h): rand −1.15 (5/24) / close **+1.64
+(8/8)** / far −0.94 (1/8) = **−0.55 avg, 14/40** after ONE cycle. rec-GT bars 35.8/28.2/38.4
+are the lowest in the campaign (1.17M g → 20k = 60× compression of fuzzy fabric). Model
+34.6/29.8/37.5. The dense-wild-scan thesis holds a third time (octopus, tent, slipper): the
+crossover band is set by how lossy the 20k compression is. c2 31374520 running (seeded from
+c1 ep27); expected to cross on avg if the +1 dB cycle gain holds.
