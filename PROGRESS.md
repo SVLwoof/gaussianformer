@@ -2539,3 +2539,8 @@ tent c2 (31377511; resumed from ep21 after the disk-full truncation of ep24/27):
 object; far (bar 46.5) is the whole deficit. Script generalised to CYCLE=N (_rN, seeds from
 _r{N-1}); tent c3 submitted 4-GPU killable. Lab share hit 100 % at ~11:00 (2 TB quota, mine
 351 GB): freed ~80 GB by dropping intermediate ckpts of finished cycles; keep_last_n 2.
+
+## 2026-08-26: seahorse c2 −9.06 (gain +1.3); bar-limited as expected
+seahorse c2 (31377491, 4×L40S): rand −9.66 / close −6.35 / far −10.19 = **−9.06 avg, 0/40**
+(c1 −10.4). Same +1.3 dB cycle gain as the rich objects; with a 51 dB bar it is the clearest
+case for the K-sweep (rate–distortion) framing: the model, not the bar, is the constant.
