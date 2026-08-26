@@ -2552,3 +2552,30 @@ are the lowest in the campaign (1.17M g → 20k = 60× compression of fuzzy fabr
 34.6/29.8/37.5. The dense-wild-scan thesis holds a third time (octopus, tent, slipper): the
 crossover band is set by how lossy the 20k compression is. c2 31374520 running (seeded from
 c1 ep27); expected to cross on avg if the +1 dB cycle gain holds.
+
+## 2026-08-26: K-sweep pilot (rate–distortion, no retraining) — NEGATIVE; codec is realization-specific
+`data_v10/k_sweep.py` (1 GPU, jobs 31383269–72): re-prune the FULL splat to K ∈ {20k,10k,5k,
+2.5k} with the fleet recipe, feed the trained c2 codec the K-splat unchanged, compare with
+rasterizing the same K-splat (both vs full-splat renders; avg over the 40 frozen views).
+
+| object (full N) | K=20k model/raster/Δ | 10k | 5k | 2.5k |
+|---|---|---|---|---|
+| seahorse (50k) | 40.1 / 49.9 / −9.9 | 32.5 / 46.5 / −14.0 | 28.9 / 42.5 / −13.6 | 26.7 / 38.4 / −11.7 |
+| plate (50k) | 36.4 / 44.0 / −7.7 | 27.9 / 38.3 / −10.5 | 23.8 / 33.3 / −9.5 | 21.4 / 29.7 / −8.4 |
+| tent (50k) | 39.2 / 43.3 / −4.1 | 26.3 / 33.4 / −7.0 | 23.3 / 30.0 / −6.8 | 20.6 / 28.7 / −8.1 |
+| octopus (1.84M) | 33.4 / 36.9 / −3.5 | 28.4 / 34.4 / −6.0 | 24.3 / 31.0 / −6.7 | 21.7 / 28.5 / −6.8 |
+
+1. **No free crossing from compressing harder**: the un-retrained model degrades FASTER than
+   the rasterizer at every step (Δ widens by 2–4 dB from 20k→10k, then flattens). The RD
+   framing only survives if retraining at each K recovers the model's 20k-level absolute
+   PSNR; nothing here suggests it would, and it costs a full cycle per (object, K).
+2. **The codec is specific to the splat REALIZATION, not the object**: a fresh 20k prune of the
+   same object costs the model 2–4 dB (tent 43.2→39.2, octopus 35.6→33.4, seahorse 41.4→40.1,
+   plate 37.0→36.4) while the rasterizer moves ≤1.2 dB. Per-object codec models overfit the
+   exact token set they were trained on — a real caveat for any "train once, re-prune later"
+   deployment story, and for eval protocols that regenerate inputs.
+3. Studio scenes are only 50k splats, so 20k is a 2.5× "compression" — which is WHY their bars
+   are 44–51 dB. Octopus at 20k is 92×. The crossover band is a property of the source scan
+   density, consistent with everything since 2026-08-24.
+Decision: K-sweep idea shelved (retrain-at-K unjustified). Stay on cycles for the three wild
+scans (tent c3, slipper c2, octopus c3 running) + 1423/1223 c1s.
