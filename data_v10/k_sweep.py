@@ -54,6 +54,7 @@ for K in KS:
     with h5py.File(h5, "w") as f:
         for k in ("means", "scales", "rotations", "colors"): f.create_dataset(k, data=rec[k])
         f.create_dataset("opacities", data=np.asarray(rec["opacities"]).reshape(-1, 1))
+        f.create_dataset("c2w", data=np.eye(4, dtype=np.float32)[None]); f.create_dataset("fov", data=np.array([FOV], np.float32))
     data = load_single_gaussian_h5_data(h5)
     recp = to_dev(dict(means=rec["means"], quats=rec["rotations"], scales=rec["scales"],
                        colors=rec["colors"], opacities=np.asarray(rec["opacities"]).reshape(-1)), device)
