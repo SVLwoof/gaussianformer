@@ -2633,3 +2633,7 @@ consistent pattern on every near-crossing object (tent, molecule, octopus, slipp
 wins close, ties rand, loses far. c3 submitted.
 Scoreboard: slipper +0.48 (c2) · molecule +0.08 (c2) · tent −0.05 (c3) · octopus −1.21 (c3) ·
 apple −2.14 · vase −5.49 · doll (c2 pending) · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-29: doll c2 −5.70 (gain +1.62, bar-limited); no c3
+scene_1223 c2: rand −6.28 / close −2.63 / far −8.38 = **−5.70, 0/40** (c1 −7.32). Same +1.6 gain
+as plate/figure; bar 48/42/51 keeps it out of reach. Not continued.
