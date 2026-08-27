@@ -2594,3 +2594,7 @@ molecule/scene_1423 c1 (31383249): rand −0.69 (8/24) / close **+0.75 (5/8)** /
 (highest absolute yet) vs bar 44.6/40.6/48.0. Revises the band: not "wild scans only" but
 "moderate bar" — some studio objects (molecule, tent) sit there; seahorse/plate/sandal do not.
 c2 31383251 running (seeded from c1 ep27). Far-range remains the universal deficit.
+
+## 2026-08-27: doll (scene_1223) c1 −7.32 — bar-limited like plate/sandal
+doll c1 (31383253): rand −7.64 / close −4.07 / far −9.60 = **−7.32 avg, 0/40**; bar 48.5/44.4/50.9.
+Joins the high-bar studio group. c2 31383255 running.
