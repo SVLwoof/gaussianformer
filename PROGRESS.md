@@ -2598,3 +2598,14 @@ c2 31383251 running (seeded from c1 ep27). Far-range remains the universal defic
 ## 2026-08-27: doll (scene_1223) c1 −7.32 — bar-limited like plate/sandal
 doll c1 (31383253): rand −7.64 / close −4.07 / far −9.60 = **−7.32 avg, 0/40**; bar 48.2/41.9/50.8.
 Joins the high-bar studio group. c2 31383255 running.
+
+## 2026-08-28: SLIPPER c2 **+0.48 dB, 23/40 — FIRST SCALE-OUT OBJECT TO BEAT rec-GT ON AVERAGE**
+gopro/crocs slipper c2 (31374520, 4×A40 accum2, seeded from c1 ep27): rand −0.10 (11/24) /
+close **+2.90 (8/8)** / far −0.20 (4/8) = **+0.48 avg, 23/40** at 60k steps. Gain +1.03 over c1
+(−0.55). Model 35.7/31.1/38.2 vs bar 35.8/28.2/38.4. The tomato result (+1.30 after 5 cycles)
+now reproduces on a second, independently sourced real scan after only two cycles — and with the
+frozen scale-out recipe, no per-object tuning. Rand and far are at parity (−0.1/−0.2); close is
+the model's regime everywhere (+2.9 here, +1.7 tent, +0.5 octopus). c3 submitted (4-GPU killable).
+Standing: slipper +0.48 (c2) · tent −0.05 (c3, c4 running) · molecule −1.11 (c1, c2 running) ·
+octopus −1.21 (c3) · apple −2.14 · vase −5.49 · doll −7.32 (c2 running) · plate/sandal/ring/figure
+−7.0…−7.4 · seahorse −9.11.
