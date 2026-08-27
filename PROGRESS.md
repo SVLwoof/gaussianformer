@@ -2609,3 +2609,16 @@ the model's regime everywhere (+2.9 here, +1.7 tent, +0.5 octopus). c3 submitted
 Standing: slipper +0.48 (c2) · tent −0.05 (c3, c4 running) · molecule −1.11 (c1, c2 running) ·
 octopus −1.21 (c3) · apple −2.14 · vase −5.49 · doll −7.32 (c2 running) · plate/sandal/ring/figure
 −7.0…−7.4 · seahorse −9.11.
+
+### Slipper vs tomato at equal budget
+| steps | tomato (codec3→5, tuned campaign) | slipper (frozen scale-out recipe) |
+|---|---|---|
+| 30k | — | −0.55 (14/40) |
+| 60k | −1.38 | **+0.48 (23/40)** |
+| 120k | +0.36 (first crossing, cycle 4) | c3 → 90k running |
+| 150k | +0.97 | |
+| 180k | +1.30 (34/40, final) | |
+The slipper crosses ~2 cycles earlier than the tomato did, without per-object tuning. Why easier:
+lower bar (35.8/28.2/38.4 — 60× compression of fuzzy fabric costs the rasterizer more than the
+model) and a large close-range margin (+2.9). Open: whether it keeps climbing like the tomato
+(+0.9 over its last three cycles) — c3 answers that.
