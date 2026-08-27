@@ -30,10 +30,11 @@ def stats(d):
 
 def ksteps(scene, ckpt_path):
     ep = int(re.search(r"phase2_epoch_(\d+)", ckpt_path).group(1))
-    cyc2 = "_r2/" in ckpt_path
-    if scene == "scene_0874" and not cyc2:   # vase c1: 6xbs1 -> 1500 steps/epoch
+    m = re.search(r"_r(\d+)/", ckpt_path)
+    cyc = int(m.group(1)) if m else 1
+    if scene == "scene_0874" and cyc == 1:   # vase c1: 6xbs1 -> 1500 steps/epoch
         return ep * 1.5
-    return (30.0 if cyc2 else 0.0) + ep * 1.125
+    return 30.0 * (cyc - 1) + ep * 1.125
 
 def annealed(scene, ckpt_path):
     """True only at a cycle's FINAL epoch, where the cosine LR has annealed back down.
@@ -43,7 +44,7 @@ def annealed(scene, ckpt_path):
     points (see the apple's c2-ep9 dip, 2026-08-20).
     """
     ep = int(re.search(r"phase2_epoch_(\d+)", ckpt_path).group(1))
-    final = 20 if (scene == "scene_0874" and "_r2/" not in ckpt_path) else 27
+    final = 20 if (scene == "scene_0874" and not re.search(r"_r\d+/", ckpt_path)) else 27
     return ep == final
 
 traj = {}
