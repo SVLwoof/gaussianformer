@@ -2585,3 +2585,12 @@ tent c3 (31380320, 4×A40): rand **+0.13 (16/24)** / close **+1.69 (8/8)** / far
 **−0.05 avg, 25/40**. Cycle gains: +1.24 (c2) → +0.73 (c3) — decaying but not exhausted; far
 (bar 46.5) is the only losing regime. First scale-out object to win a majority of views and the
 random-view regime. c4 submitted (4-GPU killable) — expected to cross on avg.
+
+## 2026-08-27: octopus c3 −1.21 (gain decaying); MOLECULE c1 −1.11 — a studio object in the band
+octopus c3 (31383257): rand −1.95 (3/24) / close +0.49 (6/8) / far −0.70 (2/8) = **−1.21, 11/40**.
+Gains +0.76 → +0.47: decaying; no c4 queued (would need ~3 more cycles at this rate).
+molecule/scene_1423 c1 (31383249): rand −0.69 (8/24) / close **+0.75 (5/8)** / far −4.26 (0/8) =
+**−1.11, 13/40** — second-best c1 in the campaign, and a STUDIO 50k object. Model 43.9/41.4/43.7
+(highest absolute yet) vs bar 44.6/40.6/48.0. Revises the band: not "wild scans only" but
+"moderate bar" — some studio objects (molecule, tent) sit there; seahorse/plate/sandal do not.
+c2 31383251 running (seeded from c1 ep27). Far-range remains the universal deficit.
