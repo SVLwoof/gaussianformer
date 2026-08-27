@@ -2622,3 +2622,14 @@ The slipper crosses ~2 cycles earlier than the tomato did, without per-object tu
 lower bar (35.8/28.2/38.4 — 60× compression of fuzzy fabric costs the rasterizer more than the
 model) and a large close-range margin (+2.9). Open: whether it keeps climbing like the tomato
 (+0.9 over its last three cycles) — c3 answers that.
+
+## 2026-08-28 (eve): MOLECULE c2 **+0.08, 23/40 — second crossing, and a STUDIO object**
+scene_1423 c2 (31383251, 4×L40S): rand **+0.49 (15/24)** / close **+1.97 (8/8)** / far −3.05
+(0/8) = **+0.08 avg, 23/40** at 60k steps (c1 −1.11, gain +1.19). Model 45.1/42.6/45.0 — the
+highest absolute PSNR of the campaign — vs bar 44.6/40.6/48.0. Second object over rec-GT within
+a day, and the first from the synthetic-studio pool (50k splat, 2.5× compression): the band is
+"moderate bar", not "wild scan". Far-range (bar 48) is again the only losing regime — now the
+consistent pattern on every near-crossing object (tent, molecule, octopus, slipper): the model
+wins close, ties rand, loses far. c3 submitted.
+Scoreboard: slipper +0.48 (c2) · molecule +0.08 (c2) · tent −0.05 (c3) · octopus −1.21 (c3) ·
+apple −2.14 · vase −5.49 · doll (c2 pending) · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
