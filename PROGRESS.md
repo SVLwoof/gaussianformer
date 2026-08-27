@@ -2579,3 +2579,9 @@ rasterizing the same K-splat (both vs full-splat renders; avg over the 40 frozen
    density, consistent with everything since 2026-08-24.
 Decision: K-sweep idea shelved (retrain-at-K unjustified). Stay on cycles for the three wild
 scans (tent c3, slipper c2, octopus c3 running) + 1423/1223 c1s.
+
+## 2026-08-27: TENT c3 −0.05, 25/40 — parity; rand crosses (+0.13, 16/24); c4 queued
+tent c3 (31380320, 4×A40): rand **+0.13 (16/24)** / close **+1.69 (8/8)** / far −2.36 (1/8) =
+**−0.05 avg, 25/40**. Cycle gains: +1.24 (c2) → +0.73 (c3) — decaying but not exhausted; far
+(bar 46.5) is the only losing regime. First scale-out object to win a majority of views and the
+random-view regime. c4 submitted (4-GPU killable) — expected to cross on avg.
