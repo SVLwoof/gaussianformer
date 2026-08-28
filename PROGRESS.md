@@ -2652,3 +2652,12 @@ scene_1423 c3 (31400001): rand **+1.20 (18/24)** / close **+2.55 (8/8)** / far �
 c4 submitted (expected ~+0.35 more).
 Scoreboard: molecule +0.75 (c3) · slipper +0.48 (c2) · tent +0.30 (c4) · octopus −1.21 · apple −2.14
 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-30: SLIPPER c3 **+1.26, 30/40 — ALL THREE REGIMES POSITIVE, matches the tomato final at half the budget**
+gopro c3 (31395334, 90k steps): rand **+0.70 (17/24)** / close **+3.76 (8/8)** / far **+0.46 (5/8)**
+= **+1.26 avg, 30/40**. Gain +0.78 (c2 +1.03) — decaying slower than tent/molecule. First
+object where far-range crosses (bar 38.4 is low enough). Equals the tomato's final +1.30 (180k
+steps, 5 cycles) at 90k / 3 cycles with the frozen recipe. c4 submitted.
+Scoreboard: slipper +1.26 (c3) · molecule +0.75 (c3, c4 running) · tent +0.30 (c4, c5 running) ·
+octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 ·
+seahorse −9.11.
