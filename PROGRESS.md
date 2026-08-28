@@ -2637,3 +2637,10 @@ apple −2.14 · vase −5.49 · doll (c2 pending) · plate/sandal/ring/figure �
 ## 2026-08-29: doll c2 −5.97 (gain +1.35, bar-limited); no c3
 scene_1223 c2: rand −6.28 / close −2.63 / far −8.38 = **−5.97, 0/40** (c1 −7.32). Same ~+1.3 gain
 as plate/figure; bar 48/42/51 keeps it out of reach. Not continued.
+
+## 2026-08-29: TENT c4 **+0.30, 27/40 — third object over rec-GT**; c5 queued as the last tent cycle
+scene_0223 c4 (31392272): rand **+0.45 (18/24)** / close **+2.05 (8/8)** / far −1.91 (1/8) =
+**+0.30 avg, 27/40** at 120k steps. Cycle gains 1.24 → 0.73 → 0.35 (halving each cycle), so c5
+is worth ~+0.15 more and is the last tent cycle. Three objects now over the bar (slipper +0.48,
+tent +0.30, molecule +0.08), all with the same signature: close +2…+3, rand slightly positive,
+far −2…−3. Far-range is the remaining frontier — its bar is the highest in every object.
