@@ -2644,3 +2644,11 @@ scene_0223 c4 (31392272): rand **+0.45 (18/24)** / close **+2.05 (8/8)** / far �
 is worth ~+0.15 more and is the last tent cycle. Three objects now over the bar (slipper +0.48,
 tent +0.30, molecule +0.08), all with the same signature: close +2…+3, rand slightly positive,
 far −2…−3. Far-range is the remaining frontier — its bar is the highest in every object.
+
+## 2026-08-29 (pm): MOLECULE c3 **+0.75, 26/40 — best scale-out result so far**; c4 queued
+scene_1423 c3 (31400001): rand **+1.20 (18/24)** / close **+2.55 (8/8)** / far −2.41 (0/8) =
+**+0.75 avg, 26/40** at 90k steps (c2 +0.08, gain +0.67; c1→c2 was +1.19 — decaying at the same
+~0.55× rate as tent). Model 46.5/43.2/45.6. Overtakes the slipper (+0.48 at 60k; c3 pending).
+c4 submitted (expected ~+0.35 more).
+Scoreboard: molecule +0.75 (c3) · slipper +0.48 (c2) · tent +0.30 (c4) · octopus −1.21 · apple −2.14
+· vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
