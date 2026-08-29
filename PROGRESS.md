@@ -2711,3 +2711,11 @@ What the table says:
    specific, −2…−4 dB on re-prune); more cycles cannot rescue bar-limited objects.
 Ops: killable-only since 2026-08-23; lab share at 32 GB free (user chose to keep all data);
 debian13 test nodes drained by the HC "fugitive" bug (reported); branch 26 commits ahead of origin.
+
+## 2026-08-31: TENT c5 **+0.71, 28/40** — tent CLOSED at 5 cycles (150k steps)
+scene_0223 c5 (31406005): rand **+0.87 (18/24)** / close **+2.41 (8/8)** / far −1.48 (2/8) =
+**+0.71 avg, 28/40**. Gain +0.41 (c4 was +0.35 — the decay flattened rather than halving, so
+the "ceiling ≈ c1 + 2.5" rule is conservative: tent is at c1 + 2.7). Trajectory −2.02 → −0.78 →
+−0.05 → +0.30 → +0.71. Declared final per plan; a c6 would likely add ~+0.3 if ever wanted.
+Final scale-out crossings: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) ·
+tent +0.71 (c5, closed).
