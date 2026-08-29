@@ -2680,22 +2680,24 @@ End-of-cycle verdicts only (view-weighted avg dB vs rec-GT rasterization of the 
 | molecule (1423) | studio 50k | 44.6/40.6/48.0 | −1.11 | +0.08 | +0.75 | **+1.18** | +1.18 (28) | c5 running (last) |
 | tent (0223) | studio 50k | 43.8/38.9/46.5 | −2.02 | −0.78 | −0.05 | **+0.30** | +0.30 (27) | c5 running (last) |
 | octopus | superspl.at, 92× | 38.1/30.6/39.9 | −2.44 | −1.68 | −1.21 | — | −1.21 (11) | stopped (gain 0.47) |
-| apple (0959) | studio | ~45 | −2.18 | −2.14 | — | — | −2.14 (7) | saturated |
-| vase (0874) | studio | ~45 | −6.66 | −5.49 | — | — | −5.49 (0) | stopped |
+| apple (0959) | studio | 50.2/46.0/53.1 | −2.18 | −2.14 | — | — | −2.14 (7) | saturated |
+| vase (0874) | studio | 50.6/44.2/52.3 | −6.66 | −5.49 | — | — | −5.49 (0) | stopped |
 | doll (1223) | studio | 48.2/41.9/50.8 | −7.32 | −5.97 | — | — | −5.97 (0) | stopped |
-| plate (0262) | studio | ~46 | −8.61 | −6.99 | — | — | −6.99 (0) | stopped |
-| sandal (0772) | studio | ~46 | −8.21 | −7.13 | — | — | −7.13 (0) | stopped |
-| ring (1342) | studio | ~46 | −8.13 | −7.18 | — | — | −7.18 (3) | stopped |
-| figure (1078) | studio | ~46 | −8.80 | −7.37 | — | — | −7.37 (0) | stopped |
+| plate (0262) | studio | 44.9/39.6/45.8 | −8.61 | −6.99 | — | — | −6.99 (0) | stopped |
+| sandal (0772) | studio | 43.6/36.6/48.2 | −8.21 | −7.13 | — | — | −7.13 (0) | stopped |
+| ring (1342) | studio | 46.0/38.0/49.0 | −8.13 | −7.18 | — | — | −7.18 (3) | stopped |
+| figure (1078) | studio | 48.2/43.0/50.9 | −8.80 | −7.37 | — | — | −7.37 (0) | stopped |
 | seahorse (0031) | studio 50k | 51.0/44.7/51.8 | −10.40 | −9.11 | — | — | −9.11 (0) | stopped |
 | *tomato (ref.)* | superspl.at | — | — | −1.38 | — | +0.36 | +1.30 @c5 (34) | closed |
 
 What the table says:
-1. **Crossing is decided by the rec-GT bar, not the model.** Model absolute PSNR sits at 35–46
-   for every object; objects cross when their bar is ≲ 46 (rand) and lose by the bar's excess
-   otherwise (seahorse 51 → −9). Bar height = how well 20k splats already render the object:
-   dense wild scans (60–92×) and detailed studio objects (molecule, tent) have moderate bars;
-   smooth studio objects rasterize near-perfectly at 20k.
+1. **Crossing = model absolute vs bar, and BOTH vary by object.** Bars range 43.6–51 (rand);
+   model absolute ranges 36–48 (apple 48, molecule 46, tent 44, seahorse 41, plate 37, sandal 36).
+   Apple (bar 50) sits at −2 because the model is excellent on it; plate (bar 45) sits at −7
+   because the model is poor on it. So the earlier "model is flat, bar decides" reading was too
+   strong: bar height explains seahorse/vase/doll/figure, model content-difficulty explains
+   plate/sandal/ring (the fine-detail bandwidth limit from the V17 diagnosis). Objects cross
+   when the two are within ~2.5 dB at c1.
 2. **Cycle gains decay ~0.55×/cycle** (tent 1.24/0.73/0.35; molecule 1.19/0.67/0.43; slipper
    1.03/0.78) — each object has a ceiling ≈ c1 + 2.5 dB. That predicts who can cross from c1
    alone: c1 ≳ −2.5 → yes (slipper, molecule, tent, octopus-borderline); c1 ≲ −5 → never.
