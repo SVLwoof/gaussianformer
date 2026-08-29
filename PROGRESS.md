@@ -2719,3 +2719,14 @@ the "ceiling ≈ c1 + 2.5" rule is conservative: tent is at c1 + 2.7). Trajector
 −0.05 → +0.30 → +0.71. Declared final per plan; a c6 would likely add ~+0.3 if ever wanted.
 Final scale-out crossings: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) ·
 tent +0.71 (c5, closed).
+
+## 2026-08-31: MOLECULE c5 **+1.47, 29/40 — best scale-out result; molecule CLOSED at 5 cycles**
+scene_1423 c5 (31410702, 150k steps): rand **+1.91 (20/24)** / close **+3.26 (8/8)** / far −1.67
+(1/8) = **+1.47 avg, 29/40**. Trajectory −1.11 → +0.08 → +0.75 → +1.18 → +1.47 (gains 1.19/0.67/
+0.43/0.29 — clean ~0.6× decay). Model 46.5/43.9/46.3. Exceeds the tomato's final +1.30.
+Ops: the lab share hit 0 GB during this eval (other members' writes) — eval + slipper c4 died with
+no log (stdout unwritable); checkpoints verified intact; freed 12 GB by deleting the rebuildable
+debian13 venv/uv-cache; both resubmitted (eval 31429211 → this verdict; slipper c4 31429212
+resumes from ep21). Free space 8.8 GB — unsafe; user notified.
+Final scale-out crossings: molecule +1.47 (c5, closed) · slipper +1.26 (c3; c4 running) · tent
++0.71 (c5, closed).
