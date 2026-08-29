@@ -2661,3 +2661,11 @@ steps, 5 cycles) at 90k / 3 cycles with the frozen recipe. c4 submitted.
 Scoreboard: slipper +1.26 (c3) · molecule +0.75 (c3, c4 running) · tent +0.30 (c4, c5 running) ·
 octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 ·
 seahorse −9.11.
+
+## 2026-08-30: MOLECULE c4 **+1.18, 28/40**; c5 queued as the last molecule cycle
+scene_1423 c4 (31406462, 120k steps): rand **+1.62 (19/24)** / close **+3.06 (8/8)** / far −2.01
+(1/8) = **+1.18 avg, 28/40**. Gains 1.19 → 0.67 → 0.43; c5 (~+0.3) is the last. Far still loses
+(bar 48.0) — the only near-bar object whose far bar is that high.
+Scoreboard: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) · tent +0.30 (c4, c5
+running) · octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure
+−7.0…−7.4 · seahorse −9.11.
