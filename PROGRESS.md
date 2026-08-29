@@ -2669,3 +2669,43 @@ scene_1423 c4 (31406462, 120k steps): rand **+1.62 (19/24)** / close **+3.06 (8/
 Scoreboard: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) · tent +0.30 (c4, c5
 running) · octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure
 −7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-30 (noon): CAMPAIGN STANDING — 3/12 objects over rec-GT; all 12 through ≥2 cycles
+End-of-cycle verdicts only (view-weighted avg dB vs rec-GT rasterization of the same 20k splat,
+40 held-out views: 24 rand / 8 close / 8 far). Bars = rec-GT PSNR rand/close/far.
+
+| object | source | bar (r/c/f) | c1 | c2 | c3 | c4 | best (won/40) | status |
+|---|---|---|---|---|---|---|---|---|
+| slipper (gopro) | superspl.at, 60× | 35.8/28.2/38.4 | −0.55 | +0.48 | **+1.26** | running | +1.26 (30) | c4 running |
+| molecule (1423) | studio 50k | 44.6/40.6/48.0 | −1.11 | +0.08 | +0.75 | **+1.18** | +1.18 (28) | c5 running (last) |
+| tent (0223) | studio 50k | 43.8/38.9/46.5 | −2.02 | −0.78 | −0.05 | **+0.30** | +0.30 (27) | c5 running (last) |
+| octopus | superspl.at, 92× | 38.1/30.6/39.9 | −2.44 | −1.68 | −1.21 | — | −1.21 (11) | stopped (gain 0.47) |
+| apple (0959) | studio | ~45 | −2.18 | −2.14 | — | — | −2.14 (7) | saturated |
+| vase (0874) | studio | ~45 | −6.66 | −5.49 | — | — | −5.49 (0) | stopped |
+| doll (1223) | studio | 48.2/41.9/50.8 | −7.32 | −5.97 | — | — | −5.97 (0) | stopped |
+| plate (0262) | studio | ~46 | −8.61 | −6.99 | — | — | −6.99 (0) | stopped |
+| sandal (0772) | studio | ~46 | −8.21 | −7.13 | — | — | −7.13 (0) | stopped |
+| ring (1342) | studio | ~46 | −8.13 | −7.18 | — | — | −7.18 (3) | stopped |
+| figure (1078) | studio | ~46 | −8.80 | −7.37 | — | — | −7.37 (0) | stopped |
+| seahorse (0031) | studio 50k | 51.0/44.7/51.8 | −10.40 | −9.11 | — | — | −9.11 (0) | stopped |
+| *tomato (ref.)* | superspl.at | — | — | −1.38 | — | +0.36 | +1.30 @c5 (34) | closed |
+
+What the table says:
+1. **Crossing is decided by the rec-GT bar, not the model.** Model absolute PSNR sits at 35–46
+   for every object; objects cross when their bar is ≲ 46 (rand) and lose by the bar's excess
+   otherwise (seahorse 51 → −9). Bar height = how well 20k splats already render the object:
+   dense wild scans (60–92×) and detailed studio objects (molecule, tent) have moderate bars;
+   smooth studio objects rasterize near-perfectly at 20k.
+2. **Cycle gains decay ~0.55×/cycle** (tent 1.24/0.73/0.35; molecule 1.19/0.67/0.43; slipper
+   1.03/0.78) — each object has a ceiling ≈ c1 + 2.5 dB. That predicts who can cross from c1
+   alone: c1 ≳ −2.5 → yes (slipper, molecule, tent, octopus-borderline); c1 ≲ −5 → never.
+3. **Regime signature on every near-bar object: close +2…+4, rand ±1, far −2…−3.** Far loses
+   because its bar is the highest (distant views hide splat artifacts); only the slipper, whose
+   far bar is 38, has crossed there. Far-range is the open frontier.
+4. The frozen recipe (v18-256 init, 9000 views, 30k steps/cycle, 4×bs1×accum2) reproduces the
+   tomato's tuned result on three new objects without per-object work; the slipper reaches the
+   tomato's final +1.3 at half the budget.
+5. Negatives on record: K-sweep (no free crossing from harder compression; codec is realization-
+   specific, −2…−4 dB on re-prune); more cycles cannot rescue bar-limited objects.
+Ops: killable-only since 2026-08-23; lab share at 32 GB free (user chose to keep all data);
+debian13 test nodes drained by the HC "fugitive" bug (reported); branch 26 commits ahead of origin.
