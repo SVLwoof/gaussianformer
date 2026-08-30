@@ -2748,3 +2748,9 @@ So amortised over many views of one scene: ~200 ms/view ≈ 5 fps at 512² on an
 magnitude slower and ~2 orders more VRAM than the rasterizer — the codec buys quality at
 close range, not speed; any deployment story needs the scene-stage cache and a smaller/
 distilled view decoder. L40S would be ~2× faster than the A40 measured here.
+
+## 2026-08-31: PAUSED — all runs cancelled pending Sagie's input (lab share hit 0 GB twice)
+Nothing queued. Slipper c4 resume (from intact ep24, 3 epochs) is the only unfinished item; the
+truncated ep27 was deleted. Dithering diagnosed (molecule sphere): a 3.8-px stripe at ~1 %
+amplitude from the DPT ConvTranspose(4,4) stride, which becomes visible phase-random high-
+frequency texture on fur/skin under LPIPS 0.5 (MTF>1, coherence ~0.3). Noted; no action for now.
