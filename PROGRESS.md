@@ -2730,3 +2730,21 @@ debian13 venv/uv-cache; both resubmitted (eval 31429211 → this verdict; slippe
 resumes from ep21). Free space 8.8 GB — unsafe; user notified.
 Final scale-out crossings: molecule +1.47 (c5, closed) · slipper +1.26 (c3; c4 running) · tent
 +0.71 (c5, closed).
+
+## 2026-08-31: inference cost — codec model vs gsplat on the SAME 20k splat (A40, 512², molecule c5)
+`data_v10/bench_inference.{py,sh}` (job 31432276). Per view, 40 held-out poses, CUDA-synced:
+
+| | gsplat (packed) | codec (bf16, flash-attn) | ratio |
+|---|---|---|---|
+| latency / view | **0.98 ms** | **476 ms** | 485× |
+| views / s | 1017 | 2.1 | |
+| peak working VRAM | 10 MB | 926 MB | 89× |
+| resident | 1.1 MB (20k×14 floats) | 745 MB (194.9 M params) | |
+| batched: 8 views | 0.27 ms/view | 223 ms/view (4.4 GB) | 830× |
+
+Model split: scene encoder (view-independent, cacheable per scene) 277 ms; view decoder 199 ms/view.
+So amortised over many views of one scene: ~200 ms/view ≈ 5 fps at 512² on an A40 vs gsplat's
+~1000 fps. fp32 not measurable (flash-attn is bf16/fp16 only). Bottom line: ~2.5 orders of
+magnitude slower and ~2 orders more VRAM than the rasterizer — the codec buys quality at
+close range, not speed; any deployment story needs the scene-stage cache and a smaller/
+distilled view decoder. L40S would be ~2× faster than the A40 measured here.
