@@ -2754,3 +2754,11 @@ Nothing queued. Slipper c4 resume (from intact ep24, 3 epochs) is the only unfin
 truncated ep27 was deleted. Dithering diagnosed (molecule sphere): a 3.8-px stripe at ~1 %
 amplitude from the DPT ConvTranspose(4,4) stride, which becomes visible phase-random high-
 frequency texture on fur/skin under LPIPS 0.5 (MTF>1, coherence ~0.3). Noted; no action for now.
+
+## 2026-08-31: SLIPPER c4 **+1.82, 35/40 — best result of the campaign; slipper CLOSED**
+gopro c4 (31443864, resumed from ep24 after the disk-full truncation; 120k steps): rand **+1.25
+(21/24)** / close **+4.43 (8/8)** / far **+0.91 (6/8)** = **+1.82 avg, 35/40**. All three regimes
+positive for a second straight cycle. Trajectory −0.55 → +0.48 → +1.26 → +1.82 (gains 1.03/0.78/
+0.56); exceeds the tomato final (+1.30, 34/40) on every metric with the frozen recipe at 2/3 the
+budget. FINAL scale-out scoreboard: slipper +1.82 (c4) · molecule +1.47 (c5) · tent +0.71 (c5) —
+3/12 objects over rec-GT; campaign closed pending Sagie's input.
