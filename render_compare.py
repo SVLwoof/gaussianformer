@@ -86,7 +86,14 @@ def load_model(spec: ModelSpec, device: torch.device) -> GaussianFormerRendering
     config = GaussianFormerConfig(pe_type=spec.pe_type)
     model = GaussianFormer(config)
     ckpt = torch.load(spec.ckpt, map_location="cpu", weights_only=True)
-    model.load_state_dict(ckpt["model_state_dict"])
+    if "lora" in ckpt:
+        # Adapter-only checkpoint: base from the recorded seed, re-wrap, load A/B, fold in.
+        from gaussianformer.layers.lora import load_lora
+        base = torch.load(ckpt["lora"]["base_ckpt"], map_location="cpu", weights_only=True)
+        model.load_state_dict(base["model_state_dict"])
+        load_lora(model, ckpt, merge=True)
+    else:
+        model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     pipe = GaussianFormerRenderingPipeline(model)
     pipe.to(device)
