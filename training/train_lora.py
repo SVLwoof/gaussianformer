@@ -97,7 +97,9 @@ def main() -> None:
     resume = newest_checkpoint(args.save_dir)
     start_epoch, global_step = 0, 0
     if resume is not None:
-        ckpt = torch.load(resume, map_location="cpu", weights_only=True)
+        # Early adapter checkpoints stored Path objects in "args"; allowlist them (our own file).
+        with torch.serialization.safe_globals([Path, type(Path())]):
+            ckpt = torch.load(resume, map_location="cpu", weights_only=True)
         assert ckpt["lora"] == meta, f"resume meta mismatch: {ckpt['lora']} vs {meta}"
         load_lora(module, ckpt, merge=False)
         start_epoch, global_step = ckpt["epoch"], ckpt["global_step"]
@@ -183,7 +185,8 @@ def main() -> None:
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scheduler_state_dict": scheduler.state_dict(),
                         "epoch": epoch + 1, "global_step": global_step, "loss": avg_loss,
-                        "args": vars(args) | {"init_from": str(args.init_from)}}, tmp)
+                        "args": {k: str(v) if isinstance(v, Path) else v
+                                 for k, v in vars(args).items()}}, tmp)
             os.replace(tmp, path)
             print(f"  Saved checkpoint: {path}", flush=True)
             if args.keep_last_n > 0:
