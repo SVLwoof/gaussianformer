@@ -18,10 +18,6 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-from gaussianformer.layers.lora import (
-    DEFAULT_TARGETS, apply_lora, load_lora, lora_param_count, lora_state_dict,
-)
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -212,13 +208,8 @@ def run_phase(
     start_epoch: int = 0,
     keep_last_n: int | None = None,
     grad_accum: int = 1,
-    lora_meta: dict | None = None,
 ) -> int:
-    """Run a training phase (shared logic for phase 1 and 2).
-
-    With `lora_meta` set, checkpoints carry only the adapter (A/B) plus the meta needed to
-    re-wrap the base checkpoint, instead of the full 780 MB model_state_dict.
-    """
+    """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -337,20 +328,15 @@ def run_phase(
             # Atomic write: save to .tmp then os.replace, so a preemption mid-write can
             # never leave a half-written checkpoint that --resume would choke on.
             tmp_path = ckpt_path.with_suffix(".pt.tmp")
-            state = {
+            torch.save({
                 "phase": phase_name,
                 "epoch": epoch + 1,
                 "global_step": global_step,
+                "model_state_dict": unwrap_model(model).state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "loss": avg_loss,
-            }
-            if lora_meta is None:
-                state["model_state_dict"] = unwrap_model(model).state_dict()
-            else:
-                state["lora"] = lora_meta
-                state["lora_state_dict"] = lora_state_dict(unwrap_model(model))
-            torch.save(state, tmp_path)
+            }, tmp_path)
             os.replace(tmp_path, ckpt_path)
             print(f"  Saved checkpoint: {ckpt_path}", flush=True)
 
@@ -441,13 +427,6 @@ def main():
     parser.add_argument("--keep_last_n", type=int, default=None,
                         help="Retain only the N most recent same-phase checkpoints "
                         "(prune older ones after each save). None = keep all (default).")
-    parser.add_argument("--lora_rank", type=int, default=0,
-                        help="LoRA rank on --lora_targets (0 = full fine-tune). Requires "
-                             "--init_from; base stays frozen, checkpoints hold only the adapter")
-    parser.add_argument("--lora_alpha", type=float, default=None,
-                        help="LoRA scaling numerator (default 2*rank)")
-    parser.add_argument("--lora_targets", type=str, default=DEFAULT_TARGETS,
-                        help="regex over qualified nn.Linear names to adapt")
     parser.add_argument("--views_per_epoch", type=int, default=None,
                         help="Per-epoch view subsampling for the TRAIN set: draw this many "
                         "random views per scene each epoch (redrawn per epoch; all views seen "
@@ -549,27 +528,12 @@ def main():
     resume_ckpt = None
     resume_phase = None
     resume_epoch = 0
-    lora_meta = None
-    if args.lora_rank > 0:
-        assert args.init_from or args.resume, "--lora_rank needs --init_from (or a LoRA --resume)"
-        lora_meta = {"rank": args.lora_rank,
-                     "alpha": args.lora_alpha if args.lora_alpha is not None else 2.0 * args.lora_rank,
-                     "targets": args.lora_targets,
-                     "base_ckpt": str(args.init_from) if args.init_from else None}
     if args.resume:
         resume_ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
         resume_phase = resume_ckpt["phase"]
         resume_epoch = resume_ckpt["epoch"]
         module = GaussianFormer(gf_config)
-        if "lora" in resume_ckpt:
-            # Adapter-only checkpoint: rebuild base from the recorded seed, re-wrap, load A/B.
-            lora_meta = resume_ckpt["lora"]
-            base = torch.load(lora_meta["base_ckpt"], map_location="cpu", weights_only=True)
-            module.load_state_dict(base["model_state_dict"])
-            load_lora(module, resume_ckpt, merge=False)
-        else:
-            assert lora_meta is None, "--lora_rank given but --resume checkpoint is a full model"
-            module.load_state_dict(resume_ckpt["model_state_dict"])
+        module.load_state_dict(resume_ckpt["model_state_dict"])
         if is_main_process():
             print(f"Resuming from {args.resume} ({resume_phase} epoch {resume_epoch})", flush=True)
     elif args.init_from:
@@ -586,15 +550,9 @@ def main():
             assert not bad, f"init_from mismatch beyond geom gates: {bad}"
         else:
             module.load_state_dict(init_ckpt["model_state_dict"])
-        if lora_meta is not None:
-            wrapped = apply_lora(module, lora_meta["rank"], lora_meta["alpha"], lora_meta["targets"])
-            if is_main_process():
-                print(f"LoRA r={lora_meta['rank']} alpha={lora_meta['alpha']} on {len(wrapped)} "
-                      f"Linears ({lora_param_count(module)/1e3:.1f}K adapter params, "
-                      f"{lora_param_count(module)*4/1e3:.0f} KB fp32)", flush=True)
         if is_main_process():
             print(f"Warm-start (weights only) from {args.init_from} "
-                  f"-> fresh Phase 2 {'LoRA' if lora_meta else 'fine-tune'}", flush=True)
+                  f"-> fresh Phase 2 fine-tune", flush=True)
     elif args.from_scratch:
         module = GaussianFormer(gf_config)
         if is_main_process():
@@ -645,13 +603,11 @@ def main():
         )
         del p1  # drop the Phase-1 DDP wrapper; its reducer hooks go inert once unused
 
-    # --- Phase 2: full fine-tune (or adapter-only when LoRA is on; apply_lora already froze
-    # the base, and DDP registers only the A/B params) ---
-    if lora_meta is None:
-        unfreeze_all(module)
+    # --- Phase 2: full fine-tune ---
+    unfreeze_all(module)
     p2 = wrap_ddp(module, world_size, local_rank)
     optimizer = torch.optim.AdamW(
-        [p for p in p2.parameters() if p.requires_grad],
+        p2.parameters(),
         lr=config.phase2_lr,
         weight_decay=args.weight_decay,
     )
@@ -672,24 +628,16 @@ def main():
         args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
         model_config, global_step, val_dataloader=val_dataloader,
         train_sampler=train_sampler, start_epoch=phase2_start, grad_accum=args.grad_accum,
-        keep_last_n=args.keep_last_n, lora_meta=lora_meta,
+        keep_last_n=args.keep_last_n,
     )
 
     # --- Save final model (rank 0 only) ---
     if is_main_process():
-        if lora_meta is not None:
-            # The adapter IS the deliverable; the last phase2 checkpoint already holds it
-            # (with optimizer state). Write a bare copy without optimizer state.
-            final_path = config.save_dir / "lora_final.pt"
-            torch.save({"lora": lora_meta, "lora_state_dict": lora_state_dict(module)}, final_path)
-            print(f"\nFinal adapter saved to: {final_path} "
-                  f"({final_path.stat().st_size/1e3:.0f} KB)", flush=True)
-        else:
-            final_path = config.save_dir / "gaussianformer_final"
-            final_path.mkdir(parents=True, exist_ok=True)
-            module.save_pretrained(final_path)
-            print(f"\nFinal model saved to: {final_path}", flush=True)
-            print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
+        final_path = config.save_dir / "gaussianformer_final"
+        final_path.mkdir(parents=True, exist_ok=True)
+        module.save_pretrained(final_path)
+        print(f"\nFinal model saved to: {final_path}", flush=True)
+        print(f"Use with: python infer_gaussian.py --model_id {final_path}", flush=True)
 
     if dist.is_initialized():
         dist.destroy_process_group()
