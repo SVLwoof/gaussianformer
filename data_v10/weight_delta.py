@@ -105,7 +105,7 @@ def main() -> None:
             print(f"  {m['name']:70s} rel {m['rel']:.4f}  r90 {m['r90']:4d}  top4 {m['top_frac'][4]:.2f}")
     if a.json:
         with open(a.json, "w") as fh:
-            json.dump(out, fh, indent=1)
+            json.dump(out, fh, separators=(",", ":"))  # compact: ~10k lines pretty-printed
         print(f"\nwrote {a.json}")
 
 
