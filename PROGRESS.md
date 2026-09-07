@@ -2796,3 +2796,38 @@ unverified; the anchors below are the calibration.
 
 **Running**: slipper (gopro, 20k) anchors r=1/4/16 at lr 2e-4, 27 epochs — jobs 31526729/30/31.
 Reference: full-FT c1 = −0.55 (c4 = +1.82).
+
+## 2026-09-07: weight-delta audit — where full fine-tuning moved the weights, and is it low-rank?
+`data_v10/weight_delta.py` (V18 seed vs slipper c1/c4, molecule c5, tent c5; results in
+`data_v10/weight_delta/crossing_models.json`). Relative change ‖ΔW‖/‖W₀‖ per family and the
+SVD spectrum of each ΔW. All three crossing objects agree:
+
+| family (params) | rel Δ slipper c1 → c4 | share of Δ energy (c4) | median r90 (c4) | top-8 energy |
+|---|---|---|---|---|
+| view FFN (42 M) | 0.13 → 0.25 | **39 %** | 175 | 0.21 |
+| scene FFN (85 M) | 0.08 → 0.17 | 26 % | 83 | 0.44 |
+| DPT decoder convs (10.6 M) | 0.17 → 0.32 | 13 % | – | – |
+| view self-attn (14 M) | 0.08 → 0.17 | 7 % | 114 | 0.29 |
+| scene attn in_proj (21 M) | 0.07 → 0.16 | 6 % | 61 | 0.54 |
+| view cross-attn q/k/v/out (14 M) | 0.08–0.11 → 0.15–0.22 | 5 % | 57–145 | 0.28–0.71 |
+| scene attn out_proj (7 M) | 0.07 → 0.17 | 3 % | 75 | 0.39 |
+| input head (11.5 K) | 0.04 → 0.12 | 0.1 % | 1 | 0.99 |
+| ray_map_encoder, norms | 0.02–0.06 | ≈0 | | |
+
+Three conclusions. (1) **The change is FFN- and decoder-dominated**: FFNs carry ~65 % of the
+delta energy and the DPT convs another 13 %; the attention projections that the default LoRA
+targets carry ~21 %. The hottest single matrices are the last two view-stage FFNs (layers 4–5,
+rel 0.30) and the first scene attention blocks (layers 0–1). (2) **The delta is NOT low-rank**:
+on 768-wide matrices the median number of components for 90 % of the delta energy is 60–175,
+and rank 8 captures 20–55 %; only the view cross-attn q_proj (and a few early scene in_proj)
+are genuinely low-rank (r90 ≈ 12–50, top-16 ≈ 0.86). Later cycles spread the change into MORE
+directions (slipper r90 roughly doubles c1 → c4). Energy is not function — 30k SGD steps also
+wander in directions that may not matter, and a LoRA trained directly can find a different,
+low-rank solution — but the natural solution the optimiser found is broad-spectrum. (3) The
+input head barely moves (0.1 % of energy) and its delta is rank-1: unfreezing it fully (10.7 K
+params) is nearly free but unlikely to be where the gain lives.
+
+Implication for the LoRA pivot: attention-only rank ≤ 8 addresses the minority of the change,
+so the anchors are the test of whether a low-rank re-solution exists at all. The sweep already
+includes `attn_ffn`; worth adding a cheap "view FFN layers 4–5" target (6 matrices, 1.6 K
+Gaussians-equiv per rank) where the energy actually is.
