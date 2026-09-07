@@ -2762,3 +2762,37 @@ positive for a second straight cycle. Trajectory −0.55 → +0.48 → +1.26 →
 0.56); exceeds the tomato final (+1.30, 34/40) on every metric with the frozen recipe at 2/3 the
 budget. FINAL scale-out scoreboard: slipper +1.82 (c4) · molecule +1.47 (c5) · tent +0.71 (c5) —
 3/12 objects over rec-GT; campaign closed pending Sagie's input.
+
+## 2026-09-07: PIVOT — LoRA adapters, rate–distortion vs gsplat at equal bytes (branch `exp/lora-feasibility`)
+Shahaf's reframing: the target is to beat gsplat on quality **at equal bytes**, with the shared
+base model counted as the free decoder. Then an adapter is a fixed cost that displaces
+Gaussians (56 B each in our h5) and must earn back more PSNR than they would.
+
+**Budget rule** (`data_v10/lora_budget.py`, reads only the safetensors header of the V18 seed):
+adapter params = r·Σ(in+out) over targeted Linears; all 116 Linears are 768-wide, so
+attention-only (60 matrices: `in_proj`/`out_proj`/`q,k,v_proj`) costs **8,558 Gaussians per rank**,
+all Linears 23.5k/rank. Dropping 20k→5k frees 15k Gaussians = 840 KB, which pays for attn r=1
+(479 KB) only. The viable operating point is ≥1 MB budgets: LoRA r=1 + ~11.4k vs gsplat 20k.
+Cheaper adapters if LoRA is too fat: view-stage attention only (4.6k/rank), RMSNorm scales only
+(~2.9k), learned prefix tokens (55 Gaussians/token), input encoder only (770). The campaign's
+780 MB per-object checkpoints were never a fair RD point; LoRA makes the comparison honest.
+
+**Code**: `gaussianformer/layers/lora.py` (pure PyTorch, no `peft`; B=0 init reproduces the base
+bit-exactly, merge error 2e-7), `training/train_lora.py` (separate script per Shahaf: one phase,
+frozen base, adapter-only checkpoints with the seed path recorded, auto-resume; no generic val set
+because its loss rises monotonically in every per-object run — it measures forgetting, not object
+quality), `render_compare.load_model` merges adapter checkpoints on load so the verdict eval is
+unchanged, `data_v10/train_codec_lora.sh` (env knobs, 4-GPU killable, lr 2e-4). `train.py` untouched.
+`.gitignore` now covers `checkpoints_{codec,tomato,lora}_*` and downloaded splats.
+
+**HPO**: Optuna TPE controller lives OUTSIDE the repo at `/cs/labs/sagieb/shahaf_levy/lora_hpo/`
+(own uv venv: optuna 4.9 + wandb 0.29, so the training venv is never touched). Space: rank
+{1,2,4,8} × alpha/r {1,2,4} × targets {attn, attn+ffn, view-attn} × lr log[3e-5,3e-3] × dropout
+[0,0.1] × wd {0,0.01,0.1} × grad_accum {1,2,4} (= effective batch 4/8/16; per-GPU bs pinned at 1
+by VRAM). Objective = the object's view-weighted avg ΔPSNR vs rec-GT from the verdict eval;
+proxy budget 6 epochs (full cosine) + eval per trial, 3 trials in parallel, results mirrored to
+wandb project `gaussianformer-lora-hpo`. Caveat: whether 6-epoch rankings hold at 27 epochs is
+unverified; the anchors below are the calibration.
+
+**Running**: slipper (gopro, 20k) anchors r=1/4/16 at lr 2e-4, 27 epochs — jobs 31526729/30/31.
+Reference: full-FT c1 = −0.55 (c4 = +1.82).
