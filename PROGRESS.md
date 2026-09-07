@@ -2831,3 +2831,21 @@ Implication for the LoRA pivot: attention-only rank ≤ 8 addresses the minority
 so the anchors are the test of whether a low-rank re-solution exists at all. The sweep already
 includes `attn_ffn`; worth adding a cheap "view FFN layers 4–5" target (6 matrices, 1.6 K
 Gaussians-equiv per rank) where the energy actually is.
+
+## 2026-09-08: first LoRA verdict + the zero-shot floor (slipper)
+Sweep moved to Sagie's quota (12 GPUs: r=4 anchor + 2 parallel trials; 16 blocked a lab
+member, dropped to 2). Resume bug fixed (5c3da8c: `Path` objects in saved args broke
+`weights_only` loads on resume).
+
+| slipper, 40 held-out views | avg Δ vs rec-GT | rand / close / far | model PSNR |
+|---|---|---|---|
+| **V18 base, zero-shot** (`gopro_v18base`) | **−16.32** | −17.0 / −10.3 / −20.3 | 18.8 / 17.9 / 18.1 |
+| LoRA t001: r=4 view-stage attn only, lr 3.3e-4, 6 ep (258 K params, 1 MB) | **−3.90**, 0/40 | −4.46 / −1.81 / −4.28 | 31.3 / 26.4 / 34.1 |
+| full FT c1, 27 ep (195 M params) | −0.55, 14/40 | | |
+| full FT c4 | +1.82, 35/40 | | |
+
+Reading: the generalist renders the slipper at ~18 dB, so the per-object fine-tune's job is
+overwhelmingly *adaptation to this object* (15.8 dB from base to c1), not a subtle polish. A
+258 K-parameter adapter on the view stage alone, in 6 epochs, closed 12.4 of those 15.8 dB
+(79 %). Remaining gap to c1: 3.4 dB; to the crossing: 5.7 dB. Side effect: view-only targets
+train 2× faster per epoch (autograd never enters the 12-layer scene transformer).
