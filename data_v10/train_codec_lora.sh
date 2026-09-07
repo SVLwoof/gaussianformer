@@ -5,15 +5,13 @@
 #SBATCH --output=runs/codec_lora_%j.out
 #SBATCH --job-name=codeclora
 #SBATCH --gres=gg:g4:4
-#SBATCH --killable
-#SBATCH --account=killable-cs
 #SBATCH --requeue
 #SBATCH --exclude=cyril-01,firefoot-01,firefoot-08,khan-01,khan-02,firefoot-13,firefoot-04,firefoot-16
 
 # LoRA adapter on the frozen v18_256 base for one scale-out object (training/train_lora.py).
 # Same data + recipe as train_codec_scaleout.sh (9000 views, 512px, LPIPS 0.5, rot-aug,
 # effective batch 8 by default); only the adapter trains, checkpoints are MBs.
-#   sbatch --export=SCENE=gopro,LORA_RANK=4 data_v10/train_codec_lora.sh
+#   sbatch --killable --account=killable-cs --export=SCENE=gopro,LORA_RANK=4 data_v10/train_codec_lora.sh   # or -A sagieb (quota)
 # Knobs (env): LORA_RANK (req) LORA_ALPHA LORA_TARGETS LORA_DROPOUT LR WD GRAD_ACCUM EPOCHS SAVE_INT SAVE_DIR NPROC SEED
 
 source /etc/profile.d/huji-lmod.sh
