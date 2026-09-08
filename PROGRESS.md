@@ -2966,3 +2966,15 @@ heldout300 vs 20.47). Operational note: jobs import code from the WORKING TREE a
 tree stays on `exp/p1-canvas` (superset) while probes run. First observation: p3_rope32's
 stage R opens at 256px log-L1 0.011 (intact warm ≈ 0.0008) — the RoPE change is a large
 perturbation; the 300-epoch recovery decides whether it re-settles.
+
+### 2026-09-08 late: P3 finding — the pretrained RoPE band is load-bearing; only ADDITIVE changes survive a warm start
+Recovery-stage (256px log-L1, epoch 1) losses, intact warm init ≈ 0.0008, from-scratch ≈ 0.013:
+`rope_dim=32 + rope_pos_scale=4` **0.0110** (flat at 0.009 for 100 epochs, 0.0022 only after LR
+annealing; generic val100 stuck at 0.0082 → the 10 objects were re-memorised, the generalist was
+not restored) · `rope_pos_scale=2` alone **0.0115** (cancelled at epoch 1) · `ray_rope_2d=true`
+(new pairs only) **0.0015**. Doubling the frequency of the pairs the pretrained attention already
+uses scrambles it as badly as replacing them. P3-ii therefore reduces to `rope_hf_scale` (an
+extra 8× band in previously position-blind pairs, pretrained rotations untouched; a73b0b9),
+running as p3_hf8 (31540294, sagieb). Shahaf's "we might have to pretrain from scratch" is
+answered by the record: scratch is untrainable (LPIPS 0.092 attractor), so V19 changes must be
+additive to the pretrained function.
