@@ -45,6 +45,21 @@ class GaussianFormerConfig:
     fields -> single Linear, RoPE still on."""
     rope_double_max_freq: bool = False
     """Whether to double the max frequency for RoPE."""
+    rope_dim: Optional[int] = None
+    """Rotary dim per stage (channel pairs rotated = pos_dim * rope_dim/2). None = pos_pe_num_freqs
+    (12: 18 of 64 pairs rotated, 1..5 rad/unit). Raising it rotates previously position-blind
+    pairs, so a warm init needs a 256px recovery stage."""
+    rope_pos_scale: float = 1.0
+    """Positions are multiplied by this before RoPE in BOTH stages: k shifts the frequency band
+    to k..5k rad per world unit (P3: spatial bandwidth of position-dependent attention)."""
+    ray_rope_2d: bool = False
+    """2-D RoPE on the patch-grid position for ray-token SELF-attention in the view transformer
+    (today it is permutation-invariant: every patch carries the camera origin as its position)."""
+    ray_rope_2d_dim: int = 16
+    """Rotary dim of the 2-D ray RoPE (8 log-spaced freqs per axis), placed after the 3-D pairs."""
+    ray_rope_2d_scale: float = 0.25
+    """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
+    (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""
     pos_pe_num_freqs: int = 12
     """The number of frequencies in the positional encoding for gaussian positions."""
     gaussian_encoder_norm_type: Literal['layer_norm', 'rms_norm'] = 'rms_norm'

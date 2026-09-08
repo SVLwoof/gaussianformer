@@ -19,7 +19,7 @@ class ViewTransformer(nn.Module):
         # The ray decoder is pure RoPE for both pe_types ('nerf' differs from 'rope' only
         # in the scene encoder; its ray decoder is identical).
         if config.pe_type in ('rope', 'nerf'):
-            self.rope_dim = config.pos_pe_num_freqs
+            self.rope_dim = config.rope_dim or config.pos_pe_num_freqs
         else:
             raise ValueError(f"Unsupported positional encoding type: {config.pe_type}")
 
@@ -63,6 +63,10 @@ class ViewTransformer(nn.Module):
             include_self_attn=self.config.view_transformer_include_self_attn,
             use_swin_attn=self.config.view_transformer_use_swin_attn,
             geom_bias=self.config.geom_bias,
+            rope_pos_scale=self.config.rope_pos_scale,
+            ray_rope_2d=self.config.ray_rope_2d,
+            ray_rope_2d_dim=self.config.ray_rope_2d_dim,
+            ray_rope_2d_scale=self.config.ray_rope_2d_scale,
         )
 
         # --- Output Head ---

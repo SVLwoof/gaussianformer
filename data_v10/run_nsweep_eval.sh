@@ -45,7 +45,7 @@ N=${N:?N required}
 TAG=${TAG:-nsweep_n${N}}   # override for variants (ctrl, fgloss, scratch) -- rows and resume
                            # state are keyed by output file, so variants MUST NOT share one
 CKPT=${CKPT:-$(ls -t checkpoints_nsweep_n${N}/phase2_epoch_*.pt 2>/dev/null | head -1)}
-EXTRA=${EXTRA:-}   # e.g. "--encoder_layers 6 --view_layers 3" for depth-pruned ckpts
+EXTRA=${EXTRA//;/ }   # ;-separated from sbatch --export; e.g. "--encoder_layers 6 --view_layers 3" for depth-pruned ckpts
 [ -z "$CKPT" ] && { echo "FATAL: no checkpoint for N=$N"; exit 1; }
 echo "N=$N ckpt=$CKPT node=$(hostname) sm_${ARCH}"
 

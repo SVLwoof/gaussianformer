@@ -29,7 +29,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             )
             nn.init.zeros_(self.gaussian_encoder_mlp[-1].weight)
             nn.init.zeros_(self.gaussian_encoder_mlp[-1].bias)
-        self.rope_dim = self.config.pos_pe_num_freqs
+        self.rope_dim = self.config.rope_dim or self.config.pos_pe_num_freqs
 
         if self.config.pe_type == 'nerf':
             # Concat encoder: position lifted into a NeRF basis, concatenated with the
@@ -60,7 +60,8 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             pos_dim=self.config.pos_dim,
             bias=self.config.bias,
             qk_norm=self.config.view_indep_qk_norm,
-            rope_double_max_freq=self.config.rope_double_max_freq
+            rope_double_max_freq=self.config.rope_double_max_freq,
+            rope_pos_scale=self.config.rope_pos_scale,
         )
 
         self.view_transformer = ViewTransformer(config)

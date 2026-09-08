@@ -553,10 +553,14 @@ def main():
             # Architecture probes add modules the seed lacks. Warm-safe rule: every missing
             # tensor must be zero at init (gates, zero-init linears), so the wrapped model is
             # exactly the seed until training moves it. RoPE-only changes add no tensors.
-            missing, unexpected = module.load_state_dict(init_ckpt["model_state_dict"], strict=False)
-            assert not unexpected, f"seed has keys the model lacks: {list(unexpected)[:5]}"
             sd = module.state_dict()
-            nonzero = [k for k in missing if sd[k].abs().sum() > 0]
+            # RoPE frequency tables (*.freqs) are config-determined constants stored as
+            # non-trainable Parameters: drop the seed's copies so a changed rotary dim loads.
+            seed_sd = {k: v for k, v in init_ckpt["model_state_dict"].items()
+                       if not (k.endswith(".freqs") and (k not in sd or sd[k].shape != v.shape))}
+            missing, unexpected = module.load_state_dict(seed_sd, strict=False)
+            assert not unexpected, f"seed has keys the model lacks: {list(unexpected)[:5]}"
+            nonzero = [k for k in missing if not k.endswith(".freqs") and sd[k].abs().sum() > 0]
             assert not nonzero, f"missing seed keys are NOT zero-init (would damage the warm init): {nonzero[:5]}"
             if is_main_process() and missing:
                 print(f"init_from: {len(missing)} zero-init tensors absent from seed "

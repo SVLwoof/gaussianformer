@@ -36,7 +36,8 @@ EPOCHS=$(( TARGET_STEPS / STEPS_PER_EPOCH ))
 SAVE_INT=$(( EPOCHS / 15 )); [ $SAVE_INT -lt 1 ] && SAVE_INT=1
 SEED=${SEED:-checkpoints_v18_256/phase2_epoch_30.pt}
 SAVE=checkpoints_probe_${TAG}
-CFG=(); [ -n "$MODEL_CFG" ] && CFG=(--model_cfg ${=MODEL_CFG})
+# MODEL_CFG arrives ;-separated (sbatch --export cannot carry spaces reliably)
+CFG=(); [ -n "$MODEL_CFG" ] && CFG=(--model_cfg ${(s:;:)MODEL_CFG})
 COMMON=(--gaussian_h5_dir data_v10/nsweep/n${N}_h5 --renders_dir data_v10/nsweep/n${N}_renders
         --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders
         --batch_size 1 --pe_type rope --augment_rotation --views_per_epoch 4

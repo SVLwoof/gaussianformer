@@ -156,6 +156,7 @@ class SpatialRotaryEmbedding(Module):
         pos_dim=3,
         hf_format=True,
         double_max_freq=False,
+        pos_scale=1.0,
     ):
         """
         SpatialRotaryEmbedding is a class that implements rotary embedding for spatial data.
@@ -170,6 +171,10 @@ class SpatialRotaryEmbedding(Module):
 
         self.hf_format = hf_format
         self.pos_dim = pos_dim
+        # Multiplies positions before the frequency product: with unit-sphere scenes the default
+        # 1..5 rad/unit band cannot separate Gaussians a few pixels apart; pos_scale=k shifts
+        # the whole band to k..5k rad/unit without touching the pretrained channel layout.
+        self.pos_scale = pos_scale
 
         # log spaced frequencies
         max_freq = log(
@@ -205,6 +210,6 @@ class SpatialRotaryEmbedding(Module):
         # t shape: [batch, n_items, pos_dim]
         assert t.shape[-1] == self.pos_dim, f"Position dimension {t.shape[-1]} does not match expected {self.pos_dim}"
         freqs = self.freqs
-        freqs = einsum("... i, f -> ... i f", t.type(freqs.dtype), freqs)
+        freqs = einsum("... i, f -> ... i f", (t * self.pos_scale).type(freqs.dtype), freqs)
         freqs = rearrange(freqs, '... i f -> ... (i f)')
         return freqs
