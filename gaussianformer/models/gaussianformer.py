@@ -127,7 +127,8 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         return seq, valid_mask_padded, pos_list_padded
 
-    def forward(self, gaussians, valid_mask, rays_o, rays_d, gaussians_view_tf, tf32_view_tf=False, fov=None):
+    def forward(self, gaussians, valid_mask, rays_o, rays_d, gaussians_view_tf, tf32_view_tf=False, fov=None,
+                canvas=None):
         """
         Forward pass of the transformer.
 
@@ -170,6 +171,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             tf32_mode=tf32_view_tf,
             fov=None if fov is None else fov.reshape(-1),
             view_extra=view_extra,
+            canvas=canvas,  # [B*V, H, W, 3] or None
         )
 
         res = res.view(

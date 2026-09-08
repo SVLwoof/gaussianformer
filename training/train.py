@@ -111,6 +111,12 @@ def training_forward(
     # Generate rays (detached -- rays don't need gradients)
     with torch.no_grad():
         rays_o, rays_d = ray_generator(c2w_for_view_tf, fov / 180.0 * torch.pi, resolution)
+        canvas = None
+        if config.canvas_cond:
+            # P1: gsplat rasterization of the (possibly rotation-augmented) input splat for the
+            # same camera; augmentation rotates scene + camera jointly so the canvas stays valid.
+            from gaussianformer.utils.canvas import render_canvas
+            canvas = render_canvas(gaussians, mask, c2w, fov.reshape(bs, nv), resolution)
 
     # Model forward (gradients flow here)
     rendered_imgs = model(
@@ -121,6 +127,7 @@ def training_forward(
         gaussians_view_tf=gaussians_for_view_tf[..., :10],  # pos(3) + cam-frame scale(3) + quat(4)
         tf32_view_tf=True,
         fov=(fov / 180.0 * torch.pi).reshape(bs, nv),
+        canvas=canvas,
     )
 
     # [bs, nv, C, H, W] -> [bs, nv, H, W, C]

@@ -70,6 +70,11 @@ class ViewTransformer(nn.Module):
             proj_rope_2d=self.config.proj_rope_2d,
         )
         assert not (self.config.geom_bias and self.config.proj_bias), "pick one cross-attention bias"
+        if self.config.canvas_cond:
+            # P1: rasterized canvas patches -> ray tokens, zero-init (exactly the baseline at init)
+            self.canvas_encoder = nn.Linear(3 * self.config.patch_size ** 2, self.config.view_transformer_latent_dim)
+            nn.init.zeros_(self.canvas_encoder.weight)
+            nn.init.zeros_(self.canvas_encoder.bias)
         if self.config.proj_feat:
             # P2c: [log depth, log projected radius px, cam-frame quat(4)] -> context tokens, zero-init
             self.geom_feat = nn.Linear(6, self.config.latent_dim)
@@ -102,7 +107,7 @@ class ViewTransformer(nn.Module):
         return torch.stack([u, v], -1), depth, (Z > -1e-3), focal
 
     def forward(self, camera_o, ray_map, ctx_tokens, spatial_pos, valid_mask, tf32_mode=False,
-                fov=None, view_extra=None):
+                fov=None, view_extra=None, canvas=None):
         """
         Cross attention between ray map and context tokens (gaussians).
 
@@ -128,6 +133,11 @@ class ViewTransformer(nn.Module):
         patch_h = ray_map.size(1) // self.config.patch_size
         patch_w = ray_map.size(2) // self.config.patch_size
         ray_tokens = self.ray_map_patch_token + self.ray_map_encoder_norm(self.ray_map_encoder(ray_tokens))  # [B, N_PATCHES, D]
+        if self.config.canvas_cond:
+            assert canvas is not None, "canvas_cond needs the rasterized canvas [B, H, W, 3]"
+            canvas_tokens = rearrange(canvas.to(ray_tokens.dtype), 'b (h1 p1) (w1 p2) c -> b (h1 w1) (c p1 p2)',
+                                      p1=self.config.patch_size, p2=self.config.patch_size)
+            ray_tokens = ray_tokens + self.canvas_encoder(canvas_tokens)
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
 

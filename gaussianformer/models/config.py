@@ -70,6 +70,10 @@ class GaussianFormerConfig:
     """P2a: 2-D RoPE on the projected patch coordinates for cross-attention KEYS and on patch
     centres for QUERIES (uses ray_rope_2d_dim / ray_rope_2d_scale). Alters pretrained function:
     needs a 256px recovery stage."""
+    canvas_cond: bool = False
+    """P1: add a gsplat rasterization of the input splat (same camera, log10(x+1) space) to the ray
+    tokens through a zero-init linear. Identity at init; the model starts at rec-GT quality once
+    the linear learns to pass the canvas through, and the transformer's job becomes refinement."""
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""

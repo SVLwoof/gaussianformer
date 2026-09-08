@@ -81,12 +81,18 @@ class GaussianFormerRenderingPipeline:
         # Flatten triangles: [bs, num_tris, 3, 3] -> [bs, num_tris*9]
         # Flatten vn: [bs, num_tris, 3, 3] -> [bs, num_tris*9]
         # Flatten tri_vpos_view_tf: [bs, nv, num_tris, 3, 3] -> [bs, nv, num_tris*9]
+        canvas = None
+        if self.config.canvas_cond:
+            from gaussianformer.utils.canvas import render_canvas
+            canvas = render_canvas(gaussians, mask, c2w, fov.reshape(bs, nv), resolution)
+
         with torch.no_grad(), torch.autocast(device_type=self.device.type, dtype=torch_dtype):
             rendered_imgs = self.model(
                 gaussians=gaussians,
                 valid_mask=mask,
                 rays_o=rays_o,
                 rays_d=rays_d,
+                canvas=canvas,
                 # Camera-frame position (3) + scale (3) + quaternion (4); the model uses the
                 # first pos_dim for RoPE and the rest only for projection features (P2).
                 gaussians_view_tf=gaussians_for_view_tf[..., :10],
