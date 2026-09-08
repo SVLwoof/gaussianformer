@@ -2978,3 +2978,22 @@ extra 8× band in previously position-blind pairs, pretrained rotations untouche
 running as p3_hf8 (31540294, sagieb). Shahaf's "we might have to pretrain from scratch" is
 answered by the record: scratch is untrainable (LPIPS 0.092 attractor), so V19 changes must be
 additive to the pretrained function.
+
+## 2026-09-09: low-N codec inputs ready (5k / 2k) for slipper, molecule, tent, octopus, tomatoes
+`data_v10/codec_lowN_datagen.{py,sh}` (array 31531911, killable): each object re-pruned from its
+FULL splat with the fleet recipe and laid out as `codec_scaleout/<scene>_n{5k,2k}` (h5 with the
+20k object's training poses, per-file symlinks to its full-splat renders and eval views, so
+`SCENE=gopro_n5k` works in train_codec_lora.sh / codec_scaleout_eval.sh unchanged). Frame check
+= rec-GT vs the stored GT render on eval view 0 (single view, not the 40-view bar):
+
+| object | 5k | 2k |
+|---|---|---|
+| slipper (gopro, 1.17 M src) | 35.9 | 34.2 |
+| molecule (scene_1423) | 38.0 | 35.0 |
+| tent (scene_0223) | 31.0 | 29.2 |
+| octopus (1.84 M src) | 31.1 | 28.1 |
+| tomatoes (219 k src) | 39.2 | 36.8 |
+
+Splat bytes: 280 KB (5k) / 112 KB (2k) vs 1,120 KB (20k). These are the inputs for the
+equal-bytes RD grid (adapter or fine-tune at N ∈ {2k, 5k, 20k} vs gsplat at matched bytes),
+queued behind the V19 probes per Shahaf's priority.
