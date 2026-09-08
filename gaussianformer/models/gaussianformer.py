@@ -62,6 +62,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             qk_norm=self.config.view_indep_qk_norm,
             rope_double_max_freq=self.config.rope_double_max_freq,
             rope_pos_scale=self.config.rope_pos_scale,
+            rope_hf_scale=self.config.rope_hf_scale,
         )
 
         self.view_transformer = ViewTransformer(config)

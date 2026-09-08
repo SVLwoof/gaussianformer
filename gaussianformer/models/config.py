@@ -52,6 +52,10 @@ class GaussianFormerConfig:
     rope_pos_scale: float = 1.0
     """Positions are multiplied by this before RoPE in BOTH stages: k shifts the frequency band
     to k..5k rad per world unit (P3: spatial bandwidth of position-dependent attention)."""
+    rope_hf_scale: float = 0.0
+    """P3 (warm-safe variant): ADD a second 3-D RoPE band at this position scale in the channel
+    pairs right after the pretrained ones (which stay untouched), in both stages. 0 = off.
+    e.g. 8 -> extra band 8..40 rad/unit; rotates 18 previously position-blind pairs."""
     ray_rope_2d: bool = False
     """2-D RoPE on the patch-grid position for ray-token SELF-attention in the view transformer
     (today it is permutation-invariant: every patch carries the camera origin as its position)."""

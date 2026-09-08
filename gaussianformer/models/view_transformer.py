@@ -68,6 +68,7 @@ class ViewTransformer(nn.Module):
             ray_rope_2d_dim=self.config.ray_rope_2d_dim,
             ray_rope_2d_scale=self.config.ray_rope_2d_scale,
             proj_rope_2d=self.config.proj_rope_2d,
+            rope_hf_scale=self.config.rope_hf_scale,
         )
         assert not (self.config.geom_bias and self.config.proj_bias), "pick one cross-attention bias"
         if self.config.canvas_cond:
