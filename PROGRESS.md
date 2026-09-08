@@ -2849,3 +2849,83 @@ overwhelmingly *adaptation to this object* (15.8 dB from base to c1), not a subt
 258 K-parameter adapter on the view stage alone, in 6 epochs, closed 12.4 of those 15.8 dB
 (79 %). Remaining gap to c1: 3.4 dB; to the crossing: 5.7 dB. Side effect: view-only targets
 train 2× faster per epoch (autograd never enters the 12-layer scene transformer).
+
+## 2026-09-08: V18 re-examined — what actually binds the generalist, and V19 proposals
+Two passes: the full experimental record (PROGRESS 1600–2440, memory notes) and a line-level read
+of the readout path (gaussianformer.py, view_transformer.py, attention.py, rope.py, dpt.py,
+transform.py, ray_generator.py, train.py). Findings first, then proposals ranked by expected value.
+
+### What V18 is
+V17 recipe on 2× data, stage A only (30 ep @256, val log-L1 0.000793 vs V17's 0.000765). Stage B
+(512 + LPIPS) was never run: the diagnosis arc retired its premise (train→test gap 0.55 dB; the
+model under-fits its own training set by 14 dB). It exists as the seed for everything since.
+
+### The record, compressed (N=100 harness, train-fit margin vs rec-GT, baseline 13.40)
+capacity (depth 18/9, FFN×8, width) FLAT · input-head MLP / log-scale FLAT · geometry-bias
+(cos-angle, scalar gate) FLAT, gates → 0 · aug/wd −0.27 · **fg-weighted loss −1.63** ·
+**cosine restarts 30k→90k: −1.9, decelerating to ~10** · fg + 2 cycles = **10.04 (best)** ·
+from-scratch untrainable (LPIPS 0.092 attractor) · dense per-object views reach the ceiling at
+N=1 (42–48 dB novel) but not at N=10 (30 dB) · rec-GT flat 44.7–45.6 across detail while V17
+falls 34→28.5 · MTF ≈ 1 with coherence 0.3 at 4 px: detail is *invented and misplaced*, not
+missing.
+
+### What the code pass adds (structural, not under-training)
+1. **The view stage never sees a projection.** Cross-attention logits are `q · R(p_cam) k`: the
+   query RoPE is the identity for every patch (ray_pos = camera origin = 0 in the camera frame,
+   view_transformer.py:109, transform.py:66) and the key RoPE is a phase of the *3-D camera-frame
+   mean*. The network must recover (x/−z, y/−z) by phase-matching an absolute-position rotation.
+   Nothing computes pixel/patch coordinates of a Gaussian anywhere.
+2. **The RoPE that carries geometry is coarse.** Frequencies {1.0…5.0} rad per world unit on
+   unit-sphere scenes, rotating 18 of 64 channel-pairs per head. Two Gaussians 0.02 apart (≈10 px
+   at 512) differ by ≤0.1 rad. This is a spatial-bandwidth limit in the *attention*, matching
+   the content-stratified gap (+2.9 dB per detail tercile) better than any capacity story.
+3. **Ray tokens have no 2-D position at all** (identity RoPE in self-attention, full attention,
+   no swin): adjacency exists only via the DPT convolutions. Consistent with "energy present,
+   spatially misplaced".
+4. **No depth, ordering, transmittance, or footprint.** The camera-frame quaternion and scale are
+   computed by transform_gaussians_to_cam_coord and then discarded (rendering_pipeline.py:91,
+   train.py:121); opacity reaches the view stage only inside the world-frame latent. Occlusion is
+   a softmax competition with no monotone depth feature.
+5. **The geometry-bias probe tested a low-contrast signal.** cos(angle between patch ray and
+   camera→Gaussian) spans only 0.93–1.0 across a 45° frustum; a scalar gate on that has almost
+   no dynamic range to exploit. The negative result closes "cos-angle bias", not "projection
+   awareness".
+6. Loss: targets are LDR PNGs but the loss lives in log10(x+1), so the whole target range is
+   [0, 0.301]; whole-image averaging dilutes the object 14–50× (fg-loss fixes the second, not the
+   first). LPIPS is whole-image and unmasked.
+
+### Proposals (all warm-compatible: zero-init or identity-preserving, since scratch is untrainable)
+**P1 — Rasterized-canvas conditioning (splat-then-refine).** Rasterize the input splat with
+gsplat (1 ms, already in the data pipeline), patchify, and add it to the ray tokens through a
+zero-init linear (identity at init). The model starts *at* rec-GT quality and learns to add:
+pruning-artifact repair and detail, which is exactly what the N=1 result showed it can do
+(scene_0387 beat rec-GT by 2.15 dB). Prediction: held-out margin collapses from 14.65 toward 0
+within a cycle, then goes negative. Honest caveat: the artifact becomes a learned refiner over
+rasterization, and the rasterizer's failure modes (floaters, holes) become its inputs. Cost: ~50
+lines + one N=100 run. Highest expected value by far.
+**P2 — Projection-aware cross-attention (replaces the cos-angle probe).** Compute per view, per
+Gaussian: projected patch coordinates (u,v), log-depth, and projected footprint (from the
+cam-frame covariance we already compute and drop). (a) 2-D RoPE on (u,v) for keys and on patch
+centres for queries, in currently-unrotated channel pairs; (b) a zero-init Gaussian proximity
+bias −γ‖u_q−u_k‖²/σ² in *patch units* (high contrast, unlike cos); (c) log-depth and footprint
+injected into the key via a zero-init linear. Prediction: N=100 fit ≤ 11 at 30k steps without
+fg/cycles; tomatoes 14-view novel probe 29.9 → >35. Cost: one probe chain (~1 day, 4 GPUs).
+**P3 — 2-D RoPE for ray-token self-attention + higher scene-RoPE bandwidth** (rotary dim 12→32,
+max freq ~5→~60 rad/unit), each with a 256 log-L1 recovery stage. Cheap, addresses points 2–3;
+expect coherence gains more than PSNR gains. Run after P2 or fold into it.
+**P4 — Recipe bundle (free, already validated at N=100).** fg-weighted loss + 2–3 cosine cycles
++ foreground-masked LPIPS + a tone map that uses the LDR range (plain L1 on linear or log_w
+rescaled). This is "finish V18": seed v18_256-ep30, 512 + LPIPS, 2× data. Expected: 10.04 at
+N=100 translates to maybe 2–4 dB on held-out at full N (the record flags the N=100 gain as
+memorization-flavoured). Worth running as the new baseline regardless.
+**P5 — Decoder stripe.** Replace DPT ConvTranspose(4,4)/(2,2) with bilinear + conv (the 3.8-px
+MTF>1 artifact, the dithering). Decoder-only, 256 ramp to re-settle. Cosmetic in PSNR, real in
+perceived quality.
+Not proposed: more data (retired), more capacity (flat ×5), input-head changes (flat),
+pruning-score fix for the generalist (rec-GT is flat across detail; the input is not the limit).
+
+### Decisive plan (N=100 harness, 30k steps, 4 GPUs each, killable; readouts: train-fit margin
+vs 13.40 / 10.04, heldout300 vs 17.93, tomatoes 14-view novel vs 29.9)
+1. P4 baseline (recipe bundle) — the new floor.  2. P2 on top of P4.  3. P1 on top of P4.
+Whichever of P1/P2 moves the tomatoes novel-view number is the V19 architecture; then scale to
+full N with 2× data.
