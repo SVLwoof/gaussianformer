@@ -2929,3 +2929,40 @@ vs 13.40 / 10.04, heldout300 vs 17.93, tomatoes 14-view novel vs 29.9)
 1. P4 baseline (recipe bundle) — the new floor.  2. P2 on top of P4.  3. P1 on top of P4.
 Whichever of P1/P2 moves the tomatoes novel-view number is the V19 architecture; then scale to
 full N with 2× data.
+
+## 2026-09-08: V19 probes launched — P3 / P2 / P1 on the N=10 harness, separate branches
+Shahaf's priority P3 > P2 > P1, each on its own branch, evaluated as "10-object overfit"
+(N-sweep n10 harness: seed v18_256-ep30, 30k steps, 4×bs1@512, LPIPS 0.5, aug + wd; recorded
+baseline train-fit margin **7.57** / heldout300 **20.47**). Sagie quota capped at 12 GPUs.
+
+Branches (nested: infra ⊂ p3 ⊂ p2 ⊂ p1; all defaults are bit-exact to the baseline, verified on CPU):
+- `exp/probe-infra`: one generic `--model_cfg key=val` (train.py + ceiling_eval.py) instead of
+  per-feature flags; warm-safe `--init_from` (tensors absent from the seed must be zero; RoPE
+  frequency tables are config constants and are swapped); `data_v10/probe_n10.sh` (optional
+  256px log-L1 recovery stage R for changes that alter pretrained function) + `submit_probe.sh`.
+- `exp/p3-rope-bandwidth`: `rope_pos_scale` (positions ×k before RoPE, both stages),
+  `rope_dim` (rotary dim; 12 → 32 rotates 48 of 64 pairs), `ray_rope_2d` (2-D patch-grid RoPE
+  for ray-token self-attention in previously unrotated pairs).
+- `exp/p2-projection-attn`: explicit perspective projection of every Gaussian in the view stage
+  (fov now threaded through; cam-frame scale+quat passed instead of dropped): `proj_bias`
+  (zero-init-gated −d²/σ² in patch units, σ=2), `proj_feat` (zero-init linear of [log depth,
+  log projected radius px, cam-frame quat] into context tokens), `proj_rope_2d` (2-D RoPE on
+  projected coords for keys / patch centres for queries).
+- `exp/p1-canvas`: `canvas_cond` (gsplat render of the input splat, same camera, log10 space,
+  added to ray tokens through a zero-init linear); `gaussianformer/utils/canvas.py`;
+  `data_v10/check_canvas.py` verifies the rasterization convention on GPU.
+
+| arm | cfg | stage R | account | train → eval |
+|---|---|---|---|---|
+| baseline (rerun, same code) | — | 0 | killable | 31539628 → 31539629 |
+| p3_rope32 | rope_dim=32 rope_pos_scale=4 | 3000 | sagieb | 31539624 → 31539625 |
+| p3_ray2d | ray_rope_2d=true | 3000 | killable | 31539626 → 31539627 |
+| p2_bias_feat | proj_bias proj_feat | 0 | killable | 31539690 → 31539691 |
+| p2_rope2d | proj_rope_2d=true | 3000 | killable | 31539692 → 31539693 |
+| p1_canvas | canvas_cond=true | 0 | killable | 31539708 → 31539709 (check 31539707) |
+
+Readouts: `data_v10/ceiling/probe_<tag>_{train,heldout}.jsonl` (train-fit margin vs 7.57,
+heldout300 vs 20.47). Operational note: jobs import code from the WORKING TREE at start, so the
+tree stays on `exp/p1-canvas` (superset) while probes run. First observation: p3_rope32's
+stage R opens at 256px log-L1 0.011 (intact warm ≈ 0.0008) — the RoPE change is a large
+perturbation; the 300-epoch recovery decides whether it re-settles.
