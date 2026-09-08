@@ -118,8 +118,9 @@ def training_forward(
         valid_mask=mask,
         rays_o=rays_o,
         rays_d=rays_d,
-        gaussians_view_tf=gaussians_for_view_tf[..., :config.pos_dim],
+        gaussians_view_tf=gaussians_for_view_tf[..., :10],  # pos(3) + cam-frame scale(3) + quat(4)
         tf32_view_tf=True,
+        fov=(fov / 180.0 * torch.pi).reshape(bs, nv),
     )
 
     # [bs, nv, C, H, W] -> [bs, nv, H, W, C]

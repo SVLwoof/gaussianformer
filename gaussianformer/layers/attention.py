@@ -648,6 +648,7 @@ class TransformerDecoder(nn.Module):
             ray_rope_2d: bool = False,
             ray_rope_2d_dim: int = 16,
             ray_rope_2d_scale: float = 0.25,
+            proj_rope_2d: bool = False,
     ):
         """
         Transformer decoder. Each layer has cross-attention and self-attention.
@@ -708,20 +709,35 @@ class TransformerDecoder(nn.Module):
         # right after the 3-D pairs (which end at pos_dim*rope_dim/2), so it never overlaps the
         # pretrained rotation layout.
         self.ray_rope_2d = ray_rope_2d
-        if ray_rope_2d:
+        self.proj_rope_2d = proj_rope_2d
+        if ray_rope_2d or proj_rope_2d:
             assert rope_dim is not None
             self.rope_uv = SpatialRotaryEmbedding(dim=ray_rope_2d_dim, pos_dim=2, pos_scale=ray_rope_2d_scale)
             self.rope_uv_start = pos_dim * rope_dim // 2
             assert self.rope_uv_start + ray_rope_2d_dim <= self.head_dim // 2, "not enough head channels for 2-D RoPE"
 
+    def _cos_sin_3d_2d(self, pos3, uv):
+        """3-D RoPE in the pretrained channel pairs plus 2-D (u,v) RoPE in the pairs right after."""
+        f3 = self.rope_emb.get_spatial_freqs(pos3)                 # hf format: [B,1,N,2*n3]
+        f3 = f3[..., : f3.shape[-1] // 2]
+        f2 = self.rope_uv.get_spatial_freqs(uv)
+        f2 = f2[..., : f2.shape[-1] // 2]
+        f = torch.cat([f3, f2], -1)
+        return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
+
     def forward(self, x, ctx, src_key_padding_mask=None, spatial_pos=None, ray_pos=None, out_layers=[], tf32_mode=False,
-                patch_h=None, patch_w=None, geom_align=None):
+                patch_h=None, patch_w=None, geom_align=None, uv_q=None, uv_k=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
-            rope_freqs = self.rope_emb.get_spatial_freqs(ray_pos)
-            rope_cos, rope_sin = freqs_to_cos_sin(rope_freqs, head_dim=self.head_dim)
-            rope_ctx_freqs = self.rope_emb.get_spatial_freqs(spatial_pos)
-            rope_ctx_cos, rope_ctx_sin = freqs_to_cos_sin(rope_ctx_freqs, head_dim=self.head_dim)
+            if self.proj_rope_2d and uv_k is not None:
+                # P2a: queries carry their patch centre, keys the Gaussian's projected patch coords
+                rope_cos, rope_sin = self._cos_sin_3d_2d(ray_pos, uv_q)
+                rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d_2d(spatial_pos, uv_k)
+            else:
+                rope_freqs = self.rope_emb.get_spatial_freqs(ray_pos)
+                rope_cos, rope_sin = freqs_to_cos_sin(rope_freqs, head_dim=self.head_dim)
+                rope_ctx_freqs = self.rope_emb.get_spatial_freqs(spatial_pos)
+                rope_ctx_cos, rope_ctx_sin = freqs_to_cos_sin(rope_ctx_freqs, head_dim=self.head_dim)
         else:
             rope_cos = rope_sin = rope_ctx_cos = rope_ctx_sin = None
         rope_self_cos = rope_self_sin = None

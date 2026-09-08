@@ -57,6 +57,19 @@ class GaussianFormerConfig:
     (today it is permutation-invariant: every patch carries the camera origin as its position)."""
     ray_rope_2d_dim: int = 16
     """Rotary dim of the 2-D ray RoPE (8 log-spaced freqs per axis), placed after the 3-D pairs."""
+    proj_bias: bool = False
+    """P2b: zero-init-gated cross-attention bias -|u_patch - u_gaussian|^2 / sigma^2 in PATCH units,
+    from the explicit perspective projection of each Gaussian (replaces the low-contrast cos-angle
+    geom_bias). Gaussians behind the camera get a large distance; register slots get 0."""
+    proj_sigma_patches: float = 2.0
+    """Width of the proximity bias in patches (2 = 16 px at patch 8)."""
+    proj_feat: bool = False
+    """P2c: inject per-view [log depth, log projected radius (px), camera-frame quaternion] into the
+    context tokens through a zero-init linear, so the view stage sees depth and footprint."""
+    proj_rope_2d: bool = False
+    """P2a: 2-D RoPE on the projected patch coordinates for cross-attention KEYS and on patch
+    centres for QUERIES (uses ray_rope_2d_dim / ray_rope_2d_scale). Alters pretrained function:
+    needs a 256px recovery stage."""
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""

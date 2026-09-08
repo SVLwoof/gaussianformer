@@ -87,9 +87,11 @@ class GaussianFormerRenderingPipeline:
                 valid_mask=mask,
                 rays_o=rays_o,
                 rays_d=rays_d,
-                # Pass only the positional part for view transformation
-                gaussians_view_tf=gaussians_for_view_tf[..., :self.config.pos_dim],
+                # Camera-frame position (3) + scale (3) + quaternion (4); the model uses the
+                # first pos_dim for RoPE and the rest only for projection features (P2).
+                gaussians_view_tf=gaussians_for_view_tf[..., :10],
                 tf32_view_tf=tf32_view_tf,
+                fov=(fov / 180. * torch.pi).reshape(bs, nv),
             )
 
         # Process output
