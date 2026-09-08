@@ -427,6 +427,10 @@ def main():
     parser.add_argument("--keep_last_n", type=int, default=None,
                         help="Retain only the N most recent same-phase checkpoints "
                         "(prune older ones after each save). None = keep all (default).")
+    parser.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
+                        help="GaussianFormerConfig overrides for architecture probes, e.g. "
+                             "--model_cfg rope_pos_scale=4 ray_rope_2d=true. With --init_from, "
+                             "parameters absent from the seed must be zero-init (warm-safe).")
     parser.add_argument("--views_per_epoch", type=int, default=None,
                         help="Per-epoch view subsampling for the TRAIN set: draw this many "
                         "random views per scene each epoch (redrawn per epoch; all views seen "
@@ -520,7 +524,9 @@ def main():
         view_transformer_ffn_hidden_dim=args.latent_dim * args.ffn_mult,
         input_mlp_hidden=args.input_mlp_hidden,
         geom_bias=args.geom_bias,
-    )
+    ).with_overrides(args.model_cfg)
+    if args.model_cfg and is_main_process():
+        print(f"model_cfg overrides: {args.model_cfg}", flush=True)
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
     # it carries the phase + epoch so training continues from where it stopped. The
@@ -543,11 +549,18 @@ def main():
         # phase2_lr, global_step/start_epoch = 0). Phase 1 is skipped via the gate below.
         init_ckpt = torch.load(args.init_from, map_location="cpu", weights_only=True)
         module = GaussianFormer(gf_config)
-        if args.geom_bias:
-            # unbiased seeds lack the gates; they stay at their zero init = exact baseline
+        if args.geom_bias or args.model_cfg:
+            # Architecture probes add modules the seed lacks. Warm-safe rule: every missing
+            # tensor must be zero at init (gates, zero-init linears), so the wrapped model is
+            # exactly the seed until training moves it. RoPE-only changes add no tensors.
             missing, unexpected = module.load_state_dict(init_ckpt["model_state_dict"], strict=False)
-            bad = [k for k in missing if not k.endswith(".geom_gate")] + list(unexpected)
-            assert not bad, f"init_from mismatch beyond geom gates: {bad}"
+            assert not unexpected, f"seed has keys the model lacks: {list(unexpected)[:5]}"
+            sd = module.state_dict()
+            nonzero = [k for k in missing if sd[k].abs().sum() > 0]
+            assert not nonzero, f"missing seed keys are NOT zero-init (would damage the warm init): {nonzero[:5]}"
+            if is_main_process() and missing:
+                print(f"init_from: {len(missing)} zero-init tensors absent from seed "
+                      f"(e.g. {missing[0]})", flush=True)
         else:
             module.load_state_dict(init_ckpt["model_state_dict"])
         if is_main_process():

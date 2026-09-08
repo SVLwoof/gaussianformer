@@ -5,8 +5,6 @@
 #SBATCH --job-name=nsweval
 #SBATCH --output=runs/nsweval_%j.out
 #SBATCH --gres=gg:g4:1
-#SBATCH --account=sagieb
-#SBATCH --killable
 #SBATCH --requeue
 #SBATCH --exclude=cyril-01,firefoot-01,firefoot-08
 

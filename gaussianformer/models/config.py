@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
 from typing import Literal, List, Optional
 
 
@@ -90,3 +90,37 @@ class GaussianFormerConfig:
 
     def get(self, key, default=None):
         return getattr(self, key, default)
+
+    def with_overrides(self, pairs: list[str] | None) -> "GaussianFormerConfig":
+        """Apply `key=value` overrides (CLI `--model_cfg`), coercing to the field's type.
+
+        One generic knob for architecture probes instead of a flag per feature. Unknown keys
+        raise; bools accept true/false/1/0; None-defaulted fields try int, then float, then str.
+        """
+        if not pairs:
+            return self
+        types = {f.name: f for f in fields(self)}
+        out = {}
+        for p in pairs:
+            key, _, raw = p.partition("=")
+            if key not in types:
+                raise KeyError(f"unknown GaussianFormerConfig field {key!r}")
+            cur = getattr(self, key)
+            if isinstance(cur, bool):
+                val = raw.lower() in ("1", "true", "yes")
+            elif isinstance(cur, int):
+                val = int(raw)
+            elif isinstance(cur, float):
+                val = float(raw)
+            elif cur is None:
+                val = raw
+                for cast in (int, float):
+                    try:
+                        val = cast(raw)
+                        break
+                    except ValueError:
+                        pass
+            else:
+                val = raw
+            out[key] = val
+        return replace(self, **out)
