@@ -3040,3 +3040,29 @@ Render strips (`data_v10/probe_strips.py`, tmp/probe_strips.png): the three prob
 indistinguishable by eye; the residual is invented/misplaced fine texture on the dense objects
 (hut 31–32 dB vs rec-GT 42–44) and soft edges on smooth ones (girl 40–42 vs 47). Remaining:
 p2_rope2d (512 stage opened low at 0.0223), p1_canvas, baseline rerun (moving to sagieb).
+
+## 2026-09-09: **P2 arm 2 (2-D RoPE on projected coordinates in cross-attention) = FIRST POSITIVE** — 6.47 fit / 19.07 heldout
+`probe_p2_rope2d` (31545380 → eval 31545381; `proj_rope_2d=true`: keys carry a 2-D RoPE of the
+Gaussian's PROJECTED patch coordinates (u,v), queries carry their patch centre, in the channel
+pairs after the pretrained 3-D band; 256px recovery to 0.00043, then the exact n10 schedule).
+
+| | fit margin | model PSNR (train) | heldout300 margin | LPIPS m (train / heldout) |
+|---|---|---|---|---|
+| baseline (record) | 7.57 | 36.87 | 20.47 | 0.0105 / 0.0997 |
+| p2_bias_feat, p3_ray2d, p3_hf8 | 7.53–7.60 | 36.85–36.92 | 20.45–20.73 | 0.0105 / 0.099–0.102 |
+| **p2_rope2d** | **6.47 (−1.10)** | **37.98** | **19.07 (−1.40)** | **0.0080 / 0.0868** |
+
+Training loss led the pack from epoch 1 (0.0223 vs ~0.030) and finished at 0.000893 vs the
+same-day baseline rerun's trajectory (0.00110 at 2500; final pending), ~19 % lower throughout.
+This is the first architectural change in the entire record (capacity ×5, input head, log-scale,
+cos-angle bias, proximity bias + depth/footprint, 2-D ray RoPE, HF band — all flat) that moves
+BOTH fit and held-out, and held-out moves MORE than fit (−1.40 vs −1.10), i.e. not memorisation.
+Why this and not the proximity bias: the bias only tells attention "how far" a Gaussian is from
+the patch (a scalar penalty); the 2-D RoPE makes the query–key dot product itself a function of
+the image-plane offset in every head and channel pair, so the model can learn oriented,
+anisotropic, content-dependent projection kernels rather than one isotropic falloff. It gives
+the readout the coordinate system rasterization uses. Next: (1) strips; (2) stack with the
+proximity bias / depth features (cheap, zero-init) and with the fg-weighted loss; (3) the
+tomatoes 14-view novel-view probe (29.9 baseline) to test the "reading" claim directly; (4) the
+decisive scale test — full-N (2× data, V18 seed) with proj_rope_2d, since N=10 gains have
+under-delivered at scale before (fg-loss −1.63 at N=100 was the previous best mover).
