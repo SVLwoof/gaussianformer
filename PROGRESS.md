@@ -3030,3 +3030,13 @@ was already sufficient. Verdicts so far: p2_bias_feat 7.60/20.45, p3_ray2d 7.54/
 null. Pending: p3_hf8 (eval running), p2_rope2d (512 stage opened at 0.0223 vs ~0.029 for every
 other arm — first arm to start visibly differently), p1_canvas (512 stage running after the
 autocast fix), baseline rerun (killable).
+
+## 2026-09-09: P3 arm (additive 8× RoPE band) = **FLAT** — 7.53 fit / 20.69 heldout
+`probe_p3_hf8` (31540294 → eval 31540295; `rope_hf_scale=8`, recovery to 0.00042). Fit 7.53
+(model 36.92), heldout 20.69, LPIPS margins 0.0105 / 0.1015 — identical to p3_ray2d (7.54 /
+20.73) and p2_bias_feat (7.60 / 20.45). Three of the four geometry arms are now null within
+±0.1 dB on fit; the model does not use extra positional bandwidth to fit 10 objects better.
+Render strips (`data_v10/probe_strips.py`, tmp/probe_strips.png): the three probes are
+indistinguishable by eye; the residual is invented/misplaced fine texture on the dense objects
+(hut 31–32 dB vs rec-GT 42–44) and soft edges on smooth ones (girl 40–42 vs 47). Remaining:
+p2_rope2d (512 stage opened low at 0.0223), p1_canvas, baseline rerun (moving to sagieb).
