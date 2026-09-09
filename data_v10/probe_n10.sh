@@ -38,11 +38,13 @@ SEED=${SEED:-checkpoints_v18_256/phase2_epoch_30.pt}
 SAVE=checkpoints_probe_${TAG}
 # MODEL_CFG arrives ;-separated (sbatch --export cannot carry spaces reliably)
 CFG=(); [ -n "$MODEL_CFG" ] && CFG=(--model_cfg ${(s:;:)MODEL_CFG})
+# EXTRA_TRAIN: ;-separated extra train.py args (e.g. "--fg_bg_weight;0.05")
+XT=(); [ -n "$EXTRA_TRAIN" ] && XT=(${(s:;:)EXTRA_TRAIN})
 COMMON=(--gaussian_h5_dir data_v10/nsweep/n${N}_h5 --renders_dir data_v10/nsweep/n${N}_renders
         --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders
         --batch_size 1 --pe_type rope --augment_rotation --views_per_epoch 4
-        --phase2_lr 5e-5 --keep_last_n 2 --num_workers 8 "${CFG[@]}")
-echo "PROBE $TAG cfg=[$MODEL_CFG] stage_r=$STAGE_R steps=$TARGET_STEPS epochs=$EPOCHS node=$(hostname) sm_${ARCH}"
+        --phase2_lr 5e-5 --keep_last_n 2 --num_workers 8 "${CFG[@]}" "${XT[@]}")
+echo "PROBE $TAG cfg=[$MODEL_CFG] extra=[$EXTRA_TRAIN] seed=$SEED stage_r=$STAGE_R steps=$TARGET_STEPS epochs=$EPOCHS node=$(hostname) sm_${ARCH}"
 [ -f $SEED ] || { echo "FATAL: missing $SEED"; exit 1; }
 
 # --- Stage R: 256px log-L1 recovery (resume-safe) ---
