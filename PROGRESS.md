@@ -3008,3 +3008,15 @@ attention+FFN r=4 −2.70; full FT c1 −0.55, c4 +1.82. So 4.5× more steps at 
 6-epoch proxy ordering (targets ≫ rank ≫ epochs) holds at 27 epochs. Equal-bytes verdict for
 the storage-viable shape (≤0.5 MB, 20k+adapter vs 25k gsplat): NEGATIVE — the adapter is 3 dB
 below gsplat-20k before its bytes are even counted. r=1 / r=16 anchors still running on killable.
+
+## 2026-09-09: P2 arm 1 (proximity bias + depth/footprint features) = **FLAT** — 7.60 fit / 20.45 heldout (baseline 7.57 / 20.47)
+`probe_p2_bias_feat` (31542857 → eval 31542858; `--model_cfg proj_bias=true proj_feat=true`, no
+recovery stage, exact n10 schedule). Train-fit margin **7.60** (model 36.85 vs rec-GT 44.44),
+heldout300 **20.45**, LPIPS margins unchanged. Final train loss 0.001103 = baseline 0.001103.
+Unlike the cos-angle probe, the model DID take the signal (epoch-1000 gates 0.001/0.018/0.001/
+**0.079**/0.021/0.006 → ~1.3 nats of logit at 8 patches off-ray in layer 3; geom_feat weight
+norms 0.15 on the cam-frame quaternion, 0.07 on projected radius, 0.03 on log-depth) — and it
+bought nothing. Second clean negative for "the readout lacks projection information": at N=10
+the model can already route; giving it exact image-plane proximity, depth and footprint does not
+move fit. Remaining arms: p3_hf8, p3_ray2d (training loss on the baseline curve since epoch
+1500), p2_rope2d (recovery 0.0018, clean), p1_canvas (killable, pending), baseline rerun.
