@@ -3071,3 +3071,19 @@ under-delivered at scale before (fg-loss −1.63 at N=100 was the previous best 
 `probe_baseline` (31546002 → 31546003; no overrides, same code as all arms, same day, L40S).
 Final train loss 0.001109 vs 0.001103 recorded. So the arm deltas are clean: p2_rope2d −1.15 fit /
 −1.37 heldout vs the same-code control; p2_bias_feat, p3_ray2d, p3_hf8 within ±0.1 / ±0.3.
+
+## 2026-09-10: P2 (proj_rope_2d) becomes THE candidate — cycle 2 + variant sweep launched
+Shahaf: "our sole improvement should be that nice P2; if we match at N=10 and improve a specific
+model with the adapter over fit, we win." Plan = push the N=10 fit margin toward 0 with
+proj_rope_2d, then per-object adapters on top. Launched (N=10 harness, `submit_probe.sh` now
+takes SEED and EXTRA_TRAIN):
+
+| arm | change vs p2_rope2d (6.47 / 19.07) | account |
+|---|---|---|
+| p2_rope2d_c2 | 2nd cosine cycle, seeded from p2_rope2d ep3000 (record: cycles gave −1.14, −0.78 at N=100) | sagieb 31560327 |
+| p2_full | + proximity bias + depth/footprint (zero-init) | sagieb 31560101 (running) |
+| p2r_fg | + fg-weighted loss 0.05 (record: −1.63 at N=100) | killable 31560329 |
+| p2r_dim32 | 2-D band 16 → 32 rotary dims (more freqs per axis) | killable 31560331 |
+| p2r_scale1 | 2-D band scale 0.25 → 1.0 (1..7 rad/patch: sharper kernels) | killable 31560333 |
+| p2r_both | + 2-D RoPE in ray self-attention too | killable 31560335 |
+Still pending from the first wave: p1_canvas (12–13 % under baseline in train loss).
