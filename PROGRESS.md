@@ -2997,3 +2997,14 @@ FULL splat with the fleet recipe and laid out as `codec_scaleout/<scene>_n{5k,2k
 Splat bytes: 280 KB (5k) / 112 KB (2k) vs 1,120 KB (20k). These are the inputs for the
 equal-bytes RD grid (adapter or fine-tune at N ∈ {2k, 5k, 20k} vs gsplat at matched bytes),
 queued behind the V19 probes per Shahaf's priority.
+
+## 2026-09-09: LoRA anchor r=4 (27 epochs) = **−3.11 dB, 1/40** — attention-only LoRA saturates ~3 dB below rec-GT
+slipper 20k, attention-only rank 4 (479 K params, 1.9 MB), lr 2e-4, 27 ep (31527117; eval
+31542856): rand −3.70 (0/24, model 32.1) / close −1.17 (1/8, 27.0) / far −3.27 (0/8, 35.1).
+Final train loss 0.0177 = where the full fine-tune was at epoch 2 (c1 ended 0.0095). Context:
+zero-shot floor −16.32; 6-epoch sweep attention-only r=2 at lr 7.8e-4 −3.41; best 6-epoch
+attention+FFN r=4 −2.70; full FT c1 −0.55, c4 +1.82. So 4.5× more steps at the recipe lr bought
++0.3 dB over the 6-epoch attention-only point and did not reach the 6-epoch FFN trials: the
+6-epoch proxy ordering (targets ≫ rank ≫ epochs) holds at 27 epochs. Equal-bytes verdict for
+the storage-viable shape (≤0.5 MB, 20k+adapter vs 25k gsplat): NEGATIVE — the adapter is 3 dB
+below gsplat-20k before its bytes are even counted. r=1 / r=16 anchors still running on killable.
