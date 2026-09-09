@@ -3020,3 +3020,13 @@ bought nothing. Second clean negative for "the readout lacks projection informat
 the model can already route; giving it exact image-plane proximity, depth and footprint does not
 move fit. Remaining arms: p3_hf8, p3_ray2d (training loss on the baseline curve since epoch
 1500), p2_rope2d (recovery 0.0018, clean), p1_canvas (killable, pending), baseline rerun.
+
+## 2026-09-09: P3 arm (2-D ray-token RoPE) = **FLAT** — 7.54 fit / 20.73 heldout (baseline 7.57 / 20.47)
+`probe_p3_ray2d` (31540200 → eval 31540201; `ray_rope_2d=true`, 256px recovery to 0.00042 then
+the n10 schedule). Fit 7.54 (model 36.90), heldout 20.73 (−0.26 dB worse than baseline, within
+the LPIPS-margin noise seen across controls), final train loss 0.001088 vs 0.001103. Giving the
+ray-token self-attention a 2-D position does nothing for fit at N=10: adjacency via the DPT convs
+was already sufficient. Verdicts so far: p2_bias_feat 7.60/20.45, p3_ray2d 7.54/20.73 — both
+null. Pending: p3_hf8 (eval running), p2_rope2d (512 stage opened at 0.0223 vs ~0.029 for every
+other arm — first arm to start visibly differently), p1_canvas (512 stage running after the
+autocast fix), baseline rerun (killable).
