@@ -10,7 +10,8 @@ from pathlib import Path
 from gaussianformer.utils.canvas import render_canvas
 
 scenes = json.load(open("data_v10/nsweep/n10_scenes.json"))
-scene = scenes[0] if isinstance(scenes, list) else list(scenes)[0]
+sid = scenes[0] if isinstance(scenes, list) else list(scenes)[0]
+scene = f"scene_{int(sid):04d}" if not str(sid).startswith("scene_") else sid
 h5 = Path("data_v10/nsweep/n10_h5") / f"{scene}.h5"
 with h5py.File(h5) as f:
     g = np.concatenate([np.array(f[k], np.float32).reshape(len(f["means"]), -1)
