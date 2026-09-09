@@ -3066,3 +3066,8 @@ proximity bias / depth features (cheap, zero-init) and with the fg-weighted loss
 tomatoes 14-view novel-view probe (29.9 baseline) to test the "reading" claim directly; (4) the
 decisive scale test — full-N (2× data, V18 seed) with proj_rope_2d, since N=10 gains have
 under-delivered at scale before (fg-loss −1.63 at N=100 was the previous best mover).
+
+## 2026-09-10: baseline rerun reproduces the record — 7.62 fit / 20.44 heldout (record 7.57 / 20.47)
+`probe_baseline` (31546002 → 31546003; no overrides, same code as all arms, same day, L40S).
+Final train loss 0.001109 vs 0.001103 recorded. So the arm deltas are clean: p2_rope2d −1.15 fit /
+−1.37 heldout vs the same-code control; p2_bias_feat, p3_ray2d, p3_hf8 within ±0.1 / ±0.3.
