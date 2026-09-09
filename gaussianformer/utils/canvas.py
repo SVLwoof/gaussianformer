@@ -9,6 +9,7 @@ import torch
 
 
 @torch.no_grad()
+@torch.autocast("cuda", enabled=False)  # gsplat's CUDA kernels are fp32-only; the trainer runs under bf16 autocast
 def render_canvas(gaussians: torch.Tensor, mask: torch.Tensor, c2w: torch.Tensor, fov_deg: torch.Tensor,
                   resolution: int) -> torch.Tensor:
     """gaussians [B,N,14] (pos, scale, quat wxyz, rgb, opacity), mask [B,N], c2w [B,V,4,4] (Blender
