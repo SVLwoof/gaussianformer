@@ -3163,3 +3163,10 @@ differ slightly from the arms above (all of which used bf16 LPIPS); the baseline
 20.44 remains the reference. c3b (31571879, sagieb, from the c2 ep2200 model) is the test: if it
 trains through without the jump, the bf16-LPIPS story holds; if it collapses again, next
 suspects are Adam eps and the clip. dim32 back on killable to stay within 12 sagieb GPUs.
+
+## 2026-09-10 eve: fp32 LPIPS holds — c3b passed the old collapse window clean
+`p2_rope2d_c3b` (same seed, schedule and data order as the collapsed c3, only LPIPS in fp32):
+epochs 830–978 all below 0.0015, latest 0.00077 at ep978 — lower than any epoch c3 reached
+before it jumped (0.0034 at ep830, 0.008 at ep1000). Single-run evidence so far, but it is the
+same trajectory that collapsed deterministically three times under bf16 LPIPS. Verdict ~05:30.
+p2r_fg finished (train LPIPS 0.00136 vs 0.00148 plain P2; eval queued); dim32 promoted to sagieb.
