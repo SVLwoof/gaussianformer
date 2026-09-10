@@ -109,7 +109,8 @@ def main() -> None:
         # Early adapter checkpoints stored Path objects in "args"; allowlist them (our own file).
         with torch.serialization.safe_globals([Path, type(Path())]):
             ckpt = torch.load(resume, map_location="cpu", weights_only=True)
-        assert ckpt["lora"] == meta, f"resume meta mismatch: {ckpt['lora']} vs {meta}"
+        old_meta = {**{"model_cfg": []}, **ckpt["lora"]}  # adapters saved before model_cfg existed
+        assert old_meta == meta, f"resume meta mismatch: {old_meta} vs {meta}"
         load_lora(module, ckpt, merge=False)
         start_epoch, global_step = ckpt["epoch"], ckpt["global_step"]
     else:
