@@ -3143,3 +3143,15 @@ to; once across, the tiny LR cannot bring it back. Cycle 1 (higher loss, same sc
 did this. Mitigations to try when it matters: Adam eps 1e-8 → 1e-6, EMA of weights for eval,
 or a loss-spike rollback (reload last checkpoint + skip the epoch). For now: cycle 2's model =
 ep2200 (4.56 fit); cycle 3 is running from it with the collapse detector armed.
+
+## 2026-09-10: cycle 3 collapsed too — at ep830, lr 4.2e-5 → the low-loss STATE is unstable, not the schedule
+`p2_rope2d_c3` (31566233, fresh cosine + fresh Adam from the c2 ep2200 model): 0.00090 flat
+through ep700, 0.0034 at ep830, 0.0080 at ep1000 and rising → cancelled. So the "Adam noise
+floor at tiny LR" story is wrong: from the ep2200 state, training tips over within a few hundred
+steps at ANY lr (8e-6 tail of c2; 8e-6 shuffled; 4e-5 head of c3). Cycle 1 from the V18 seed
+never collapsed (final 0.00089); the instability appears once the train loss sits ≲0.0006–0.0009.
+Suspects, in testing order: (1) LPIPS term computed under bf16 autocast at very small
+perceptual distances (the jump is 90 % LPIPS: 0.001 → 0.014); (2) Adam eps 1e-8 with tiny
+second moments; (3) grad clip 1.0 too loose for a sharp basin. Consequence for the "match at
+N=10 with cycles" plan: cycles past 2 are blocked until this is fixed. Cycle-2 ep2200 (4.56)
+stands as the best P2 model. dim32 variant moved into the freed sagieb slot.
