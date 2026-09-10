@@ -3121,3 +3121,11 @@ the canvas acts as a prior the model can lean on for objects it has not memorise
 model PSNR, rec-GT 45): the zero-init pass-through was only partially learned in 30k steps.
 Stack arm p1p2 (`canvas_cond=true proj_rope_2d=true`) queued on killable as a variant of the P2
 candidate; Shahaf's stated preference is P2 as the single improvement.
+
+## 2026-09-10: p2_full (rope2d + proximity bias + depth/footprint) = 6.46 / 19.04 — identical to rope2d alone (6.47 / 19.07)
+`probe_p2_full` (31560101 → 31560102). Final train loss 0.000882 vs 0.000893. The zero-init bias
+and feature paths add nothing once the 2-D RoPE is present; P2 = proj_rope_2d alone. Also
+launched: shuffle-order collapse diagnostic (`p2_rope2d_c2diag`, 31571612: resume from the
+ep2200 checkpoint with `--data_seed 1`, new reproducibility knob in train.py/dataset.py; if no
+collapse by ep2231 the event is sample-order specific). p2r_scale1 bumped back to killable to
+stay within 12 sagieb GPUs.
