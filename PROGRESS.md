@@ -3180,3 +3180,17 @@ N=100 in August (−1.63): −3.12 dB here. Reading: the 2-D projected RoPE lets
 where object detail goes, and the fg loss stops the 95 % background from diluting the gradient
 that places it; each fixes a different half of "fine detail is invented and misplaced".
 Next rung launched: p2r_fg_c2 (cycle 2 from p2r_fg ep3000, fg loss, fp32 LPIPS).
+
+## 2026-09-10 eve: THE WIN TEST — LoRA "adapter over fit" on the P2+fg base
+Shahaf: take the best arm (P2+fg, or its cycle 2) and LoRA-overfit a single object; beat rec-GT
+on novel views = win. The base's own 10 objects have only 14 orbit views (no full splats stored
+for the train split), so the clean protocol is the codec one on scale-out objects: 9000
+randomised training views of the full splat, 40 held-out novel views, verdict vs rec-GT.
+Launched (train_lora.py now takes `--model_cfg`, recorded in the adapter; eval rebuilds the base):
+- slipper: `checkpoints_lora_p2fg_gopro_r4` (31577096 → eval 31577097, sagieb)
+- molecule: `checkpoints_lora_p2fg_scene_1423_r4` (31577093 → 31577094, killable)
+Recipe = the sweep's best (rank 4 attn+FFN, alpha 4, lr 2.75e-3, eff. batch 4, wd 0.1, dropout
+0.07) + fg loss 0.05, 27 epochs, base = p2r_fg ep3000 (proj_rope_2d). Bars: V18-base LoRA on
+slipper −3.11 (27 ep) / −2.70 (best 6 ep); full fine-tune c1 −0.55, c4 +1.82; molecule full FT
+c5 +1.47. Caveat: the base is a 10-object fit that never saw either object, so the adapter must
+do the whole object adaptation — a harder test than "adapter over the object's own fit".
