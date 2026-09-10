@@ -3087,3 +3087,15 @@ takes SEED and EXTRA_TRAIN):
 | p2r_scale1 | 2-D band scale 0.25 → 1.0 (1..7 rad/patch: sharper kernels) | killable 31560333 |
 | p2r_both | + 2-D RoPE in ray self-attention too | killable 31560335 |
 Still pending from the first wave: p1_canvas (12–13 % under baseline in train loss).
+
+## 2026-09-10: p2_rope2d cycle 2 COLLAPSED at epoch 2230 (lr 8e-6) — salvaged from the epoch-2200 checkpoint
+Cycle 2 (31560327, seeded from p2_rope2d ep3000) was on track — 0.00080 at ep1500, 0.00063 at
+ep2000, 0.00058 at ep2224 (cycle-1 final 0.00089) — then within epoch 2230 the loss jumped to
+~0.007 and stayed there (LPIPS 0.001 → 0.014, log-L1 0.00024 → 0.0006) for 300+ epochs at
+lr ≤ 8e-6: a basin jump the annealed LR cannot undo, not a transient. No NaN/resume in the log.
+Cycle 1 of the same config and all other arms showed no such event. Actions: pre-collapse
+`phase2_epoch_2200.pt` copied to tmp/ and evaluated directly (31566134; LR at ep2200 was already
+8e-6, so it is a near-annealed cycle-2 model); post-collapse ep2400 deleted; job resubmitted
+(31566135) → auto-resumes from ep2200 to test reproducibility. Monitor now flags any late-epoch
+avg loss > 0.003. Open question: numerical (bf16 attention with the added 2-D band?) vs
+optimizer-state event; if the resume collapses at the same epoch it is data-order/optimizer.
