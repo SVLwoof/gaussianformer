@@ -184,10 +184,15 @@ def compute_loss(
 
     lpips_term = torch.tensor(0.0, device=device)
     if lpips_w > 0:
-        pred_ldr = torch.clamp(10.0 ** pred.squeeze(1) - 1.0, 0.0, 1.0)
-        p = pred_ldr.permute(0, 3, 1, 2) * 2.0 - 1.0
-        g = target.permute(0, 3, 1, 2) * 2.0 - 1.0
-        lpips_term = get_lpips(device)(p, g).mean()
+        # LPIPS in fp32 regardless of the caller's autocast: a VGG feature distance between two
+        # nearly identical images has ~3 significant digits in bf16, and its gradient turns to
+        # noise exactly when training converges (the late-cycle collapses of 2026-09-10 were
+        # 90 % LPIPS jumps at train loss ~0.0006).
+        with torch.autocast(device_type="cuda", enabled=False):
+            pred_ldr = torch.clamp(10.0 ** pred.squeeze(1).float() - 1.0, 0.0, 1.0)
+            p = pred_ldr.permute(0, 3, 1, 2) * 2.0 - 1.0
+            g = target.float().permute(0, 3, 1, 2) * 2.0 - 1.0
+            lpips_term = get_lpips(device)(p, g).mean()
         total = total + lpips_w * lpips_term
 
     return total, log_term, lpips_term
