@@ -439,6 +439,9 @@ def main():
                         help="GaussianFormerConfig overrides for architecture probes, e.g. "
                              "--model_cfg rope_pos_scale=4 ray_rope_2d=true. With --init_from, "
                              "parameters absent from the seed must be zero-init (warm-safe).")
+    parser.add_argument("--data_seed", type=int, default=0,
+                        help="Offsets the per-epoch data order (sampler shuffle + view draw). 0 = the "
+                             "default epoch-keyed order; use e.g. 1 to test order-dependence on resume.")
     parser.add_argument("--views_per_epoch", type=int, default=None,
                         help="Per-epoch view subsampling for the TRAIN set: draw this many "
                         "random views per scene each epoch (redrawn per epoch; all views seen "
@@ -474,11 +477,13 @@ def main():
         augment_rotation=args.augment_rotation,
         views_per_epoch=args.views_per_epoch,
         log_scale_input=args.log_scale_input,
+        data_seed=args.data_seed,
     )
     train_sampler: DistributedSampler | None = None
     if world_size > 1:
         train_sampler = DistributedSampler(
             dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=False,
+            seed=args.data_seed,
         )
     dataloader = DataLoader(
         dataset,
