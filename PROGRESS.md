@@ -3194,3 +3194,8 @@ Recipe = the sweep's best (rank 4 attn+FFN, alpha 4, lr 2.75e-3, eff. batch 4, w
 slipper −3.11 (27 ep) / −2.70 (best 6 ep); full fine-tune c1 −0.55, c4 +1.82; molecule full FT
 c5 +1.47. Caveat: the base is a 10-object fit that never saw either object, so the adapter must
 do the whole object adaptation — a harder test than "adapter over the object's own fit".
+
+## 2026-09-10 late: p2r_scale1 (2-D band 4× sharper) = 6.51 / 19.25 — same as the default band (6.47 / 19.07)
+`probe_p2r_scale1` (31571637 → 31571638). Final train loss 0.000888 vs 0.000893. The 2-D RoPE's
+frequency scale is not a lever between 0.25 and 1.0 rad/patch; default kept. Remaining P2
+variants (dim32, both, p1p2) are still starved on killable.
