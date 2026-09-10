@@ -3099,3 +3099,13 @@ Cycle 1 of the same config and all other arms showed no such event. Actions: pre
 (31566135) → auto-resumes from ep2200 to test reproducibility. Monitor now flags any late-epoch
 avg loss > 0.003. Open question: numerical (bf16 attention with the added 2-D band?) vs
 optimizer-state event; if the resume collapses at the same epoch it is data-order/optimizer.
+
+## 2026-09-10: p2_rope2d CYCLE 2 (ep2200, pre-collapse) = **fit 4.56 / heldout 19.42** — the ladder is 7.57 → 6.47 → 4.56
+`probe_p2_rope2d_c2ep2200` (31566134): train-fit margin **4.56** (model 39.88 vs rec-GT 44.44;
+LPIPS margin 0.0046), heldout300 **19.42** (+0.35 vs cycle 1's 19.07 — cycles buy fit, not
+generalisation, as at N=100). Cycle gain −1.91 dB, larger than the N=100 record's −1.14. The
+resume from ep2200 collapsed again at the SAME epoch (2231) → the collapse is deterministic in
+(checkpoint, data order); cancelled. ep2200 stands as the cycle-2 result (LR was 8e-6 = 97 %
+annealed). Cycle 3 launched from that checkpoint (p2_rope2d_c3). fg-loss variant moved to
+sagieb (31566158). Path to "match at N=10": 4.56 left; if the 0.55× decay holds, c3 ≈ 3.5,
+c4 ≈ 2.9; fg-loss and the other variants have to supply the rest.
