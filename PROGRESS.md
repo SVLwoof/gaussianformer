@@ -3155,3 +3155,11 @@ perceptual distances (the jump is 90 % LPIPS: 0.001 → 0.014); (2) Adam eps 1e-
 second moments; (3) grad clip 1.0 too loose for a sharp basin. Consequence for the "match at
 N=10 with cycles" plan: cycles past 2 are blocked until this is fixed. Cycle-2 ep2200 (4.56)
 stands as the best P2 model. dim32 variant moved into the freed sagieb slot.
+
+## 2026-09-10: fix applied — LPIPS evaluated in fp32 (668f6d6); cycle 3 relaunched as p2_rope2d_c3b
+`compute_loss` now wraps the LPIPS-VGG call in `autocast(enabled=False)` with fp32 inputs; the L1
+term and the model forward stay under bf16 autocast. Numerics of every run started after this
+differ slightly from the arms above (all of which used bf16 LPIPS); the baseline rerun's 7.62 /
+20.44 remains the reference. c3b (31571879, sagieb, from the c2 ep2200 model) is the test: if it
+trains through without the jump, the bf16-LPIPS story holds; if it collapses again, next
+suspects are Adam eps and the clip. dim32 back on killable to stay within 12 sagieb GPUs.
