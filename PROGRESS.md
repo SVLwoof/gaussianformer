@@ -3129,3 +3129,17 @@ launched: shuffle-order collapse diagnostic (`p2_rope2d_c2diag`, 31571612: resum
 ep2200 checkpoint with `--data_seed 1`, new reproducibility knob in train.py/dataset.py; if no
 collapse by ep2231 the event is sample-order specific). p2r_scale1 bumped back to killable to
 stay within 12 sagieb GPUs.
+
+## 2026-09-10: collapse diagnostic — NOT sample-order specific; the ep2200 state itself is on a ridge
+Resume from ep2200 with `--data_seed 1` (different sampler shuffle AND different per-epoch view
+draw): loss flat at 0.00059–0.00066 for 24 epochs, then 0.0035 at ep2225 and 0.007–0.008 from
+ep2226 on — the same event, 5 epochs EARLIER than the original (2230) and the same-order resume
+(2231). So it is a property of (weights, Adam moments) at ep2200, not of a particular batch: any
+~250 further optimizer steps at lr ≈ 8e-6 tip it over. Best current explanation: late in cycle 2
+the loss (0.0006) and hence gradients are ~2× smaller than at the same point of cycle 1; Adam's
+normalised update keeps a fixed per-element size (~lr) as the gradient shrinks, so the update
+direction becomes noise-dominated and the model random-walks across a sharp ridge it sits next
+to; once across, the tiny LR cannot bring it back. Cycle 1 (higher loss, same schedule) never
+did this. Mitigations to try when it matters: Adam eps 1e-8 → 1e-6, EMA of weights for eval,
+or a loss-spike rollback (reload last checkpoint + skip the epoch). For now: cycle 2's model =
+ep2200 (4.56 fit); cycle 3 is running from it with the collapse detector armed.
