@@ -47,6 +47,10 @@ OPT=()
 [ -n "$LORA_ALPHA" ] && OPT+=(--alpha $LORA_ALPHA)
 [ -n "$LORA_TARGETS" ] && OPT+=(--targets "$LORA_TARGETS")
 [ -n "$LORA_DROPOUT" ] && OPT+=(--dropout $LORA_DROPOUT)
+# MODEL_CFG: ;-separated GaussianFormerConfig overrides of the BASE (e.g. "proj_rope_2d=true");
+# FG: fg-weighted loss background weight (e.g. 0.05). Both optional.
+[ -n "$MODEL_CFG" ] && OPT+=(--model_cfg ${(s:;:)MODEL_CFG})
+[ -n "$FG" ] && OPT+=(--fg_bg_weight $FG)
 echo "CODEC-LORA $SCENE r=$LORA_RANK lr=$LR wd=$WD: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM}, save=$SAVE_DIR, node=$(hostname) sm_${ARCH}"
 
 uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train_lora \

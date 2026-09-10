@@ -44,6 +44,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--save_dir", type=Path, required=True)
     p.add_argument("--init_from", type=Path, required=True, help="frozen base checkpoint (.pt)")
     p.add_argument("--pe_type", type=str, default="rope")
+    p.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
+                   help="GaussianFormerConfig overrides of the BASE (e.g. proj_rope_2d=true); "
+                        "recorded in the adapter checkpoint so evals rebuild the same base")
     p.add_argument("--resolution", type=int, default=512)
     p.add_argument("--epochs", type=int, default=27)
     p.add_argument("--lr", type=float, default=2e-4)
@@ -76,7 +79,7 @@ def main() -> None:
     args = parse_args()
     rank, local_rank, world_size, device = setup_ddp()
     alpha = args.alpha if args.alpha is not None else 2.0 * args.rank
-    meta = {"rank": args.rank, "alpha": alpha, "targets": args.targets,
+    meta = {"rank": args.rank, "alpha": alpha, "targets": args.targets, "model_cfg": args.model_cfg or [],
             "dropout": args.dropout, "base_ckpt": str(args.init_from)}
 
     # --- Data (object views only) ---
@@ -90,9 +93,15 @@ def main() -> None:
                             pin_memory=device.type == "cuda", collate_fn=collate_fn)
 
     # --- Frozen base + adapter ---
-    module = GaussianFormer(GaussianFormerConfig(pe_type=args.pe_type))
+    module = GaussianFormer(GaussianFormerConfig(pe_type=args.pe_type).with_overrides(args.model_cfg))
     base = torch.load(args.init_from, map_location="cpu", weights_only=True)
-    module.load_state_dict(base["model_state_dict"])
+    own = module.state_dict()
+    # RoPE frequency tables are config constants: drop the seed's copies where shapes differ.
+    base_sd = {k: v for k, v in base["model_state_dict"].items()
+               if not (k.endswith(".freqs") and (k not in own or own[k].shape != v.shape))}
+    missing, unexpected = module.load_state_dict(base_sd, strict=False)
+    assert not unexpected, unexpected
+    assert all(k.endswith(".freqs") for k in missing), f"seed lacks non-RoPE tensors: {missing[:5]}"
     del base
     resume = newest_checkpoint(args.save_dir)
     start_epoch, global_step = 0, 0

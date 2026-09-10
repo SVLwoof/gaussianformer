@@ -84,15 +84,22 @@ def parse_model(s: str) -> ModelSpec:
 
 def load_model(spec: ModelSpec, device: torch.device) -> GaussianFormerRenderingPipeline:
     config = GaussianFormerConfig(pe_type=spec.pe_type)
-    model = GaussianFormer(config)
     ckpt = torch.load(spec.ckpt, map_location="cpu", weights_only=True)
     if "lora" in ckpt:
-        # Adapter-only checkpoint: base from the recorded seed, re-wrap, load A/B, fold in.
+        # Adapter-only checkpoint: base (with its recorded config overrides) from the recorded
+        # seed, re-wrap, load A/B, fold in.
         from gaussianformer.layers.lora import load_lora
+        config = config.with_overrides(ckpt["lora"].get("model_cfg") or None)
+        model = GaussianFormer(config)
         base = torch.load(ckpt["lora"]["base_ckpt"], map_location="cpu", weights_only=True)
-        model.load_state_dict(base["model_state_dict"])
+        own = model.state_dict()
+        base_sd = {k: v for k, v in base["model_state_dict"].items()
+                   if not (k.endswith(".freqs") and (k not in own or own[k].shape != v.shape))}
+        missing, unexpected = model.load_state_dict(base_sd, strict=False)
+        assert not unexpected and all(k.endswith(".freqs") for k in missing), (missing, unexpected)
         load_lora(model, ckpt, merge=True)
     else:
+        model = GaussianFormer(config)
         model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     pipe = GaussianFormerRenderingPipeline(model)
