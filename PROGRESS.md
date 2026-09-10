@@ -3170,3 +3170,13 @@ epochs 830–978 all below 0.0015, latest 0.00077 at ep978 — lower than any ep
 before it jumped (0.0034 at ep830, 0.008 at ep1000). Single-run evidence so far, but it is the
 same trajectory that collapsed deterministically three times under bf16 LPIPS. Verdict ~05:30.
 p2r_fg finished (train LPIPS 0.00136 vs 0.00148 plain P2; eval queued); dim32 promoted to sagieb.
+
+## 2026-09-10: **P2 + fg-weighted loss = fit 3.35 / heldout 19.39** — one cycle beats P2's cycle 2
+`probe_p2r_fg` (31566158 → 31566159; `proj_rope_2d=true --fg_bg_weight 0.05`, single 30k-step
+cycle, bf16 LPIPS era). Fit margin **3.35** (model 41.10 vs rec-GT 44.44; LPIPS margin 0.0051),
+heldout300 19.39 (+0.32 vs P2's 19.07, same as P2-c2's 19.42). Ladder on fit: baseline 7.62 →
+P2 6.47 → P2 c2 4.56 → **P2+fg 3.35**. The fg loss stacks on P2 far more than it did alone at
+N=100 in August (−1.63): −3.12 dB here. Reading: the 2-D projected RoPE lets the model resolve
+where object detail goes, and the fg loss stops the 95 % background from diluting the gradient
+that places it; each fixes a different half of "fine detail is invented and misplaced".
+Next rung launched: p2r_fg_c2 (cycle 2 from p2r_fg ep3000, fg loss, fp32 LPIPS).
