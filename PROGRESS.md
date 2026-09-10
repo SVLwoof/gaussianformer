@@ -3109,3 +3109,15 @@ resume from ep2200 collapsed again at the SAME epoch (2231) → the collapse is 
 annealed). Cycle 3 launched from that checkpoint (p2_rope2d_c3). fg-loss variant moved to
 sagieb (31566158). Path to "match at N=10": 4.56 left; if the 0.55× decay holds, c3 ≈ 3.5,
 c4 ≈ 2.9; fg-loss and the other variants have to supply the rest.
+
+## 2026-09-10: P1 (rasterized-canvas conditioning) = fit 6.78 / **heldout 17.47** — the best HELD-OUT mover, weakest on fit
+`probe_p1_canvas` (31545822 → 31545823; `canvas_cond=true`, zero-init canvas linear, no recovery
+stage). Fit **6.78** (−0.84 vs 7.62 same-day baseline; model 37.66), heldout300 **17.47 (−2.97)**,
+LPIPS margins 0.0091 / 0.0805 (best heldout LPIPS of any arm). Final train loss 0.000953. So the
+two positive arms are complementary: P2 (2-D projected RoPE) is the fit mover (−1.15, −3.0 with a
+2nd cycle) and P1 (canvas) is the generalisation mover (−3.0 heldout with fit barely changed) —
+the canvas acts as a prior the model can lean on for objects it has not memorised, exactly the
+"refine rather than render" mechanism. It did NOT collapse onto rec-GT (heldout 24.5 → 27.5 dB
+model PSNR, rec-GT 45): the zero-init pass-through was only partially learned in 30k steps.
+Stack arm p1p2 (`canvas_cond=true proj_rope_2d=true`) queued on killable as a variant of the P2
+candidate; Shahaf's stated preference is P2 as the single improvement.
