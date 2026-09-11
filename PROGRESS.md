@@ -3255,3 +3255,13 @@ target ("match rec-GT") is one more cycle away at this rate: fg_c3 launched on s
 (31588838 → 31588839, fp32 LPIPS, fg loss, seed fg_c2 ep3000).
 Side probe on killable: slipper adapter over the fg_c2 base (31588840 → 31588841, same recipe as the
 −0.33 run) — does a tighter 10-object fit make a better base for an unseen object?
+
+## 2026-09-11 15:10: Debian 13 reservation re-checked — g4 nodes taken, A5000 nodes usable for LoRA
+firefoot-01 / khan-01 (the reservation's L40S / RTX Pro 6000) are fully held by another user for
+2–4 days. Idle reserved nodes are 24 GB class (drape-01, binky-01 A5000; incitatus-01 L4;
+arion-01 A10). Live VRAM: probes ~25 GB/GPU (won't fit), LoRA ~21 GB. Rebuilt the deb13 venv
+(31588948, drape-01, `uv sync --frozen`, import OK) and ran a LoRA smoke on 4×A5000 (31588949):
+fits, ~2.8 s/step vs 1.0 on L40S → 27 epochs ≈ 47 h (needs --time=60:00:00, killable cap 21 d).
+Moved there (--reservation=5787 -w drape-01 --gres=gg:g0:4): slipper adapter over the fg_c2
+base (31588992 → eval 31588993 on killable) and the r=16 anchor (31588994 → 31588995, resumes
+ep15). r=1 anchor eval queued afterany (31588996). Killable g4 pressure is now only the probes.
