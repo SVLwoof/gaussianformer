@@ -3296,3 +3296,12 @@ the generalisation lever (the rasterised canvas hands the decoder a view-consist
 cannot invent for unseen objects), and they stack on both axes. P1 belongs in the story.
 Next rung: the full stack + fg loss, `p1p2_fg` (31590443 → 31590444, killable, same protocol), then cycles.
 Ckpts freed: p1p2_r, p1p2 ep2800.
+
+## 2026-09-12 03:30: WIN TEST, molecule: LoRA r4 over P2+fg (lr 1e-3) = −2.70 dB, 3/40 (close −0.36 3/8, rand −2.53 0/24, far −5.56 0/8)
+`checkpoints_lora_p2fg_scene_1423_r4` (31583677 → 31583678). Full-FT bars on this object:
+c1 −1.11 (rand −0.69, close +0.75, far −4.26), c2 +0.08, c5 +1.47. So on the molecule the
+adapter trails one full-FT cycle by 1.6 dB (on the slipper it led by 0.2). Two differences
+from the slipper run: lr 1e-3 (2.75e-3 diverged here) and a higher rec-GT bar, esp. far (48 dB
+— even the full FT never closed far on this object). Far is the whole deficit: rand/close are
+within ~2 dB of the full-FT c1. Next: adapter cycle 2 at 1e-3 (31590780 → 31590781, sagieb), same protocol
+as slipper c2.
