@@ -3265,3 +3265,9 @@ fits, ~2.8 s/step vs 1.0 on L40S → 27 epochs ≈ 47 h (needs --time=60:00:00, 
 Moved there (--reservation=5787 -w drape-01 --gres=gg:g0:4): slipper adapter over the fg_c2
 base (31588992 → eval 31588993 on killable) and the r=16 anchor (31588994 → 31588995, resumes
 ep15). r=1 anchor eval queued afterany (31588996). Killable g4 pressure is now only the probes.
+
+## 2026-09-11 eve: V18-base anchor r=1 (attention-only, 523 KB, 27 ep) = −3.65 dB, 0/40
+`checkpoints_lora_gopro_r1` (31579937 → eval 31588996). Old-recipe anchor (lr 2e-4, wd 0,
+attn-only, V18 base): rand −4.26, close −1.62, far −3.86. Ladder on the V18 base at 27 epochs:
+r=1 attn −3.65 (0.5 MB) · r=4 attn −3.11 (2.1 MB) — rank buys little there; the base is what
+matters (P2+fg base, r=4 attn+FFN: −0.33). r=16 anchor still running (drape-01, resumes ep15).
