@@ -3199,3 +3199,15 @@ do the whole object adaptation — a harder test than "adapter over the object's
 `probe_p2r_scale1` (31571637 → 31571638). Final train loss 0.000888 vs 0.000893. The 2-D RoPE's
 frequency scale is not a lever between 0.25 and 1.0 rad/patch; default kept. Remaining P2
 variants (dim32, both, p1p2) are still starved on killable.
+
+## 2026-09-11: **P2 cycle 3 (fp32 LPIPS) = fit 2.88 / heldout 19.81** — no collapse, ladder 7.62→6.47→4.56→2.88
+`probe_p2_rope2d_c3b` (31571879 → 31571880, sagieb): 3000 epochs clean under fp32 LPIPS, final
+train loss 0.000410 (the bf16 run collapsed at ep830 from the same state). Fit margin **2.88**
+(model 41.56 vs rec-GT 44.44; LPIPS margin 0.0023 = best on record); heldout300 19.81
+(19.07 → 19.42 → 19.81 across cycles: memorisation drift, expected on a 10-object fit). Each
+cycle still buys ~1.7 dB of fit; not saturated. Cycle 4 queued on killable
+(`p2_rope2d_c4`, 31583494 → 31583495, seed c3b ep3000). fp32-LPIPS fix confirmed as the
+collapse cure (3 for 3 bf16 collapses, 0 for 1 fp32).
+Ops: c3b's 4 sagieb GPUs handed to the molecule win-test (resubmitted from killable as
+31583492 → 31583493, same recipe as slipper). Sagieb = p2r_fg_c2 + slipper LoRA + molecule LoRA
+= 12. Old LoRA anchors r=1/r=16 (31579937/38) still pending on killable.
