@@ -3225,3 +3225,10 @@ Freed ~32 GB (→38 GB): deleted p2r_scale1 (+_r; null arm, eval done), p2r_fg_r
 p2r_fg ep3000 (win-test base + c2 seed), c3b ep3000 (c4 seed), p2r_both ep3000 (eval pending).
 Status: slipper LoRA ep23/27 (LPIPS 0.0236), molecule lr1e-3 ep5 (0.0060, healthy), p2r_fg_c2
 ep2146/3000 (0.00122), c4 ep1001 (0.000615), p1p2 ep1373, dim32 ep776; anchors r=1 ep17, r=16 ep11.
+
+## 2026-09-11 eve: p2r_both (proj_rope_2d + ray_rope_2d) = 6.41 / 19.09 — null vs P2 alone (6.47 / 19.07)
+`probe_p2r_both` (31560335 → 31560336, killable). Adding the P3 ray self-attention 2-D RoPE on
+top of P2 changes nothing (within 0.06 dB on fit, 0.02 on heldout). Consistent with p3_ray2d
+alone being flat: ray-ray positional structure is not the bottleneck; the gain is entirely in
+the ray→Gaussian cross-attention. P2 variants closed so far: scale1 null, both null. Remaining:
+dim32, p1p2. Freed its ckpts (ep3000 kept).
