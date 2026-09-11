@@ -3287,3 +3287,12 @@ Rule from here: 1e-3 for adapters on the P2+fg base. Resubmitted c2 at lr 1e-3 (
 sagieb, init from the c1 adapter). Diverged dir kept as *_diverged_lr2.75e-3.
 Also restarted the slipper-over-fg_c2 adapter at 1e-3 (31590359 → 31590360, drape-01; was at ep3 @2.75e-3).
 Caveat: it now differs from the −0.33 run in both base (fg_c2 vs fg) and lr (1e-3 vs 2.75e-3).
+
+## 2026-09-12 00:30: **p1p2 (canvas + projected 2-D RoPE) = fit 6.07 / heldout 16.95** — best heldout on record, the two are additive
+`probe_p1p2` (31567039 → 31567041, killable, single cycle, stage R 3000). Heldout300 margin
+16.95 vs P2 19.07 / P1 17.47 / baseline 20.44 (LPIPS margin 0.0727, also best); fit 6.07 vs
+P2 6.47 / P1 6.78. Reading: P2 is the fit lever (where detail goes on the seen objects), P1 is
+the generalisation lever (the rasterised canvas hands the decoder a view-consistent prior it
+cannot invent for unseen objects), and they stack on both axes. P1 belongs in the story.
+Next rung: the full stack + fg loss, `p1p2_fg` (31590443 → 31590444, killable, same protocol), then cycles.
+Ckpts freed: p1p2_r, p1p2 ep2800.
