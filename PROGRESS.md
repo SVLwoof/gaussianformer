@@ -3217,3 +3217,11 @@ The slipper twin at the identical recipe is fine (ep18 LPIPS 0.0253). Molecule o
 (ep1 total 0.0082 vs slipper 0.0233) so the sweep's near-max lr (chosen on slipper, V18 base) is
 too hot here. Resubmitted at lr 1e-3, all else equal: 31583677 → 31583678 (sagieb). Diverged run dir kept
 as checkpoints_lora_p2fg_scene_1423_r4_diverged_lr2.75e-3.
+
+## 2026-09-11 16:40: session migrated to claude_node 31588298 (wadi-02); lab share hit 6 GB free
+Freed ~32 GB (→38 GB): deleted p2r_scale1 (+_r; null arm, eval done), p2r_fg_r / p2r_both_r
+(stage-R dirs whose ep300 seeds were consumed), the ep244 + final copies in dim32_r / p1p2_r
+(ep300 kept for requeue), and the ep2800 pre-final ckpts of c3b / p2r_both / p2r_fg. Kept:
+p2r_fg ep3000 (win-test base + c2 seed), c3b ep3000 (c4 seed), p2r_both ep3000 (eval pending).
+Status: slipper LoRA ep23/27 (LPIPS 0.0236), molecule lr1e-3 ep5 (0.0060, healthy), p2r_fg_c2
+ep2146/3000 (0.00122), c4 ep1001 (0.000615), p1p2 ep1373, dim32 ep776; anchors r=1 ep17, r=16 ep11.
