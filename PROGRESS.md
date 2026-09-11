@@ -3211,3 +3211,9 @@ collapse cure (3 for 3 bf16 collapses, 0 for 1 fp32).
 Ops: c3b's 4 sagieb GPUs handed to the molecule win-test (resubmitted from killable as
 31583492 → 31583493, same recipe as slipper). Sagieb = p2r_fg_c2 + slipper LoRA + molecule LoRA
 = 12. Old LoRA anchors r=1/r=16 (31579937/38) still pending on killable.
+
+## 2026-09-11 mid-day: molecule win-test DIVERGED at lr 2.75e-3 (ep2, step ~3000: loss 0.004 → 0.10–0.21, no recovery)
+The slipper twin at the identical recipe is fine (ep18 LPIPS 0.0253). Molecule opens much lower
+(ep1 total 0.0082 vs slipper 0.0233) so the sweep's near-max lr (chosen on slipper, V18 base) is
+too hot here. Resubmitted at lr 1e-3, all else equal: 31583677 → 31583678 (sagieb). Diverged run dir kept
+as checkpoints_lora_p2fg_scene_1423_r4_diverged_lr2.75e-3.
