@@ -59,3 +59,8 @@ uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train
   --epochs $EPOCHS --save_interval $SAVE_INT --keep_last_n 2 \
   --batch_size 1 --grad_accum $GRAD_ACCUM --resolution 512 --augment_rotation \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 --num_workers 3
+rc=$?
+# torchrun has returned non-zero (exit 7, no traceback) after a fully successful run, which
+# cancelled the afterok eval. The adapter file is the success criterion.
+[ -f "$SAVE_DIR/lora_final.pt" ] && exit 0
+exit $rc
