@@ -3271,3 +3271,11 @@ ep15). r=1 anchor eval queued afterany (31588996). Killable g4 pressure is now o
 attn-only, V18 base): rand −4.26, close −1.62, far −3.86. Ladder on the V18 base at 27 epochs:
 r=1 attn −3.65 (0.5 MB) · r=4 attn −3.11 (2.1 MB) — rank buys little there; the base is what
 matters (P2+fg base, r=4 attn+FFN: −0.33). r=16 anchor still running (drape-01, resumes ep15).
+
+## 2026-09-11 night: P2 cycle 4 = fit 1.88 / heldout 20.11; dim32 = 6.39 / 19.29 (null)
+`probe_p2_rope2d_c4` (31583494 → 31583495, killable, fp32 LPIPS): 2.88 → 1.88, gain per cycle
+~1.0 dB and shrinking (7.62→6.47→4.56→2.88→1.88); heldout 20.11 (drift continues). Compared
+with the fg chain at equal cycles the fg loss is worth ~2 cycles: fg c2 = 1.05 vs P2 c4 = 1.88.
+Plain-P2 chain stopped here (c5 optional as a no-fg control). `probe_p2r_dim32`
+(ray_rope_2d_dim=32; 31576933 → 31576934): 6.39 / 19.29 = P2 default within noise; the third
+null P2 variant (scale1, both, dim32). Only p1p2 remains. Ckpts freed: dim32 (+_r), c3b, c4 ep2800.
