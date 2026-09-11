@@ -3279,3 +3279,9 @@ with the fg chain at equal cycles the fg loss is worth ~2 cycles: fg c2 = 1.05 v
 Plain-P2 chain stopped here (c5 optional as a no-fg control). `probe_p2r_dim32`
 (ray_rope_2d_dim=32; 31576933 → 31576934): 6.39 / 19.29 = P2 default within noise; the third
 null P2 variant (scale1, both, dim32). Only p1p2 remains. Ckpts freed: dim32 (+_r), c3b, c4 ep2800.
+
+## 2026-09-11 late: slipper adapter cycle 2 DIVERGED at lr 2.75e-3 (ep6, step ~12.5k: 0.0099 → 0.22)
+Same signature as the molecule c1 divergence at this lr. Two of three runs at 2.75e-3 on the
+P2+fg base blew up (only slipper c1 survived); the molecule run at 1e-3 is clean through ep15.
+Rule from here: 1e-3 for adapters on the P2+fg base. Resubmitted c2 at lr 1e-3 (31590354 → 31590355,
+sagieb, init from the c1 adapter). Diverged dir kept as *_diverged_lr2.75e-3.
