@@ -81,5 +81,8 @@ uv run --no-sync torchrun --standalone --nproc_per_node=$NGPU -m training.train 
   --save_dir $SAVE --resolution 512 --phase2_epochs $EPOCHS --save_interval $SAVE_INT \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 "${RESUME[@]}"
 rc=$?
+# torchrun has exited 135/7 after a clean finish (final ckpt written), cancelling afterok evals;
+# the final checkpoint is the success criterion.
+[ -f ${SAVE}/phase2_epoch_${EPOCHS}.pt ] && rc=0
 echo "PROBE_DONE $TAG rc=$rc"
 exit $rc
