@@ -12,7 +12,7 @@
 # Same data + recipe as train_codec_scaleout.sh (9000 views, 512px, LPIPS 0.5, rot-aug,
 # effective batch 8 by default); only the adapter trains, checkpoints are MBs.
 #   sbatch --killable --account=killable-cs --export=SCENE=gopro,LORA_RANK=4 data_v10/train_codec_lora.sh   # or -A sagieb (quota)
-# Knobs (env): LORA_RANK (req) LORA_ALPHA LORA_TARGETS LORA_DROPOUT LR WD GRAD_ACCUM EPOCHS SAVE_INT SAVE_DIR NPROC SEED
+# Knobs (env): LORA_RANK (req) LORA_ALPHA LORA_TARGETS LORA_DROPOUT LR WD GRAD_ACCUM EPOCHS SAVE_INT SAVE_DIR NPROC SEED MODEL_CFG FG INIT_ADAPTER
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia
@@ -51,6 +51,8 @@ OPT=()
 # FG: fg-weighted loss background weight (e.g. 0.05). Both optional.
 [ -n "$MODEL_CFG" ] && OPT+=(--model_cfg ${(s:;:)MODEL_CFG})
 [ -n "$FG" ] && OPT+=(--fg_bg_weight $FG)
+# INIT_ADAPTER: warm-restart cycle from a finished adapter (lora_final.pt); pair with a new SAVE_DIR.
+[ -n "$INIT_ADAPTER" ] && OPT+=(--init_adapter $INIT_ADAPTER)
 echo "CODEC-LORA $SCENE r=$LORA_RANK lr=$LR wd=$WD: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM}, save=$SAVE_DIR, node=$(hostname) sm_${ARCH}"
 
 uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train_lora \

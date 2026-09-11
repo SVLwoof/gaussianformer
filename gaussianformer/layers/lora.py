@@ -88,7 +88,7 @@ def merge_lora(model: nn.Module) -> nn.Module:
 def load_lora(model: nn.Module, ckpt: dict, merge: bool = True) -> nn.Module:
     """Re-wrap a base model per `ckpt['lora']` and load its adapter; optionally merge."""
     cfg = ckpt["lora"]
-    apply_lora(model, cfg["rank"], cfg["alpha"], cfg["targets"])
+    apply_lora(model, cfg["rank"], cfg["alpha"], cfg["targets"], cfg.get("dropout", 0.0))
     missing, unexpected = model.load_state_dict(ckpt["lora_state_dict"], strict=False)
     assert not unexpected, unexpected
     bad = [k for k in missing if ".lora_A" in k or ".lora_B" in k]

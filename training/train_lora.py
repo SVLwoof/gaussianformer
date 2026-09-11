@@ -43,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--renders_dir", type=Path, required=True)
     p.add_argument("--save_dir", type=Path, required=True)
     p.add_argument("--init_from", type=Path, required=True, help="frozen base checkpoint (.pt)")
+    p.add_argument("--init_adapter", type=Path, default=None,
+                   help="start from this adapter's A/B (same rank/alpha/targets) with a fresh "
+                        "optimizer and schedule -- a warm-restart cycle, like the full fine-tune's")
     p.add_argument("--pe_type", type=str, default="rope")
     p.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
                    help="GaussianFormerConfig overrides of the BASE (e.g. proj_rope_2d=true); "
@@ -81,6 +84,8 @@ def main() -> None:
     alpha = args.alpha if args.alpha is not None else 2.0 * args.rank
     meta = {"rank": args.rank, "alpha": alpha, "targets": args.targets, "model_cfg": args.model_cfg or [],
             "dropout": args.dropout, "base_ckpt": str(args.init_from)}
+    if args.init_adapter is not None:
+        meta["init_adapter"] = str(args.init_adapter)
 
     # --- Data (object views only) ---
     dataset = GaussianRenderDataset(args.gaussian_h5_dir, args.renders_dir, args.resolution,
@@ -113,6 +118,16 @@ def main() -> None:
         assert old_meta == meta, f"resume meta mismatch: {old_meta} vs {meta}"
         load_lora(module, ckpt, merge=False)
         start_epoch, global_step = ckpt["epoch"], ckpt["global_step"]
+    elif args.init_adapter is not None:
+        ckpt = None
+        with torch.serialization.safe_globals([Path, type(Path())]):
+            prev = torch.load(args.init_adapter, map_location="cpu", weights_only=True)
+        same = {k: prev["lora"][k] for k in ("rank", "alpha", "targets")}
+        assert same == {"rank": args.rank, "alpha": alpha, "targets": args.targets}, \
+            f"init_adapter shape mismatch: {same}"
+        load_lora(module, {"lora": {**prev["lora"], "dropout": args.dropout},
+                           "lora_state_dict": prev["lora_state_dict"]}, merge=False)
+        del prev
     else:
         ckpt = None
         apply_lora(module, args.rank, alpha, args.targets, args.dropout)
@@ -131,6 +146,8 @@ def main() -> None:
               f"lr {args.lr:.1e}, {args.epochs} epochs", flush=True)
         if resume is not None:
             print(f"RESUME from {resume} (epoch {start_epoch})", flush=True)
+        elif args.init_adapter is not None:
+            print(f"INIT adapter from {args.init_adapter} (fresh optimizer/schedule)", flush=True)
 
     model = wrap_ddp(module, world_size, local_rank)  # registers only A/B (base is frozen)
     optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
