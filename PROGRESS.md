@@ -3285,3 +3285,5 @@ Same signature as the molecule c1 divergence at this lr. Two of three runs at 2.
 P2+fg base blew up (only slipper c1 survived); the molecule run at 1e-3 is clean through ep15.
 Rule from here: 1e-3 for adapters on the P2+fg base. Resubmitted c2 at lr 1e-3 (31590354 → 31590355,
 sagieb, init from the c1 adapter). Diverged dir kept as *_diverged_lr2.75e-3.
+Also restarted the slipper-over-fg_c2 adapter at 1e-3 (31590359 → 31590360, drape-01; was at ep3 @2.75e-3).
+Caveat: it now differs from the −0.33 run in both base (fg_c2 vs fg) and lr (1e-3 vs 2.75e-3).
