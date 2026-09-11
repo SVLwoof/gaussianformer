@@ -3246,3 +3246,12 @@ gained +1.0 dB from c1→c2 on this object.
 Ops: torchrun exited 7 after a clean finish (13 previous LoRA jobs exited 0; disk was at 6 GB
 at the time) and the afterok eval got cancelled; eval resubmitted, script now exits 0 when
 lora_final.pt exists (9dccf6a). Molecule eval switched to afterany.
+
+## 2026-09-11 18:00: **P2+fg cycle 2 = fit 1.05 / heldout 19.96** — one dB from matching rec-GT at N=10
+`probe_p2r_fg_c2` (31576935 → 31588802, sagieb): model 43.40 vs rec-GT 44.44 on the 10 train
+objects (LPIPS margin 0.0016). Fit ladder: baseline 7.62 → P2 6.47 → P2 c2 4.56 → P2+fg 3.35 →
+P2 c3 2.88 → **P2+fg c2 1.05**. Heldout300 19.96 (drift, as with every cycle). Shahaf's N=10
+target ("match rec-GT") is one more cycle away at this rate: fg_c3 launched on sagieb
+(31588838 → 31588839, fp32 LPIPS, fg loss, seed fg_c2 ep3000).
+Side probe on killable: slipper adapter over the fg_c2 base (31588840 → 31588841, same recipe as the
+−0.33 run) — does a tighter 10-object fit make a better base for an unseen object?
