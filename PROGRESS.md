@@ -3232,3 +3232,17 @@ top of P2 changes nothing (within 0.06 dB on fit, 0.02 on heldout). Consistent w
 alone being flat: ray-ray positional structure is not the bottleneck; the gain is entirely in
 the ray→Gaussian cross-attention. P2 variants closed so far: scale1 null, both null. Remaining:
 dim32, p1p2. Freed its ckpts (ep3000 kept).
+
+## 2026-09-11 13:43: **WIN TEST, slipper: LoRA r4 over P2+fg = −0.33 dB vs rec-GT, 18/40** (close +1.48 8/8, rand −0.88 7/24, far −0.48 3/8)
+`checkpoints_lora_p2fg_gopro_r4/lora_final.pt` (31577096 → eval 31588665; 27 epochs, rank 4
+attn+FFN, 5.3 MB, base = p2r_fg ep3000 which never saw the slipper). Ladder for the same
+object and budget (27 epochs): V18-base adapter −3.11 → **P2+fg-base adapter −0.33**; the full
+fine-tune's cycle 1 was −0.55 (14/40) and needed 4 cycles to reach +1.82. So a 5 MB adapter on
+the improved base already beats one full fine-tune cycle on every range, and wins close-range
+outright. Not over the bar yet (rand/far short by <1 dB). The base does the heavy lifting:
+2.8 dB of the 2.8 dB gain over the V18-base adapter comes from P2+fg with the adapter recipe
+held fixed. Next: adapter cycle 2 (warm restart of the adapter, fresh cosine) — the full FT
+gained +1.0 dB from c1→c2 on this object.
+Ops: torchrun exited 7 after a clean finish (13 previous LoRA jobs exited 0; disk was at 6 GB
+at the time) and the afterok eval got cancelled; eval resubmitted, script now exits 0 when
+lora_final.pt exists (9dccf6a). Molecule eval switched to afterany.
