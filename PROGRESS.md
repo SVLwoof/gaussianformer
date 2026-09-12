@@ -3305,3 +3305,9 @@ from the slipper run: lr 1e-3 (2.75e-3 diverged here) and a higher rec-GT bar, e
 — even the full FT never closed far on this object). Far is the whole deficit: rand/close are
 within ~2 dB of the full-FT c1. Next: adapter cycle 2 at 1e-3 (31590780 → 31590781, sagieb), same protocol
 as slipper c2.
+
+## 2026-09-12 08:00: V18-base anchor r=16 (attention-only, 7.7 MB, 27 ep) = −2.68 dB, 2/40 — the V18-base ladder is closed
+`checkpoints_lora_gopro_r16` (31588994 → 31588995). rand −3.27, close −0.73, far −2.84.
+V18 base, attention-only, old recipe, 27 epochs: r=1 −3.65 (0.5 MB) · r=4 −3.11 (2.1 MB) ·
+r=16 −2.68 (7.7 MB): +1 dB for 16× the bytes. The P2+fg base with r=4 attn+FFN (5.3 MB) gave
+−0.33. Base quality is worth ~2.5 dB; rank is worth ~0.3 dB per doubling. Anchors done.
