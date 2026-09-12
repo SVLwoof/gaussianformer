@@ -3411,3 +3411,10 @@ rand −2.27 (2/24), close −0.08 (4/8), far −5.36 (0/8). The full FT gained 
 on this object; the r=4 adapter gains +0.25. Close is at parity; far (bar 48 dB) does not move
 at all (−5.56 → −5.36). No c3 queued: the adapter's ceiling on the molecule is set by far-range
 capacity, not by epochs. Slipper c2 (tomorrow ~04:00) decides whether cycles pay on the easier object.
+
+## 2026-09-13 01:00: **full stack cycle 2 = fit 0.47 / heldout 17.26 — NO heldout drift**
+`probe_p1p2_fg_c2` (31591122 → moved to sagieb 31595484 → 31595485). Fit 2.91 → 0.47 (better
+than P2+fg's c2 at 1.05); heldout 17.27 → **17.26**, flat. Every earlier chain drifted +0.3–0.5
+per cycle (P2: 19.07 → 19.42 → 19.81 → 20.11; P2+fg: 19.39 → 19.96 → 20.34). With the canvas
+the fit improves without the memorisation cost — consistent with the weight audit (the decoder
+learns a refiner, cycles refine the refiner). Cycle 3 launched on sagieb (31595828 → 31595829).
