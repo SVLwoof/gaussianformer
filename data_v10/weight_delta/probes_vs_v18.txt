@@ -1,0 +1,296 @@
+
+=== checkpoints_probe_baseline/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1760               16.0%
+view ffn                           42,467,328             0.1010               35.0%
+view cross_attn out                 3,538,944             0.0842                1.5%
+view cross_attn q                   3,538,944             0.0834                1.2%
+scene ffn                          84,934,656             0.0772               31.1%
+view self_attn                     14,164,992             0.0680                6.0%
+view cross_attn k/v                 7,077,888             0.0656                1.8%
+scene attn in_proj                 21,233,664             0.0633                5.2%
+scene attn out_proj                 7,077,888             0.0605                2.2%
+ray_map_encoder                       148,992             0.0240                0.0%
+input head (gaussian_encoder)          11,520             0.0193                0.0%
+scene norms/qk-norm                    36,864             0.0127                0.1%
+view norms                             27,648             0.0122                0.1%
+other                                  14,604             0.0084                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    11   0.73   0.85   0.94   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    44   197   0.13   0.25   0.37   0.51   0.68   0.86   0.94
+scene attn out_proj               12      768    47   163   0.13   0.21   0.33   0.50   0.69   0.86   0.94
+scene ffn                         36      768    76   345   0.08   0.14   0.23   0.36   0.54   0.73   0.88
+ray_map_encoder                    1      192     3   124   0.44   0.81   0.94   0.95   0.95   0.96   0.97
+view cross_attn q                  6      768    37   214   0.27   0.39   0.58   0.67   0.79   0.94   0.97
+view cross_attn k/v               12      768    61   232   0.10   0.18   0.30   0.47   0.67   0.83   0.92
+view cross_attn out                6      768   106   276   0.07   0.13   0.23   0.37   0.52   0.69   0.84
+view self_attn                    12      768    83   272   0.06   0.10   0.19   0.33   0.52   0.75   0.90
+view ffn                          18      768   129   408   0.04   0.08   0.15   0.28   0.47   0.67   0.84
+
+top-10 individual matrices by relative change:
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1318  r90  290  top4 0.07
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1304  r90  146  top4 0.08
+  view_transformer.transformer.layers.5.ffn.w3.weight                    rel 0.1273  r90  292  top4 0.07
+  view_transformer.transformer.layers.4.ffn.w1.weight                    rel 0.1215  r90  166  top4 0.10
+  view_transformer.transformer.layers.4.ffn.w2.weight                    rel 0.1211  r90  310  top4 0.06
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1188  r90  120  top4 0.18
+  view_transformer.transformer.layers.4.ffn.w3.weight                    rel 0.1161  r90  172  top4 0.09
+  view_transformer.transformer.layers.5.multihead_attn.q_proj.weight     rel 0.1083  r90   72  top4 0.21
+  view_transformer.transformer.layers.5.self_attn.in_proj.weight         rel 0.1058  r90  215  top4 0.08
+  view_transformer.transformer.layers.3.ffn.w2.weight                    rel 0.1038  r90  246  top4 0.07
+
+=== checkpoints_probe_p2_rope2d/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1801               13.6%
+view cross_attn q                   3,538,944             0.1222                2.0%
+view ffn                           42,467,328             0.1089               33.0%
+view cross_attn out                 3,538,944             0.0949                1.6%
+scene ffn                          84,934,656             0.0872               32.2%
+view self_attn                     14,164,992             0.0829                7.2%
+view cross_attn k/v                 7,077,888             0.0817                2.2%
+scene attn in_proj                 21,233,664             0.0747                5.8%
+scene attn out_proj                 7,077,888             0.0658                2.1%
+ray_map_encoder                       148,992             0.0261                0.0%
+input head (gaussian_encoder)          11,520             0.0243                0.0%
+scene norms/qk-norm                    36,864             0.0194                0.2%
+view norms                             27,648             0.0119                0.1%
+other                                  14,604             0.0103                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    10   0.79   0.86   0.95   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    47   196   0.12   0.21   0.35   0.46   0.68   0.86   0.94
+scene attn out_proj               12      768    47   163   0.13   0.22   0.38   0.53   0.72   0.87   0.95
+scene ffn                         36      768    80   344   0.09   0.14   0.23   0.37   0.54   0.72   0.87
+ray_map_encoder                    1      192     3   123   0.52   0.83   0.95   0.95   0.95   0.96   0.97
+view cross_attn q                  6      768    21    77   0.59   0.69   0.83   0.93   0.96   0.98   0.99
+view cross_attn k/v               12      768    50   218   0.13   0.22   0.34   0.52   0.70   0.84   0.93
+view cross_attn out                6      768    96   289   0.08   0.14   0.24   0.38   0.54   0.72   0.87
+view self_attn                    12      768    97   287   0.07   0.12   0.21   0.35   0.54   0.73   0.89
+view ffn                          18      768   148   362   0.04   0.08   0.15   0.26   0.44   0.65   0.84
+
+top-10 individual matrices by relative change:
+  transformer.layers.1.multihead_attn.in_proj.weight                     rel 0.1665  r90   14  top4 0.67
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.1571  r90   26  top4 0.42
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1520  r90   96  top4 0.26
+  view_transformer.transformer.layers.3.multihead_attn.q_proj.weight     rel 0.1429  r90    6  top4 0.87
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1317  r90  297  top4 0.07
+  view_transformer.transformer.layers.4.multihead_attn.q_proj.weight     rel 0.1296  r90   71  top4 0.37
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1291  r90  148  top4 0.08
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.1290  r90  116  top4 0.17
+  view_transformer.transformer.layers.5.ffn.w3.weight                    rel 0.1277  r90  298  top4 0.07
+  view_transformer.transformer.layers.2.multihead_attn.q_proj.weight     rel 0.1255  r90   21  top4 0.49
+
+=== checkpoints_probe_p1_canvas/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1796               15.3%
+view ffn                           42,467,328             0.1105               38.5%
+view cross_attn out                 3,538,944             0.0908                1.6%
+view cross_attn q                   3,538,944             0.0883                1.2%
+scene ffn                          84,934,656             0.0773               28.7%
+view self_attn                     14,164,992             0.0731                6.4%
+view cross_attn k/v                 7,077,888             0.0686                1.8%
+scene attn in_proj                 21,233,664             0.0620                4.6%
+scene attn out_proj                 7,077,888             0.0588                1.9%
+ray_map_encoder                       148,992             0.0280                0.0%
+input head (gaussian_encoder)          11,520             0.0180                0.0%
+scene norms/qk-norm                    36,864             0.0127                0.1%
+view norms                             27,648             0.0112                0.1%
+other                                  14,604             0.0083                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     4    11   0.68   0.83   0.93   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    43   195   0.12   0.22   0.36   0.52   0.70   0.86   0.95
+scene attn out_proj               12      768    49   160   0.12   0.21   0.34   0.51   0.71   0.87   0.94
+scene ffn                         36      768    76   342   0.09   0.14   0.23   0.36   0.54   0.74   0.88
+ray_map_encoder                    1      192     3   105   0.49   0.80   0.96   0.96   0.97   0.97   0.98
+view cross_attn q                  6      768    36   149   0.31   0.44   0.57   0.74   0.89   0.95   0.98
+view cross_attn k/v               12      768    57   216   0.11   0.20   0.33   0.50   0.68   0.84   0.93
+view cross_attn out                6      768    86   266   0.07   0.14   0.26   0.40   0.56   0.72   0.86
+view self_attn                    12      768    87   261   0.07   0.12   0.21   0.34   0.53   0.74   0.90
+view ffn                          18      768   133   337   0.06   0.10   0.19   0.30   0.46   0.65   0.84
+
+top-10 individual matrices by relative change:
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1346  r90  109  top4 0.20
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1329  r90  289  top4 0.07
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1304  r90  148  top4 0.08
+  view_transformer.transformer.layers.5.ffn.w3.weight                    rel 0.1285  r90  291  top4 0.07
+  view_transformer.transformer.layers.0.ffn.w2.weight                    rel 0.1261  r90   47  top4 0.57
+  view_transformer.transformer.layers.4.ffn.w2.weight                    rel 0.1231  r90  309  top4 0.07
+  view_transformer.transformer.layers.4.ffn.w1.weight                    rel 0.1225  r90  168  top4 0.10
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.1214  r90  102  top4 0.20
+  view_transformer.transformer.layers.4.ffn.w3.weight                    rel 0.1182  r90  171  top4 0.10
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.1155  r90   21  top4 0.56
+
+=== checkpoints_probe_p1p2/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1814               13.6%
+view cross_attn q                   3,538,944             0.1233                2.0%
+view ffn                           42,467,328             0.1134               35.2%
+view cross_attn out                 3,538,944             0.0968                1.6%
+scene ffn                          84,934,656             0.0855               30.5%
+view self_attn                     14,164,992             0.0850                7.5%
+view cross_attn k/v                 7,077,888             0.0821                2.2%
+scene attn in_proj                 21,233,664             0.0716                5.3%
+scene attn out_proj                 7,077,888             0.0637                1.9%
+ray_map_encoder                       148,992             0.0272                0.0%
+input head (gaussian_encoder)          11,520             0.0230                0.0%
+scene norms/qk-norm                    36,864             0.0182                0.1%
+view norms                             27,648             0.0118                0.1%
+other                                  14,604             0.0099                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    10   0.80   0.88   0.95   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    46   199   0.12   0.23   0.36   0.48   0.69   0.86   0.94
+scene attn out_proj               12      768    48   164   0.12   0.22   0.38   0.52   0.71   0.87   0.95
+scene ffn                         36      768    79   346   0.08   0.14   0.23   0.38   0.55   0.73   0.88
+ray_map_encoder                    1      192     3   118   0.43   0.80   0.95   0.95   0.96   0.96   0.98
+view cross_attn q                  6      768    21    77   0.42   0.55   0.74   0.90   0.96   0.98   0.99
+view cross_attn k/v               12      768    51   217   0.15   0.25   0.37   0.54   0.70   0.84   0.93
+view cross_attn out                6      768    80   272   0.08   0.14   0.25   0.39   0.56   0.74   0.87
+view self_attn                    12      768    98   281   0.07   0.11   0.20   0.34   0.53   0.73   0.89
+view ffn                          18      768   149   366   0.05   0.08   0.14   0.26   0.43   0.65   0.83
+
+top-10 individual matrices by relative change:
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1558  r90   94  top4 0.24
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.1556  r90   28  top4 0.42
+  transformer.layers.1.multihead_attn.in_proj.weight                     rel 0.1491  r90   14  top4 0.69
+  view_transformer.transformer.layers.3.multihead_attn.q_proj.weight     rel 0.1400  r90    6  top4 0.87
+  view_transformer.transformer.layers.0.ffn.w2.weight                    rel 0.1357  r90   57  top4 0.51
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.1337  r90  111  top4 0.18
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1314  r90  296  top4 0.08
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1286  r90  149  top4 0.08
+  view_transformer.transformer.layers.4.multihead_attn.q_proj.weight     rel 0.1286  r90   72  top4 0.33
+  view_transformer.transformer.layers.2.multihead_attn.q_proj.weight     rel 0.1277  r90   21  top4 0.46
+
+=== checkpoints_probe_p2r_fg/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1919               13.8%
+view cross_attn q                   3,538,944             0.1266                1.9%
+view ffn                           42,467,328             0.1131               31.8%
+view cross_attn out                 3,538,944             0.0968                1.5%
+scene ffn                          84,934,656             0.0932               33.0%
+view self_attn                     14,164,992             0.0853                6.9%
+scene attn in_proj                 21,233,664             0.0843                6.7%
+view cross_attn k/v                 7,077,888             0.0841                2.1%
+scene attn out_proj                 7,077,888             0.0704                2.1%
+ray_map_encoder                       148,992             0.0279                0.0%
+input head (gaussian_encoder)          11,520             0.0247                0.0%
+scene norms/qk-norm                    36,864             0.0225                0.2%
+view norms                             27,648             0.0125                0.1%
+other                                  14,604             0.0113                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    10   0.82   0.88   0.95   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    48   197   0.12   0.20   0.35   0.49   0.67   0.85   0.94
+scene attn out_proj               12      768    45   163   0.13   0.22   0.37   0.52   0.70   0.86   0.95
+scene ffn                         36      768    83   355   0.08   0.14   0.23   0.37   0.56   0.72   0.87
+ray_map_encoder                    1      192     3   115   0.53   0.85   0.95   0.96   0.96   0.97   0.98
+view cross_attn q                  6      768    20    78   0.62   0.71   0.83   0.92   0.96   0.98   0.99
+view cross_attn k/v               12      768    51   220   0.14   0.21   0.33   0.51   0.70   0.84   0.93
+view cross_attn out                6      768   102   290   0.08   0.14   0.24   0.37   0.53   0.71   0.87
+view self_attn                    12      768    94   289   0.07   0.13   0.23   0.37   0.55   0.75   0.89
+view ffn                          18      768   139   370   0.04   0.08   0.15   0.26   0.45   0.65   0.84
+
+top-10 individual matrices by relative change:
+  transformer.layers.1.multihead_attn.in_proj.weight                     rel 0.1999  r90   16  top4 0.63
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.1670  r90   26  top4 0.44
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1526  r90  102  top4 0.23
+  view_transformer.transformer.layers.3.multihead_attn.q_proj.weight     rel 0.1421  r90    6  top4 0.87
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1389  r90  303  top4 0.07
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.1384  r90  122  top4 0.14
+  view_transformer.transformer.layers.2.multihead_attn.q_proj.weight     rel 0.1371  r90   20  top4 0.44
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1369  r90  151  top4 0.08
+  view_transformer.transformer.layers.4.multihead_attn.q_proj.weight     rel 0.1348  r90   72  top4 0.36
+  view_transformer.transformer.layers.5.ffn.w3.weight                    rel 0.1343  r90  304  top4 0.07
+
+=== checkpoints_probe_p1p2_fg/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.1937               13.7%
+view cross_attn q                   3,538,944             0.1281                1.9%
+view ffn                           42,467,328             0.1187               34.3%
+view cross_attn out                 3,538,944             0.0999                1.5%
+scene ffn                          84,934,656             0.0917               31.2%
+view self_attn                     14,164,992             0.0877                7.1%
+view cross_attn k/v                 7,077,888             0.0853                2.1%
+scene attn in_proj                 21,233,664             0.0808                6.0%
+scene attn out_proj                 7,077,888             0.0678                1.9%
+ray_map_encoder                       148,992             0.0283                0.0%
+input head (gaussian_encoder)          11,520             0.0239                0.0%
+scene norms/qk-norm                    36,864             0.0216                0.2%
+view norms                             27,648             0.0124                0.1%
+other                                  14,604             0.0106                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    10   0.79   0.88   0.95   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    49   196   0.12   0.22   0.35   0.48   0.68   0.85   0.94
+scene attn out_proj               12      768    47   164   0.13   0.22   0.38   0.52   0.70   0.86   0.95
+scene ffn                         36      768    82   355   0.08   0.14   0.23   0.37   0.53   0.72   0.87
+ray_map_encoder                    1      192     3   113   0.48   0.81   0.96   0.96   0.96   0.97   0.98
+view cross_attn q                  6      768    23    86   0.42   0.57   0.75   0.88   0.95   0.98   0.99
+view cross_attn k/v               12      768    54   217   0.14   0.23   0.38   0.53   0.69   0.83   0.92
+view cross_attn out                6      768    80   271   0.08   0.15   0.25   0.40   0.58   0.75   0.88
+view self_attn                    12      768    98   274   0.08   0.13   0.22   0.37   0.56   0.75   0.90
+view ffn                          18      768   150   373   0.05   0.10   0.16   0.26   0.44   0.64   0.83
+
+top-10 individual matrices by relative change:
+  transformer.layers.1.multihead_attn.in_proj.weight                     rel 0.1860  r90   15  top4 0.65
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.1626  r90   27  top4 0.40
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.1589  r90   95  top4 0.25
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.1404  r90  105  top4 0.21
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.1398  r90  305  top4 0.07
+  view_transformer.transformer.layers.0.ffn.w2.weight                    rel 0.1395  r90   55  top4 0.52
+  view_transformer.transformer.layers.5.ffn.w2.weight                    rel 0.1369  r90  152  top4 0.08
+  view_transformer.transformer.layers.3.multihead_attn.q_proj.weight     rel 0.1364  r90    7  top4 0.86
+  view_transformer.transformer.layers.5.multihead_attn.q_proj.weight     rel 0.1353  r90  113  top4 0.15
+  view_transformer.transformer.layers.4.multihead_attn.q_proj.weight     rel 0.1352  r90   74  top4 0.34
+
+=== checkpoints_probe_p2r_fg_c3/phase2_epoch_3000.pt vs checkpoints_v18_256/phase2_epoch_30.pt ===
+family                                 params  rel ||dW||/||W0||  share of dW energy
+DPT decoder (out_dpt convs)        10,595,203             0.2846               11.6%
+view cross_attn q                   3,538,944             0.1983                1.8%
+view ffn                           42,467,328             0.1814               31.3%
+view cross_attn out                 3,538,944             0.1734                1.8%
+scene attn in_proj                 21,233,664             0.1510                8.2%
+scene ffn                          84,934,656             0.1505               32.8%
+view self_attn                     14,164,992             0.1394                7.0%
+view cross_attn k/v                 7,077,888             0.1340                2.0%
+scene attn out_proj                 7,077,888             0.1305                2.8%
+ray_map_encoder                       148,992             0.0621                0.0%
+scene norms/qk-norm                    36,864             0.0595                0.5%
+input head (gaussian_encoder)          11,520             0.0577                0.0%
+view norms                             27,648             0.0319                0.1%
+other                                  14,604             0.0290                0.0%
+
+per-family delta spectrum (median over matrices): r90 / r99 = #components for 90% / 99% of delta energy; top-r = energy fraction captured by rank r
+family                             n min(dim)   r90   r99 top  1 top  2 top  4 top  8 top 16 top 32 top 64
+input head (gaussian_encoder)      1       14     3    10   0.83   0.89   0.94   0.98   1.00   1.00   1.00
+scene attn in_proj                12      768    67   253   0.15   0.22   0.33   0.43   0.62   0.80   0.91
+scene attn out_proj               12      768    58   208   0.11   0.19   0.31   0.45   0.62   0.79   0.92
+scene ffn                         36      768    97   404   0.08   0.12   0.21   0.35   0.52   0.71   0.84
+ray_map_encoder                    1      192     3   141   0.55   0.87   0.92   0.92   0.93   0.94   0.96
+view cross_attn q                  6      768    28   142   0.62   0.69   0.79   0.88   0.93   0.96   0.98
+view cross_attn k/v               12      768    73   283   0.13   0.18   0.26   0.41   0.61   0.78   0.89
+view cross_attn out                6      768   161   362   0.06   0.11   0.18   0.27   0.39   0.56   0.74
+view self_attn                    12      768   122   361   0.05   0.09   0.16   0.28   0.45   0.65   0.83
+view ffn                          18      768   172   440   0.03   0.06   0.11   0.21   0.36   0.57   0.78
+
+top-10 individual matrices by relative change:
+  transformer.layers.1.multihead_attn.in_proj.weight                     rel 0.3545  r90   18  top4 0.56
+  view_transformer.transformer.layers.2.multihead_attn.out_proj.weight   rel 0.2818  r90  162  top4 0.18
+  view_transformer.transformer.layers.2.multihead_attn.k_proj.weight     rel 0.2723  r90   34  top4 0.36
+  view_transformer.transformer.layers.0.self_attn.out_proj.weight        rel 0.2694  r90  170  top4 0.09
+  view_transformer.transformer.layers.3.multihead_attn.q_proj.weight     rel 0.2310  r90    6  top4 0.87
+  view_transformer.transformer.layers.2.multihead_attn.q_proj.weight     rel 0.2239  r90   28  top4 0.37
+  view_transformer.transformer.layers.0.multihead_attn.out_proj.weight   rel 0.2189  r90  161  top4 0.12
+  view_transformer.transformer.layers.5.ffn.w1.weight                    rel 0.2149  r90  353  top4 0.05
+  view_transformer.transformer.layers.4.multihead_attn.q_proj.weight     rel 0.2112  r90   83  top4 0.38
+  view_transformer.transformer.layers.5.ffn.w3.weight                    rel 0.2105  r90  353  top4 0.05
+
+wrote data_v10/weight_delta/probes_vs_v18.json

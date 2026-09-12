@@ -1,0 +1,74 @@
+A = checkpoints_probe_p1p2/phase2_epoch_3000.pt
+B = checkpoints_probe_p2_rope2d/phase2_epoch_3000.pt
+seed = checkpoints_v18_256/phase2_epoch_30.pt
+
+family                                params    relA    relB cos(dA,dB) |A-B|/|S|  share
+input head (gaussian_encoder)         11,520  0.0230  0.0243      0.980    0.0049   0.0%
+scene attn in_proj                21,233,664  0.0716  0.0747      0.813    0.0449   2.2%
+scene attn out_proj                7,077,888  0.0637  0.0658      0.799    0.0411   0.8%
+scene ffn                         84,934,656  0.0855  0.0872      0.632    0.0741  23.9%
+scene norms/qk-norm                   36,864  0.0182  0.0194      0.986    0.0033   0.0%
+ray_map_encoder                      148,992  0.0272  0.0261      0.864    0.0139   0.0%
+view self_attn                    14,164,992  0.0850  0.0829      0.493    0.0846   7.7%
+view cross_attn q                  3,538,944  0.1233  0.1222      0.515    0.1208   2.0%
+view cross_attn k/v                7,077,888  0.0821  0.0817      0.570    0.0760   2.0%
+view cross_attn out                3,538,944  0.0968  0.0949      0.507    0.0952   1.6%
+view ffn                          42,467,328  0.1134  0.1089      0.401    0.1217  42.3%
+view norms                            27,648  0.0118  0.0119      0.882    0.0057   0.0%
+DPT decoder (out_dpt convs)       10,595,203  0.1814  0.1801      0.379    0.2015  17.4%
+other                                 14,604  0.0099  0.0103      0.987    0.0017   0.0%
+
+per layer (share = of the whole-model ||A-B||^2)
+family                                params    relA    relB cos(dA,dB) |A-B|/|S|  share
+scene L00 ffn                      7,078,656  0.0591  0.0649      0.924    0.0248   0.2%
+scene L00 multihead_attn           2,360,832  0.0507  0.0566      0.890    0.0258   0.0%
+scene L01 ffn                      7,078,656  0.0514  0.0536      0.802    0.0331   0.1%
+scene L01 multihead_attn           2,360,832  0.1221  0.1358      0.974    0.0323   0.1%
+scene L02 ffn                      7,078,656  0.0542  0.0565      0.783    0.0365   0.2%
+scene L02 multihead_attn           2,360,832  0.0573  0.0612      0.900    0.0268   0.1%
+scene L03 ffn                      7,078,656  0.0634  0.0666      0.729    0.0480   0.6%
+scene L03 multihead_attn           2,360,832  0.0534  0.0558      0.846    0.0304   0.1%
+scene L04 ffn                      7,078,656  0.0648  0.0676      0.726    0.0491   0.7%
+scene L04 multihead_attn           2,360,832  0.0577  0.0606      0.810    0.0366   0.2%
+scene L05 ffn                      7,078,656  0.0765  0.0792      0.692    0.0611   1.3%
+scene L05 multihead_attn           2,360,832  0.0544  0.0565      0.826    0.0328   0.2%
+scene L06 ffn                      7,078,656  0.0751  0.0773      0.675    0.0615   1.5%
+scene L06 multihead_attn           2,360,832  0.0582  0.0595      0.747    0.0419   0.3%
+scene L07 ffn                      7,078,656  0.0893  0.0914      0.629    0.0778   2.7%
+scene L07 multihead_attn           2,360,832  0.0581  0.0596      0.800    0.0372   0.2%
+scene L08 ffn                      7,078,656  0.1003  0.1018      0.605    0.0898   3.9%
+scene L08 multihead_attn           2,360,832  0.0651  0.0653      0.747    0.0464   0.4%
+scene L09 ffn                      7,078,656  0.1051  0.1062      0.573    0.0976   4.9%
+scene L09 multihead_attn           2,360,832  0.0650  0.0657      0.756    0.0456   0.4%
+scene L10 ffn                      7,078,656  0.1016  0.1020      0.569    0.0945   5.0%
+scene L10 multihead_attn           2,360,832  0.0632  0.0633      0.663    0.0520   0.6%
+scene L11 ffn                      7,078,656  0.0803  0.0805      0.615    0.0705   2.7%
+scene L11 multihead_attn           2,360,832  0.0571  0.0575      0.727    0.0424   0.4%
+view L00 ffn                       7,078,656  0.1027  0.0534      0.240    0.1037   2.3%
+view L00 multihead_attn            2,360,832  0.0874  0.0803      0.525    0.0819   0.6%
+view L00 self_attn                 2,361,600  0.0808  0.0688      0.497    0.0757   0.3%
+view L01 ffn                       7,078,656  0.0998  0.0918      0.454    0.1003   3.9%
+view L01 multihead_attn            2,360,832  0.0812  0.0790      0.681    0.0640   0.4%
+view L01 self_attn                 2,361,600  0.0857  0.0819      0.611    0.0740   0.6%
+view L02 ffn                       7,078,656  0.0923  0.0865      0.501    0.0894   3.9%
+view L02 multihead_attn            2,360,832  0.1079  0.1059      0.534    0.1032   0.8%
+view L02 self_attn                 2,361,600  0.0799  0.0752      0.607    0.0689   0.8%
+view L03 ffn                       7,078,656  0.1111  0.1095      0.458    0.1149   7.5%
+view L03 multihead_attn            2,360,832  0.0802  0.0809      0.693    0.0631   0.6%
+view L03 self_attn                 2,361,600  0.0771  0.0753      0.563    0.0713   1.2%
+view L04 ffn                       7,078,656  0.1208  0.1211      0.418    0.1305  10.5%
+view L04 multihead_attn            2,360,832  0.0747  0.0751      0.554    0.0707   1.2%
+view L04 self_attn                 2,361,600  0.0863  0.0854      0.488    0.0869   1.9%
+view L05 ffn                       7,078,656  0.1277  0.1280      0.323    0.1487  14.3%
+view L05 multihead_attn            2,360,832  0.0772  0.0778      0.367    0.0872   2.0%
+view L05 self_attn                 2,361,600  0.0893  0.0898      0.363    0.1011   2.9%
+
+keys only in A (or reshaped):
+  view_transformer.transformer.rope_uv.freqs                   shape [8]  ||W||_F = 10.5727
+  view_transformer.canvas_encoder.weight                       shape [768, 192]  ||W||_F = 2.8822
+  view_transformer.canvas_encoder.bias                         shape [768]  ||W||_F = 0.0326
+
+keys only in B (or reshaped):
+  view_transformer.transformer.rope_uv.freqs                   shape [8]  ||W||_F = 10.5672
+
+reference: ||ray_map_encoder.weight||_F (seed) = 9.2687

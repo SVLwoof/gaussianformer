@@ -3331,3 +3331,32 @@ has seen. Shahaf's win condition, half 1 ("match at N=10"): MET.
 Half 2 (adapter over the fit beats rec-GT on an unseen object): slipper r4 adapter launched on
 the fg_c3 base (31591154 → 31591155, sagieb, lr 1e-3); the fg-base adapter scored −0.33, its cycle 2 and
 the fg_c2-base adapter are in flight. Sagieb = slipper c2 + molecule c2 + this = 12.
+
+## 2026-09-12: WEIGHT-DELTA AUDIT — why does P1+P2 generalise better? (data_v10/weight_delta/{probes_vs_v18.txt,pair_*.txt}, tool data_v10/weight_delta_pair.py)
+Seven 1-cycle probes + fg_c3 vs the common V18 seed, and pairwise comparisons of fine-tunes
+that share seed/schedule/loss and differ only in architecture (control pair = p2_rope2d vs
+p2_full, whose extras are zero-gated → run-to-run noise floor).
+1. **Nothing moves more.** Every 1-cycle probe moves each family by the same amount (view ffn
+   rel 0.10–0.12, scene ffn 0.08–0.09, DPT 0.18–0.19) with the same energy split (view ffn
+   ~35 %, scene ffn ~31 %, DPT ~14 %, all attention ~15 %) — canvas or not. The 2 dB heldout
+   gain is not "trained harder". (Cycles are: fg_c3 moves 1.6× more in every family and its
+   deltas are higher-rank — r90 view ffn 124→147, scene in_proj 46→62 — the memorisation
+   signature behind the heldout drift.)
+2. **The scene transformer learns the same thing either way.** cos(dA,dB) for the canvas pair
+   equals the control within 0.05 in scene attn/ffn (0.63–0.81 vs 0.69–0.85). The canvas does
+   not touch the RenderFormer-borrowed scene stack.
+3. **The view stack learns a different function, starting at layer 0.** View L0 FFN: the canvas
+   model moves it 2× (rel 0.103 vs 0.053) and in a different direction (cos 0.24 vs 0.76 for
+   the control); L0 self/cross-attn cos 0.50 vs 0.77. The effect decays with depth (ffn cos
+   gap to control: L0 0.52, L1 0.21, L2 0.18, L3 0.12, L4 0.09, L5 0.07) and reaches the DPT
+   (0.38 vs 0.46). The canvas is added to the ray tokens at the input; layer 0 becomes a
+   canvas reader and the rest of the decoder re-learns as a refiner of a rendered image
+   rather than a synthesiser from attention alone — a function that transfers to unseen
+   objects. canvas_encoder ||W||_F = 2.9 vs ray_map_encoder 9.3 (seed): ~30 % of the ray
+   direction path's magnitude, i.e. genuinely used (P2's bias/feat gates stayed ~0).
+4. **P2's fingerprint is separate and low-rank:** P2 models move view cross-attn q_proj 1.5×
+   more than non-P2 (0.122 vs 0.083) with a LOW-rank delta (r90 14–16 vs 27–30) — a compact
+   re-keying of the query to the projected coordinates. The canvas leaves q_proj untouched
+   (p1_canvas 0.088 ≈ baseline). Two orthogonal mechanisms → additive gains.
+5. The fg loss changes almost nothing in where/how weights move (p2r_fg ≈ p2_rope2d in every
+   family, ±0.005); its 3 dB fit gain is a gradient re-weighting, not a re-programming.
