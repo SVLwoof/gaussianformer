@@ -3311,3 +3311,12 @@ as slipper c2.
 V18 base, attention-only, old recipe, 27 epochs: r=1 −3.65 (0.5 MB) · r=4 −3.11 (2.1 MB) ·
 r=16 −2.68 (7.7 MB): +1 dB for 16× the bytes. The P2+fg base with r=4 attn+FFN (5.3 MB) gave
 −0.33. Base quality is worth ~2.5 dB; rank is worth ~0.3 dB per doubling. Anchors done.
+
+## 2026-09-12 10:00: **p1p2 + fg (full stack, cycle 1) = fit 2.91 / heldout 17.27** — best single-cycle fit, second-best heldout
+`probe_p1p2_fg` (31590443 → 31590444, killable). Single-cycle grid is now complete:
+  plain: P2 6.47/19.07 · P1 6.78/17.47 · P1+P2 6.07/16.95
+  +fg:   P2 3.35/19.39 · —            · P1+P2 2.91/17.27
+The canvas is worth −0.4 fit / −2.1 heldout on either loss; the fg loss is worth −3.1 fit and
+costs +0.3 heldout. Effects are additive to within 0.1 dB. The full stack is the base to carry
+forward. Cycle 2 launched (`p1p2_fg_c2`, 31591122 → 31591123, killable, seed p1p2_fg ep3000); P2+fg
+cycle 3 (sagieb) lands in ~1 h and tells whether the fg chain is still paying ~2 dB/cycle.
