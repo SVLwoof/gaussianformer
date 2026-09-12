@@ -3393,3 +3393,14 @@ p1-canvas). Renders: docs/figures/v19_strips_{train,heldout}.png (job 31593436).
 **Open decisions.** (1) V19 full-data pretraining with the full stack (~3 days, full L40S node).
 (2) Whether the full-stack base or the fg_c3 base is the adapter base going forward (fg_c3
 adapter running). (3) Report section.
+
+## 2026-09-12 eve: P1b — residual over the canvas (branch exp/p1-residual, NOT on the main line until proven)
+Motivation (heldout strips): the runes/ridges are in the input and even in the canvas, yet the
+decoder outputs invented strokes (axe 27.5 vs rec-GT 46.9). A pass-through solution exists but
+one cycle on 10 objects never finds it because memorising beats copying on the train objects.
+Change: `canvas_residual=true` → output = canvas + residual_head(DPT out), residual_head a
+zero-init 1×1 conv; at init the model IS the rasterizer (CPU test: output == canvas to 1e-7 after
+seed load). Arms on killable, same N=10 protocol: `p1res_p2_fg` (31593854 → 31593855, full stack + fg)
+and `p1res_p2` (31593856 → 31593858, plain loss) vs p1p2_fg 2.91/17.27 and p1p2 6.07/16.95. Expectation:
+heldout moves by several dB (starts at 0 margin); fit unaffected or better. Shahaf: separate
+branch, does not become the standard unless it proves the ideal approach.
