@@ -3418,3 +3418,9 @@ than P2+fg's c2 at 1.05); heldout 17.27 → **17.26**, flat. Every earlier chain
 per cycle (P2: 19.07 → 19.42 → 19.81 → 20.11; P2+fg: 19.39 → 19.96 → 20.34). With the canvas
 the fit improves without the memorisation cost — consistent with the weight audit (the decoder
 learns a refiner, cycles refine the refiner). Cycle 3 launched on sagieb (31595828 → 31595829).
+
+## 2026-09-13 02:00: disk 24 GB → 38 GB
+Deleted the deb13 uv cache (11 GB; the venv hardlinks its files, verified link count 2, venv
+intact) and the ep3000 ckpts of six finished null arms (p2_bias_feat, p2_full, p3_hf8, p3_ray2d,
+p2r_both, p2_rope2d_c4) — their audit deltas are saved in data_v10/weight_delta/probes_vs_v18.json.
+Kept: baseline, p2_rope2d, p1_canvas, p1p2, p2r_fg{,_c2,_c3}, p1p2_fg{,_c2} (bases / audit refs).
