@@ -78,6 +78,11 @@ class GaussianFormerConfig:
     """P1: add a gsplat rasterization of the input splat (same camera, log10(x+1) space) to the ray
     tokens through a zero-init linear. Identity at init; the model starts at rec-GT quality once
     the linear learns to pass the canvas through, and the transformer's job becomes refinement."""
+    canvas_residual: bool = False
+    """P1b (exp/p1-residual): the decoder predicts a RESIDUAL over the canvas. Output =
+    canvas + residual_head(DPT output), residual_head a zero-init 1x1 conv, so the model starts
+    exactly at the rasterizer (rec-GT quality on every object, seen or not) and only has to
+    learn corrections. Requires canvas_cond and the DPT decoder."""
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""
