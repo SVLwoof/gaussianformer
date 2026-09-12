@@ -3320,3 +3320,14 @@ The canvas is worth −0.4 fit / −2.1 heldout on either loss; the fg loss is w
 costs +0.3 heldout. Effects are additive to within 0.1 dB. The full stack is the base to carry
 forward. Cycle 2 launched (`p1p2_fg_c2`, 31591122 → 31591123, killable, seed p1p2_fg ep3000); P2+fg
 cycle 3 (sagieb) lands in ~1 h and tells whether the fg chain is still paying ~2 dB/cycle.
+
+## 2026-09-12 11:30: **P2+fg cycle 3 = fit −0.35 dB — THE MODEL BEATS rec-GT ON ITS 10 TRAIN OBJECTS** (44.80 vs 44.44 FG-PSNR, LPIPS margin 0.0000)
+`probe_p2r_fg_c3` (31588838 → 31588839, sagieb). Fit ladder closed: baseline 7.62 → P2 6.47
+→ P2+fg 3.35 → c2 1.05 → **c3 −0.35**. Heldout300 20.34 (drift, as every cycle). The N=10
+capacity floor recorded on 2026-09-0x ("cannot fit even 10 objects to ceiling, 7.6 dB short")
+is gone: projected 2-D RoPE in the cross-attention + fg-weighted loss + fp32 LPIPS + 3 warm-
+restart cycles (90k steps) put the same 196 M-param model over the rasteriser on the objects it
+has seen. Shahaf's win condition, half 1 ("match at N=10"): MET.
+Half 2 (adapter over the fit beats rec-GT on an unseen object): slipper r4 adapter launched on
+the fg_c3 base (31591154 → 31591155, sagieb, lr 1e-3); the fg-base adapter scored −0.33, its cycle 2 and
+the fg_c2-base adapter are in flight. Sagieb = slipper c2 + molecule c2 + this = 12.
