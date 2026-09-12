@@ -3404,3 +3404,10 @@ seed load). Arms on killable, same N=10 protocol: `p1res_p2_fg` (31593854 → 31
 and `p1res_p2` (31593856 → 31593858, plain loss) vs p1p2_fg 2.91/17.27 and p1p2 6.07/16.95. Expectation:
 heldout moves by several dB (starts at 0 margin); fit unaffected or better. Shahaf: separate
 branch, does not become the standard unless it proves the ideal approach.
+
+## 2026-09-12 22:30: molecule adapter cycle 2 = −2.45 dB, 6/40 (c1 −2.70) — +0.25 per cycle, far stuck at −5.4
+`checkpoints_lora_p2fg_scene_1423_r4_c2` (31590780 → 31590781, lr 1e-3, init from c1 adapter).
+rand −2.27 (2/24), close −0.08 (4/8), far −5.36 (0/8). The full FT gained +1.2 dB from c1→c2
+on this object; the r=4 adapter gains +0.25. Close is at parity; far (bar 48 dB) does not move
+at all (−5.56 → −5.36). No c3 queued: the adapter's ceiling on the molecule is set by far-range
+capacity, not by epochs. Slipper c2 (tomorrow ~04:00) decides whether cycles pay on the easier object.
