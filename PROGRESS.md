@@ -3360,3 +3360,36 @@ p2_full, whose extras are zero-gated → run-to-run noise floor).
    (p1_canvas 0.088 ≈ baseline). Two orthogonal mechanisms → additive gains.
 5. The fg loss changes almost nothing in where/how weights move (p2r_fg ≈ p2_rope2d in every
    family, ±0.005); its 3 dB fit gain is a gradient re-weighting, not a re-programming.
+
+## 2026-09-12 16:00: STATE OF PLAY — V19 probe campaign, week 1
+**Harness.** N=10 overfit (10 train objects, 30k steps/cycle, seed V18 ep30); readouts are
+FG-crop PSNR margins to rec-GT: train-fit (the 10 objects) and heldout300. Baseline 7.62 / 20.44.
+
+**Single-cycle grid (fit / heldout).** P3 arms flat (rope32 & scale2 broke the pretrained band;
+hf8 7.53/20.69; ray2d 7.54/20.73). P2: bias/feat gates ≈ 0 (7.60/20.45); **proj_rope_2d
+6.47/19.07** — the one P2 sub-change that works; variants scale1 / both / dim32 all null.
+P1 canvas 6.78/17.47. P1+P2 6.07/16.95. +fg loss: P2 3.35/19.39; P1+P2 **2.91/17.27**.
+Effects are additive (canvas −0.4 fit / −2.1 heldout; fg −3.1 fit / +0.3 heldout).
+
+**Cycles (fit).** P2: 6.47 → 4.56 → 2.88 → 1.88. P2+fg: 3.35 → 1.05 → **−0.35 (beats rec-GT
+on the train objects; N=10 target MET 2026-09-12)**. Heldout drifts +0.3–0.5 per cycle.
+bf16-LPIPS collapse (3/3 at loss ≈ 0.0006) fixed by fp32 LPIPS (0/3 since). P1+P2+fg c2 running.
+
+**Win test (adapter over the fit, unseen object, 27 ep, r4 attn+FFN, 5.3 MB).**
+slipper: V18 base −3.11 → **P2+fg base −0.33 (18/40, close +1.48 8/8)**; full-FT c1 was
+−0.55, c4 +1.82. molecule: −2.70 (far −5.56; full-FT c1 −1.11). lr rule: 1e-3 on the P2+fg
+base (2.75e-3 diverged 2/3). Running: slipper c2, molecule c2, slipper over fg_c2 base,
+slipper over fg_c3 base. V18-base anchors closed: r=1 −3.65, r=4 −3.11, r=16 −2.68.
+
+**Weight audit (2026-09-12).** Canvas = view-transformer L0 re-programmed (2× movement, new
+direction), decoder becomes a refiner; scene transformer untouched. P2 = low-rank q_proj
+re-keying. fg = no re-programming. Cycles = 1.6× high-rank movement (memorisation).
+
+**Ops.** claude_node 31588298 (wadi-02, to 2026-10-02). Disk ~50 GB (freed 45 GB of finished
+ckpts this week). deb13 venv rebuilt; A5000 reservation nodes fit LoRA only (2.8 s/step).
+Branches pushed to origin (exp/lora-feasibility ⊂ probe-infra ⊂ p3 ⊂ p2 ⊂ p1-canvas; tree on
+p1-canvas). Renders: docs/figures/v19_strips_{train,heldout}.png (job 31593436).
+
+**Open decisions.** (1) V19 full-data pretraining with the full stack (~3 days, full L40S node).
+(2) Whether the full-stack base or the fg_c3 base is the adapter base going forward (fg_c3
+adapter running). (3) Report section.
