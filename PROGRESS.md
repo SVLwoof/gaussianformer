@@ -3527,3 +3527,11 @@ PASSES. Launched: cycle 3 (31608707 → 31608708) and zero-shot codec evals of t
 (31608709) and molecule (31608710) — does the real-scan zero-shot (c1: −0.18 / −0.97) also improve per cycle?
 Remaining gates before the residual could become standard: low-N splats (codec_scaleout/<scene>_n{5k,2k}
 data exist — does the corrector still help when the rasterizer is bad?) and a view-dependent object.
+
+## 2026-09-13 12:00: zero-shot of the residual c2 base: slipper −0.14, molecule −0.72 (c1: −0.18 / −0.97)
+`p1res_fg_c2_zeroshot` (31608709 / 31608710). Cycles on the 10 studio objects also improve the
+real-scan zero-shot, by ~0.05 (slipper) and ~0.25 (molecule) per cycle — the corrector is
+getting better at correcting in general, not at these 10 objects. Framing worth keeping: the
+residual base with **zero per-object training** (−0.14 slipper) now equals the best P2+fg-base
+adapter after TWO 17-hour cycles (−0.14, 5.3 MB of per-object weights). Molecule: −0.72
+zero-shot vs −2.45 for that object's own 2-cycle adapter.
