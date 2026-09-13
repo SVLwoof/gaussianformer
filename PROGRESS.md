@@ -3642,3 +3642,20 @@ This is the headline for the MAIN line (no residual trick, the decoder still syn
 image): the canvas makes cycles free. Everything the residual branch was invented to fix is a
 separate, additive question. Cycle 4 launched on sagieb (31610166 → 31610167) to find where the fit
 saturates and whether heldout finally moves.
+
+## 2026-09-13 19:00: **base heldout margin PREDICTS adapter transfer — tighter fit makes a WORSE adapter base**
+`lora_p2fgc3_gopro_r4` (31591154 → 31591155) = −0.50 on the slipper. With the fg_c2-base run
+(−0.44, same lr 1e-3) the trend across the P2+fg chain is monotone, and it tracks the BASE's
+heldout margin, not its fit:
+
+  base            base fit   base heldout   slipper adapter (r4, 27 ep)
+  p2r_fg          3.35       19.39          −0.33   (lr 2.75e-3)
+  p2r_fg_c2       1.05       19.96          −0.44   (lr 1e-3)
+  p2r_fg_c3      −0.35       20.34          −0.50   (lr 1e-3)
+
+Cycling the base improves its fit by 3.7 dB and makes the adapter 0.17 dB worse; the base's
+heldout margin moves the same way. So "memorise the 10 objects harder" is actively harmful as
+adapter preparation — the adapter inherits the base's generalisation, not its fit. Prediction:
+the CANVAS base (p1p2_fg_c3: fit −1.12, heldout **17.17**, the best heldout on record for a
+synthesising model) should give the best adapter yet. Launched: 31611528 → 31611529 (slipper, r4, lr 1e-3).
+Also running: the same adapter over the residual base (31604958 → 31604959).
