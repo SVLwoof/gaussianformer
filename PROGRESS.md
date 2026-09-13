@@ -3456,3 +3456,64 @@ from −0.18 instead of −8.7.
 far −0.34 (3/8). Cycles pay the adapter +0.2 (molecule +0.25) vs +1.0 for the full FT: the
 r=4 adapter on the P2+fg base saturates just under the bar. Superseded as a route by the
 residual base (zero-shot −0.18 with no adapter at all); no c3.
+
+## 2026-09-13 09:00: HANDOFF (Fable 5.1 → next session). Insights, state, and what to do next.
+
+### The five insights of this campaign (read these first)
+1. **The N=10 "capacity floor" was an architecture problem, not a capacity problem.** V18 could
+   not fit 10 objects to the rasteriser's quality (7.6 dB short). Three changes, each additive,
+   close it: projected 2-D RoPE in the ray→Gaussian cross-attention (P2, −1.2 dB fit),
+   fg-weighted loss (−3.1 fit), and warm-restart cycles under fp32 LPIPS (−1.5 to −2 per
+   cycle). P2+fg cycle 3 = −0.35 (beats rec-GT on the train objects).
+2. **The canvas (P1) is the generalisation lever and it is orthogonal to P2.** Rasterise the
+   input splat from the target camera, add it (zero-init linear) to the ray tokens. Heldout
+   19.1 → 17.0 (P1+P2), and cycles on the canvas model do NOT drift heldout (0.47/17.26 at c2
+   vs P2+fg's 19.4→20.3). Weight audit: canvas re-programs view-transformer layer 0 (2×
+   movement, new direction) and turns the decoder into a refiner; scene transformer untouched;
+   P2 = low-rank q_proj re-keying; fg = no re-programming; cycles = high-rank memorisation.
+3. **The decoder cannot copy fine detail through on its own** (axe runes: input has them, canvas
+   has them, output invents them — 27 dB vs rec-GT 47). Making the copy trivial fixes it:
+   **residual over the canvas** (`canvas_residual`, branch exp/p1-residual): output = canvas +
+   zero-init 1×1 head(DPT out). One cycle: heldout 17.3 → **2.6**, fit −4.0, and **zero-shot on
+   real scans never seen: slipper −0.18 (close +0.15 8/8), molecule −0.97** (P2+fg c3 base
+   zero-shot: −8.7). Shahaf's rule: this stays a side branch until proven the ideal approach.
+4. **Adapters: base quality ≫ rank.** V18-base LoRA on the slipper: r1 −3.65, r4 −3.11, r16
+   −2.68 (+0.3/doubling). Same r4 adapter on the P2+fg base: −0.33; cycle 2: −0.14 (saturating).
+   lr rule on the P2+fg base: 1e-3 (2.75e-3 diverged 2/3). Adapter over the RESIDUAL base is
+   the open win test (31604958 → 31604959, sagieb, slipper, ~Sun 22:00).
+5. **The remaining heldout gap is fine-detail bandwidth, not geometry** (stratification, strips):
+   the canvas fixes the "where", the residual fixes the "copy"; what is left (2.6 dB on heldout,
+   slightly WORSE than the rasteriser alone) is what a 10-object fit teaches the corrector.
+   Only more objects (full-data run) can turn that into a gain on unseen objects.
+
+### Live jobs at handoff (train → eval; logs runs/probe_<id>.out, runs/nsweval_<id>.out,
+### runs/codec_lora_<id>.out, runs/csoeval_<id>.out; verdicts: `uv run --no-sync python -m
+### data_v10.probe_report`, experiments/overfit/data/codec_scaleout/<scene>/*_verdict.json)
+- sagieb (12): p1p2_fg_c3 31595828→31595829 (full stack cycle 3, ~Sun 14:00; is no-drift
+  still true at c3?); slipper adapter over fg_c3 base 31591154→31591155 (~Sun 22:00);
+  **slipper adapter over RESIDUAL base 31604958→31604959** (the win test; ~Sun 22:00).
+- killable: residual fg cycle 2 31599856→31599857 (~Sun 12:00; does heldout stay ≤2.6 or
+  drift?); slipper adapter over fg_c2 base on drape-01 (A5000, reservation) 31590359→31590360.
+- Done, no follow-up queued: molecule adapter c2 −2.45 (far stuck), slipper adapter c2 −0.14,
+  V18 anchors, all P2 variants (scale1/both/dim32 null), P3 arms (null), P2 chain (c4 = 1.88).
+- Ops: tree on `exp/p1-residual` (superset of exp/p1-canvas ⊃ p2 ⊃ p3 ⊃ probe-infra ⊃
+  lora-feasibility; all pushed). Jobs import the tree at start → keep it on the superset.
+  claude_node 31588298 (wadi-02) until 2026-10-02. Disk ~38 GB (lab share fills at ~10 GB/3 h
+  from other users; delete finished-arm ckpts first, hold list: v10_9869, tomato_codec4*,
+  data_v10/renders+h5s_20k_rec, v14auglp10). deb13 venv rebuilt (hardlinked; uv cache deleted).
+  A5000 reservation nodes fit LoRA only. Spurious torchrun exit 7/135 after clean finishes:
+  scripts now exit 0 on a written final ckpt; use afterany for evals.
+
+### What I would do next (in order)
+1. Read the three pending verdicts (residual c2, full-stack c3, residual-base adapter). If the
+   residual-base adapter beats rec-GT on the slipper → Shahaf's win condition is met end to end
+   (N=10 matched AND unseen object beaten with an adapter).
+2. Residual branch validation before it can become standard: (a) does heldout drift with
+   cycles (c2 verdict); (b) failure modes where the rasteriser is bad — low-N splats (the
+   codec_scaleout/<scene>_n5k, _n2k data exist) — does the residual model still correct, or
+   does it inherit raster artefacts? (c) an object with strong view-dependent effects.
+3. Full-data V19 pretraining with the full stack (+ residual if 2 passes): ~3 days on a full
+   L40S node, warm from V18; that is where "2.6 dB worse than the rasteriser on unseen" should
+   become "better than the rasteriser on unseen". Needs Shahaf's go.
+4. Report section (docs/figures/v19_strips_*.png, PROGRESS 2026-09-08 … 09-13, weight audit in
+   data_v10/weight_delta/).
