@@ -3535,3 +3535,30 @@ getting better at correcting in general, not at these 10 objects. Framing worth 
 residual base with **zero per-object training** (−0.14 slipper) now equals the best P2+fg-base
 adapter after TWO 17-hour cycles (−0.14, 5.3 MB of per-object weights). Molecule: −0.72
 zero-shot vs −2.45 for that object's own 2-cycle adapter.
+
+## 2026-09-13 13:30: **LOW-N TEST — the residual model does NOT correct a bad rasterizer; it converges to it**
+Zero-shot evals of the residual c2 base on pruned splats (`p1res_fg_c2_zeroshot`, 31608936-41).
+Codec-verdict convention: delta = model − rec-GT, so NEGATIVE = below the rasterizer.
+
+  object        N     rec-GT bar   model    delta
+  slipper       20k   34.8         34.6     −0.14
+  slipper        5k   32.0         31.9     −0.09
+  slipper        2k   31.1         31.1     −0.06
+  molecule      20k   44.5         43.8     −0.72
+  molecule       5k   35.6         35.5     −0.09
+  molecule       2k   33.1         33.1     −0.04
+  tomatoes       5k   —            —        −0.19
+  tomatoes       2k   —            —        −0.10
+
+Two readings, both damning for the "compression tool" claim as it stands:
+1. **On every unseen object, in every regime, the residual model is at or BELOW the rasterizer.**
+   It never adds value zero-shot. (The N=10 train margin of −5.02 in probe_report convention —
+   model 49.5 vs rec-GT 44.4 — is real, but it is on the ten memorised objects.)
+2. **The deficit SHRINKS as the rasterizer gets worse** (slipper −0.14 → −0.09 → −0.06; molecule
+   −0.72 → −0.09 → −0.04). That is the signature of the network falling back on copying the
+   canvas: the worse the input raster, the less it departs from it. A corrector worth its
+   inference cost would do the opposite — low-N is where a splat has the most fixable error.
+Correction to an earlier claim in this log (2026-09-13 04:30, "transfers to real scans at
+~parity"): parity is the CEILING of what the residual arm achieves zero-shot, never a win.
+Gate #2 for the branch: FAILED. Pending: the canvas-share diagnostic (31608934) quantifies how
+much of the output is literally the canvas.
