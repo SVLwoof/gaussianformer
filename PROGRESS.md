@@ -3450,3 +3450,9 @@ Reading: with the rasterizer in the loop the network is a correction on top of t
 a correction learned on 10 objects already transfers to real scans at ~parity. The adapter
 over the residual base (31599860 → 31599861, slipper) is now the win test proper: it starts
 from −0.18 instead of −8.7.
+
+## 2026-09-13 06:00: slipper adapter cycle 2 (P2+fg base, lr 1e-3) = −0.14 dB, 18/40 (c1 −0.33) — +0.19 per cycle
+`checkpoints_lora_p2fg_gopro_r4_c2` (31590354 → 31590355). rand −0.68 (7/24), close +1.68 (8/8),
+far −0.34 (3/8). Cycles pay the adapter +0.2 (molecule +0.25) vs +1.0 for the full FT: the
+r=4 adapter on the P2+fg base saturates just under the bar. Superseded as a route by the
+residual base (zero-shot −0.18 with no adapter at all); no c3.
