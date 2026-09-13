@@ -3659,3 +3659,13 @@ adapter preparation — the adapter inherits the base's generalisation, not its 
 the CANVAS base (p1p2_fg_c3: fit −1.12, heldout **17.17**, the best heldout on record for a
 synthesising model) should give the best adapter yet. Launched: 31611528 → 31611529 (slipper, r4, lr 1e-3).
 Also running: the same adapter over the residual base (31604958 → 31604959).
+
+## 2026-09-13 21:00: residual cycle 3 = fit −5.71 / heldout 2.33 — improving but asymptoting ABOVE parity
+`probe_p1res_p2_fg_c3` (31608707 → 31608708). Chain: fit −3.97 → −5.02 → −5.71; heldout
+2.62 → 2.46 → **2.33**. Both still improve, but the heldout gains are decaying (−0.16, −0.13,
+ratio ≈ 0.85), which extrapolates to a plateau near **1.5–1.6 dB BELOW the rasterizer** — the
+residual arm would not reach parity on unseen studio objects with any number of cycles on ten
+objects. Combined with the canvas-share finding (the edit is constant-size and simply mis-aimed
+off-distribution), the limit is the ten-object training signal, not the schedule.
+Chain STOPPED at c3: the branch is a diagnostic and the question it was raised to answer is
+answered. Kept: p1res_p2_fg_c3 ep3000 (best residual model, for figures/comparison).
