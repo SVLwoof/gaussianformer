@@ -63,8 +63,7 @@ def main() -> None:
             if not gt_path.exists():
                 continue
             gt = load_gt(gt_path, RES)
-            box = _fg_crop(gt)
-            g, r, m = gt[box], rec[i][box], mdl[i][box]
+            g, r, m = _fg_crop([gt, rec[i], mdl[i]], gt, pad=12, out=RES)
             rows.append({"scene": s, "view": v,
                          "psnr_model_gt": psnr(m, g), "psnr_rec_gt": psnr(r, g),
                          "psnr_model_rec": psnr(m, r),
