@@ -3424,3 +3424,18 @@ Deleted the deb13 uv cache (11 GB; the venv hardlinks its files, verified link c
 intact) and the ep3000 ckpts of six finished null arms (p2_bias_feat, p2_full, p3_hf8, p3_ray2d,
 p2r_both, p2_rope2d_c4) — their audit deltas are saved in data_v10/weight_delta/probes_vs_v18.json.
 Kept: baseline, p2_rope2d, p1_canvas, p1p2, p2r_fg{,_c2,_c3}, p1p2_fg{,_c2} (bases / audit refs).
+
+## 2026-09-13 03:30: **P1b RESIDUAL-OVER-CANVAS: heldout 2.62 (from 17.27), fit −3.97 — in ONE cycle**
+`probe_p1res_p2_fg` (31593854 → 31593855): train 48.41 vs rec-GT 44.44 (margin −3.97; the
+non-residual full stack needed 3 cycles to reach −0.35); heldout300 42.35 vs 44.97 = **2.62**,
+LPIPS margin 0.0027 (was 0.0725). Plain-loss twin `p1res_p2` (eval in progress, 51/300):
+−2.56 / 2.38. The 15 dB heldout jump is the pass-through the decoder could not learn on its
+own: output = canvas + residual, so the model starts as the rasterizer and unseen objects keep
+that quality minus 2.6 dB of learned-on-10-objects correction. The caveat I set for this
+branch: heldout is +2.6 relative to the rasterizer, i.e. the residual still HURTS unseen
+objects slightly; whether cycles widen that gap is the test.
+Launched (killable): residual fg cycle 2 ( → ); zero-shot codec evals of the residual
+base on slipper (31599883) and molecule (31599884) — no adapter, the base as-is on an unseen real scan —
+with the P2+fg c3 base as control (31599885); slipper r4 adapter over the residual base
+(31599860 → 31599861, lr 1e-3). Strips of the residual models: job 31597799 (after evals).
+Infra: codec eval now takes MODEL_CFG for base checkpoints (was adapter-only).
