@@ -3627,3 +3627,18 @@ run 2.75e-3), so the comparison is confounded; the clean one is the fg_c3-base a
 (31591154 → 31591155, also 1e-3), landing tonight. Working hypothesis, consistent with the
 heldout drift of the P2+fg chain: cycles buy train fit by memorising, and a more memorised base
 transfers no better — the same reason p1p2's no-drift property mattered.
+
+## 2026-09-13 17:00: **FULL STACK cycle 3 = fit −1.12 / heldout 17.17 — beats rec-GT on the train objects with NO heldout cost**
+`probe_p1p2_fg_c3` (31595828 → 31595829). Model 45.57 vs rec-GT 44.44 on its 10 objects
+(LPIPS margin also negative, −0.0006). Heldout across the chain: 17.27 → 17.26 → **17.17** —
+flat to slightly improving over three cycles. The P2-only chain over the same three cycles:
+19.39 → 19.96 → 20.34 (+0.95 drift) to reach a weaker fit (−0.35).
+
+  chain                 fit c1 → c2 → c3        heldout c1 → c2 → c3
+  P2 + fg               3.35 → 1.05 → −0.35     19.39 → 19.96 → 20.34
+  P1 + P2 + fg          2.91 → 0.47 → −1.12     17.27 → 17.26 → 17.17
+
+This is the headline for the MAIN line (no residual trick, the decoder still synthesises the
+image): the canvas makes cycles free. Everything the residual branch was invented to fix is a
+separate, additive question. Cycle 4 launched on sagieb (31610166 → 31610167) to find where the fit
+saturates and whether heldout finally moves.
