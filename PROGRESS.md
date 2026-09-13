@@ -3439,3 +3439,14 @@ base on slipper (31599883) and molecule (31599884) — no adapter, the base as-i
 with the P2+fg c3 base as control (31599885); slipper r4 adapter over the residual base
 (31599860 → 31599861, lr 1e-3). Strips of the residual models: job 31597799 (after evals).
 Infra: codec eval now takes MODEL_CFG for base checkpoints (was adapter-only).
+
+## 2026-09-13 04:30: **residual base, ZERO-SHOT on real scans (no adapter): slipper −0.18 dB (12/40, close +0.15 8/8), molecule −0.97**
+`p1res_fg_zeroshot` (31599883 / 31599884; base = p1res_p2_fg ep3000, trained on 10 studio
+objects, never saw either scan). Control: the P2+fg c3 base zero-shot on the slipper = −8.71
+(31599885). Ladder on the slipper, all vs rec-GT: V18 zero-shot −16.3 → P2+fg c3 zero-shot −8.7
+→ P2+fg-base adapter (27 ep, 5 MB) −0.33 → **residual base, zero-shot −0.18** → full FT c4
++1.82. Molecule: residual zero-shot −0.97 vs P2+fg-base adapter c2 −2.45 and full-FT c1 −1.11.
+Reading: with the rasterizer in the loop the network is a correction on top of the splat, and
+a correction learned on 10 objects already transfers to real scans at ~parity. The adapter
+over the residual base (31599860 → 31599861, slipper) is now the win test proper: it starts
+from −0.18 instead of −8.7.
