@@ -3517,3 +3517,13 @@ residual base (zero-shot −0.18 with no adapter at all); no c3.
    become "better than the rasteriser on unseen". Needs Shahaf's go.
 4. Report section (docs/figures/v19_strips_*.png, PROGRESS 2026-09-08 … 09-13, weight audit in
    data_v10/weight_delta/).
+
+## 2026-09-13 11:00: **residual cycle 2 = fit −5.02 / heldout 2.46 — cycles improve BOTH; the drift is gone**
+`probe_p1res_p2_fg_c2` (31599856 → 31599857). Fit −3.97 → **−5.02** (model 49.47 vs rec-GT
+44.44), heldout 2.62 → **2.46** (it went DOWN). Every non-canvas chain paid +0.3–0.5 heldout per
+cycle; the canvas chain held flat (17.27 → 17.26); the residual chain now *gains* on heldout
+while gaining 1 dB of fit. Gate condition #1 for the branch (does drift return with cycles?)
+PASSES. Launched: cycle 3 (31608707 → 31608708) and zero-shot codec evals of the c2 base on the slipper
+(31608709) and molecule (31608710) — does the real-scan zero-shot (c1: −0.18 / −0.97) also improve per cycle?
+Remaining gates before the residual could become standard: low-N splats (codec_scaleout/<scene>_n{5k,2k}
+data exist — does the corrector still help when the rasterizer is bad?) and a view-dependent object.
