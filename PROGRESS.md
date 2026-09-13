@@ -3428,8 +3428,8 @@ Kept: baseline, p2_rope2d, p1_canvas, p1p2, p2r_fg{,_c2,_c3}, p1p2_fg{,_c2} (bas
 ## 2026-09-13 03:30: **P1b RESIDUAL-OVER-CANVAS: heldout 2.62 (from 17.27), fit −3.97 — in ONE cycle**
 `probe_p1res_p2_fg` (31593854 → 31593855): train 48.41 vs rec-GT 44.44 (margin −3.97; the
 non-residual full stack needed 3 cycles to reach −0.35); heldout300 42.35 vs 44.97 = **2.62**,
-LPIPS margin 0.0027 (was 0.0725). Plain-loss twin `p1res_p2` (eval in progress, 51/300):
-−2.56 / 2.38. The 15 dB heldout jump is the pass-through the decoder could not learn on its
+LPIPS margin 0.0027 (was 0.0725). Plain-loss twin `p1res_p2` (full eval): −2.56 / **2.38** (heldout LPIPS margin 0.0019, the
+best on record; the fg loss buys 1.4 dB of fit and costs 0.24 dB of heldout, as before). The 15 dB heldout jump is the pass-through the decoder could not learn on its
 own: output = canvas + residual, so the model starts as the rasterizer and unseen objects keep
 that quality minus 2.6 dB of learned-on-10-objects correction. The caveat I set for this
 branch: heldout is +2.6 relative to the rasterizer, i.e. the residual still HURTS unseen
