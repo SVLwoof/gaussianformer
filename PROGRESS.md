@@ -3590,3 +3590,31 @@ rasterizer, and its 10-object correction does not transfer. What the diagnostic 
 not a degenerate copy, but an overfit corrector. That is a much better argument for the
 full-data run (a corrector trained on thousands of objects is exactly what this predicts
 should work) than for shipping the branch.
+
+## 2026-09-13 15:40: canvas-share, CONTROL arm — the residual's advantage on unseen objects is a SAFETY RAIL, not better learning
+Same diagnostic on the non-residual canvas model (p1p2_fg_c2), alongside the residual c2:
+
+  model                  split      edit size   model-vs-canvas   margin vs rec-GT
+  residual  (p1res_fg)   train        2.9 %       45.1 dB           +5.02
+  residual  (p1res_fg)   heldout      2.1 %       46.0 dB           −2.54
+  canvas    (p1p2_fg)    train        4.2 %       41.7 dB           −0.47
+  canvas    (p1p2_fg)    heldout     18.0 %       27.5 dB          −17.82
+
+(Train margins reproduce probe_report's +5.02 / −0.47 exactly; the heldout −17.82 vs the
+reported 17.26 is the 60-scene subsample.)
+
+Read the bottom two rows: on an unseen object the ordinary canvas model wanders 18 % away from
+the canvas — a different image, 27.5 dB from it — and pays 17.8 dB. The residual model stays
+within 2.1 % and pays 2.5 dB. **The residual architecture's entire generalisation advantage is
+that it is structurally unable to be very wrong.** It is a safety rail bolted to the
+rasterizer, not a better-learned renderer; on an unseen object the optimal setting of its
+residual head would be zero, and it does not know that.
+So Shahaf's "isn't it effectively cheating" is right about the SOURCE of the heldout number
+(the rasterizer supplies it) and wrong about the mechanism (the network is not copying — it
+makes a real, constant-size, overfit edit). Both facts belong in any write-up of P1b.
+Gates: #1 (drift with cycles) PASSED, #2 (low-N) FAILED, #3 (is it a pass-through) answered —
+not a pass-through, but the win is the constraint. Branch stays a diagnostic; it does NOT
+become the standard. The transferable lesson for the main line: constrain the decoder's output
+to a neighbourhood of the rasterization WITHOUT handing it the raster as the answer, e.g. bound
+the residual or supervise the departure, and get the corrector's training signal from thousands
+of objects rather than ten.
