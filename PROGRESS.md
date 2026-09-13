@@ -3562,3 +3562,31 @@ Correction to an earlier claim in this log (2026-09-13 04:30, "transfers to real
 ~parity"): parity is the CEILING of what the residual arm achieves zero-shot, never a win.
 Gate #2 for the branch: FAILED. Pending: the canvas-share diagnostic (31608934) quantifies how
 much of the output is literally the canvas.
+
+## 2026-09-13 15:00: **CANVAS-SHARE DIAGNOSTIC — it is NOT a pass-through; it is a constant-size edit that only generalises to the objects it was fit on**
+`data_v10/canvas_share.py` (31609053) on the residual c2 model, FG crop, PSNR against GT and
+against the canvas (= rec-GT, the rasterization of the same input Gaussians):
+
+  split            n    model-GT   rec-GT   model-rec   ||m-r||/||r||   margin
+  train (10 obj)   40   49.47      44.44    45.12       2.9 %          +5.02
+  heldout (60)    240   42.69      45.23    45.96       2.1 %          −2.54
+
+The edit is REAL and roughly the same size everywhere (2–3 % of canvas magnitude, ~45 dB away
+from the canvas on both splits). So "it's just a rasterizer" is wrong as a description of the
+mechanism: the network always departs from the canvas by a similar amount. What differs is the
+DIRECTION: on the ten memorised objects the departure is worth +5.0 dB, on unseen objects the
+same-sized departure costs −2.5 dB. It is a memorised correction, not a copy.
+
+This also revises the low-N reading (2026-09-13 13:30, "signature of falling back on copying").
+The likelier mechanism is scale: the raster's own rms error is 0.55 % at rec-GT 45 dB (studio
+20k), 1.8 % at 34.8 (slipper 20k), 2.5 % at 32.0 (5k), 2.8 % at 31.1 (2k). A ~2.5 % edit is 5x
+the raster's error on studio 20k (so a wrong edit is catastrophic: −2.54 dB) and roughly equal
+to it at 2k (so a wrong edit barely moves the dB: −0.06). The deficit shrinks at low N because
+the denominator grows, not because the model copies more. Confirming this would need
+PSNR(model, canvas) on the low-N splits — not yet measured.
+
+Bottom line for the branch, unchanged: on unseen objects the residual arm never beats the
+rasterizer, and its 10-object correction does not transfer. What the diagnostic adds is WHY:
+not a degenerate copy, but an overfit corrector. That is a much better argument for the
+full-data run (a corrector trained on thousands of objects is exactly what this predicts
+should work) than for shipping the branch.
