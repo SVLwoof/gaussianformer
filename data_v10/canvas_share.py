@@ -45,21 +45,24 @@ def main() -> None:
         scenes = scenes[:a.limit]
     h5_dir, ren_dir = SPLITS[a.split]
     pipe = load_model(ModelSpec(ckpt=a.ckpt, label="m", pe_type="rope", model_cfg=a.model_cfg), device)
-    vm, K, c2w, fov = make_orbit_views(RADIUS, FOV, RES, device)
+    vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
+    vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
 
     rows = []
     for n, s in enumerate(scenes):
         h5 = h5_dir / f"scene_{s:04d}.h5"
         if not h5.exists():
             continue
-        data = load_single_gaussian_h5_data(str(h5), device)
-        data = {**data, "c2w": c2w, "fov": fov}
+        data = load_single_gaussian_h5_data(h5)
+        for k in ("gaussians", "mask", "c2w", "fov"):
+            data[k] = data[k].to(device)
         rec = render_rec_all(h5, views, vm, K, RES, device)
         mdl = render_model_all(pipe, data, views, RES, 7)
         for i, v in enumerate(views):
-            gt = load_gt(ren_dir, s, v)
-            if gt is None:
+            gt_path = ren_dir / f"scene_{s:04d}_view_{v}.png"
+            if not gt_path.exists():
                 continue
+            gt = load_gt(gt_path, RES)
             box = _fg_crop(gt)
             g, r, m = gt[box], rec[i][box], mdl[i][box]
             rows.append({"scene": s, "view": v,
