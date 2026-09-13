@@ -3618,3 +3618,12 @@ become the standard. The transferable lesson for the main line: constrain the de
 to a neighbourhood of the rasterization WITHOUT handing it the raster as the answer, e.g. bound
 the residual or supervise the departure, and get the corrector's training signal from thousands
 of objects rather than ten.
+
+## 2026-09-13 16:10: adapter over the fg_c2 base = −0.44 (fg base: −0.33) — a tighter 10-object fit is not a better adapter base
+`lora_p2fgc2_gopro_r4` (31590359 → 31590360, drape-01). rand −0.99, close +1.40 (8/8), far −0.63.
+The fg_c2 base fits its 10 objects far better than the fg base (probe fit 1.05 vs 3.35) yet its
+adapter lands slightly WORSE on the unseen slipper. CAVEAT: lr differs (this run 1e-3, the −0.33
+run 2.75e-3), so the comparison is confounded; the clean one is the fg_c3-base adapter
+(31591154 → 31591155, also 1e-3), landing tonight. Working hypothesis, consistent with the
+heldout drift of the P2+fg chain: cycles buy train fit by memorising, and a more memorised base
+transfers no better — the same reason p1p2's no-drift property mattered.
