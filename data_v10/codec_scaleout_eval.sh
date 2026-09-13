@@ -32,4 +32,4 @@ export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_${EXT_TAG}sm${ARCH:-unknown}
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 
 : ${SCENE:?} ${CKPT:?}
-PYTHONPATH=. SCENE=$SCENE CKPT=$CKPT TAG=${TAG:-} uv run --no-sync python data_external/codec_scaleout_eval.py
+PYTHONPATH=. SCENE=$SCENE CKPT=$CKPT TAG=${TAG:-} MODEL_CFG=${MODEL_CFG:-} uv run --no-sync python data_external/codec_scaleout_eval.py

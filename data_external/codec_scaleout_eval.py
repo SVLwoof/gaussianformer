@@ -1,6 +1,7 @@
 """Generic codec verdict for a scale-out object: model vs rec-GT on its held-out views.
 
-Env: SCENE (e.g. scene_0959), CKPT (checkpoint path), TAG (output name, default = ckpt stem).
+Env: SCENE (e.g. scene_0959), CKPT (checkpoint path), TAG (output name, default = ckpt stem),
+MODEL_CFG (optional ;-separated GaussianFormerConfig overrides for a base checkpoint, e.g. proj_rope_2d=true).
 Outputs {TAG}_verdict.{png,json} under the object's codec_scaleout dir.
 """
 from __future__ import annotations
@@ -27,7 +28,8 @@ data = load_single_gaussian_h5_data(h5)
 with h5py.File(h5, "r") as f:
     rec = {k: torch.as_tensor(np.array(f[k], np.float32), device=device) for k in ("means","scales","rotations","colors","opacities")}
 recp = dict(means=rec["means"], quats=rec["rotations"], scales=rec["scales"], colors=rec["colors"], opacities=rec["opacities"].reshape(-1))
-pipe = load_model(ModelSpec(ckpt=CKPT, label="codec", pe_type="rope"), device)
+MODEL_CFG = [t for t in os.environ.get("MODEL_CFG", "").replace(";", " ").split() if t]  # base-ckpt config overrides
+pipe = load_model(ModelSpec(ckpt=CKPT, label="codec", pe_type="rope", model_cfg=MODEL_CFG or None), device)
 lp = lpips_lib.LPIPS(net="alex").to(device).eval()
 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
 focal = 0.5*RES/np.tan(0.5*np.radians(FOV))

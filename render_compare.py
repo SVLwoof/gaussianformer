@@ -75,6 +75,7 @@ class ModelSpec:
     ckpt: Path
     label: str
     pe_type: str
+    model_cfg: list[str] | None = None  # GaussianFormerConfig overrides for a BASE checkpoint
 
 
 def parse_model(s: str) -> ModelSpec:
@@ -99,7 +100,7 @@ def load_model(spec: ModelSpec, device: torch.device) -> GaussianFormerRendering
         assert not unexpected and all(k.endswith(".freqs") for k in missing), (missing, unexpected)
         load_lora(model, ckpt, merge=True)
     else:
-        model = GaussianFormer(config)
+        model = GaussianFormer(config.with_overrides(spec.model_cfg))
         model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     pipe = GaussianFormerRenderingPipeline(model)
