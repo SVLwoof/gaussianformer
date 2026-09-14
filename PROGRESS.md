@@ -3742,3 +3742,31 @@ residual c1 runs, and the duplicate `gaussianformer_final` HF exports of seven s
 chain links (the .pt is what every eval loads). Untouched: every checkpoint referenced by a
 reported number — p1p2_fg{,_c2,_c3,_c4}, p1res_p2{,_fg,_fg_c2,_fg_c3}, p2r_fg{,_c2,_c3},
 p2_rope2d, p1_canvas, baseline — and the running c5.
+
+## 2026-09-14 09:00: **CONFIDENCE INTERVALS (cluster bootstrap over scenes) — one headline claim does NOT survive**
+New tool `data_v10/probe_ci.py`: the 4 views of a scene are not independent, so it resamples
+SCENES, and compares arms with the SAME resampling (paired), which is far tighter than two
+independent CIs. 10 000 replicates on the rows we already have; no GPU.
+
+Heldout300 (n = 300 scenes):
+  baseline            20.44  [20.22, 20.67]
+  P2                  19.07  [18.84, 19.29]     vs baseline  −1.38 [−1.47, −1.28] *
+  P1 canvas           17.47  [17.24, 17.70]     vs P2        −1.60 [−1.69, −1.51] *
+  P1+P2               16.95  [16.73, 17.18]     vs P1        −0.52 [−0.56, −0.47] *
+  P1+P2+fg            17.27  [17.04, 17.49]     vs P1+P2     +0.32 [+0.25, +0.38] *
+  P1+P2+fg c4         17.06  [16.78, 17.34]     vs c1        −0.21 [−0.34, −0.07] * (p=0.002)
+Every architectural step is significant, and the canvas chain's cycles significantly IMPROVE
+heldout (the earlier "flat" reading was conservative). Contrast, same test on the P2+fg chain:
+c3 − c1 = **+0.95 [+0.89, +1.02]** — the drift is real and highly significant.
+
+Train (n = 10 scenes — the small-sample caveat bites):
+  baseline             7.62  [ 5.86,  9.48]
+  P2+fg c3            −0.35  [−1.73, +0.93]   ← **CROSSES ZERO**
+  P1+P2+fg c4         −2.15  [−3.25, −1.08]   ← below zero at 95 %
+  c4 vs P2+fg c3      −1.80 [−2.10, −1.46] *
+
+**Correction to the 2026-09-12 headline.** "P2+fg cycle 3 beats rec-GT on its train objects
+(−0.35)" is NOT supported at 95 % on ten scenes; the interval includes zero. The claim that
+survives is the canvas model's: P1+P2+fg c4 at −2.15 [−3.25, −1.08]. Use that one with Sagie,
+and quote intervals for every N=10 number — ten objects is a small sample and the per-object
+spread is ±1.5 dB.
