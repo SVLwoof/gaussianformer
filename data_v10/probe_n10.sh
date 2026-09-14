@@ -8,7 +8,7 @@
 #SBATCH --requeue
 #SBATCH --exclude=cyril-01,firefoot-01,firefoot-08,khan-01,khan-02,firefoot-13,firefoot-04,firefoot-16
 
-# N=10 architecture probe (2026-09-08). Exactly the N-sweep n10 baseline schedule (seed
+# N=10 (or N=100 via env N) architecture probe (2026-09-08). Exactly the N-sweep n10 baseline schedule (seed
 # v18_256-ep30, 30k optimizer steps, 4 x bs1 @512, LPIPS 0.5, rot-aug, wd 0.01; recorded
 # baseline: train-fit margin 7.57 / heldout300 20.47) with GaussianFormerConfig overrides.
 # STAGE_R (steps) prepends a 256px log-L1 recovery stage for changes that alter pretrained
@@ -40,7 +40,8 @@ mkdir -p "$TORCH_EXTENSIONS_DIR"
 TAG=${TAG:?TAG required}
 MODEL_CFG=${MODEL_CFG:-}
 STAGE_R=${STAGE_R:-0}
-N=10; NGPU=4; TARGET_STEPS=${TARGET_STEPS:-30000}
+N=${N:-10}; NGPU=4; TARGET_STEPS=${TARGET_STEPS:-30000}   # N=100 reuses the same 30k-step budget
+                                                         # so arms are compared at EQUAL COMPUTE
 STEPS_PER_EPOCH=$(( N * 4 / NGPU ))            # views_per_epoch=4, bs1
 EPOCHS=$(( TARGET_STEPS / STEPS_PER_EPOCH ))
 SAVE_INT=$(( EPOCHS / 15 )); [ $SAVE_INT -lt 1 ] && SAVE_INT=1

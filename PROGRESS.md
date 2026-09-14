@@ -3770,3 +3770,18 @@ Train (n = 10 scenes — the small-sample caveat bites):
 survives is the canvas model's: P1+P2+fg c4 at −2.15 [−3.25, −1.08]. Use that one with Sagie,
 and quote intervals for every N=10 number — ten objects is a small sample and the per-object
 spread is ±1.5 dB.
+
+## 2026-09-14 10:00: **N=100 arms launched — does the canvas advantage survive 10x more objects?**
+`probe_n10.sh` now takes `N` from the environment (default 10); everything else identical, and
+TARGET_STEPS stays 30 000 so the arms are compared at EQUAL COMPUTE (N=100 → 100 steps/epoch,
+300 epochs, stage R 30 epochs). Launched on sagieb, 4 GPUs each:
+  n100_p1p2_fg  (canvas + proj_rope_2d + fg)  31641386 → 31641387
+  n100_p2r_fg   (proj_rope_2d + fg)           31641388 → 31641389
+The baseline at this N already exists from the old sweep — `nsweep_n100` = train 13.40 /
+heldout 17.93 (and nsweep_n1000 = 15.79 / 16.70, nsweep_n10 = 7.57 / 20.47), same seed and
+step budget, so the three-point comparison at N=100 needs no new baseline run.
+What the result means either way: at N=10 the canvas bought −3.0 dB heldout against the
+baseline. If that margin holds at N=100 the mechanism scales and the full-data run is justified;
+if it collapses toward the baseline's 17.93, the canvas was buying a small-sample effect and the
+full-data run would be a poor bet. Note the baseline's own heldout already improves with N
+(20.47 → 17.93 → 16.70), so the honest metric is the GAP, not the absolute.
