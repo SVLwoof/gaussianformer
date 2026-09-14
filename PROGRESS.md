@@ -3727,3 +3727,11 @@ Reading:
 Conclusion for the write-up: report the canvas as INPUT (P1) as the contribution; report the
 residual (P1b) as the control that shows how much of a canvas-conditioned score can be obtained
 by copying — it is the right baseline to defend P1 against, not a method to ship.
+
+## 2026-09-14 06:00: canvas base on a 2k slipper = −2.33 (20k: −4.14) — where the crossover would be
+`p1p2fgc4_zeroshot` on gopro_n2k (31631773). The canvas model's own quality falls slowly with
+the input splat (30.7 dB at 20k → 28.8 at 2k) while the rec-GT bar falls faster (34.8 → 31.1),
+so the deficit narrows from −4.14 to −2.33. Linear in the bar, parity would arrive at a bar of
+roughly **29 dB**, i.e. compression well below 2k Gaussians — or, equivalently, the model needs
+about +2.5 dB of absolute quality on unseen objects to win at 2k. That is the number the
+full-data run has to deliver, and it is a far more concrete target than "beat rec-GT".
