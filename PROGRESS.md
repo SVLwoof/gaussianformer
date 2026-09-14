@@ -3700,3 +3700,30 @@ Consequence: on the residual branch the best slipper number is the base with NO 
 (c2 base zero-shot −0.14). The win test on that branch fails twice over — never beats rec-GT,
 and per-object adaptation is counterproductive. The live question is now the adapter over the
 CANVAS base (31611528 → 31611529, ep 9+ and training lower than any previous adapter).
+
+## 2026-09-14 05:00: **THE HEAD-TO-HEAD — what the rasterizer is worth, as input vs as output**
+Zero-shot on unseen objects, no per-object training, same 10-object training set for all three,
+same P2 + fg recipe; they differ only in how (and whether) the rasterization is used.
+
+  SLIPPER (real scan, rec-GT bar 34.8 dB)
+    no rasterizer      probe_p2r_fg_c3        model 26.1   delta −8.71
+    canvas as INPUT    probe_p1p2_fg_c4       model 30.7   delta −4.14
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 34.6   delta −0.14
+
+  MOLECULE (studio, rec-GT bar 44.5 dB)
+    canvas as INPUT    probe_p1p2_fg_c4       model 29.0   delta −15.51
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 43.8   delta −0.72
+
+Reading:
+* **Canvas conditioning is worth +4.6 dB zero-shot on an unseen real scan** (26.1 → 30.7) with
+  the decoder still synthesising every pixel. That is a genuine architectural gain and the
+  single most valuable thing the V19 campaign has produced for the main line.
+* The residual adds another +3.9 dB on the slipper and +14.8 on the molecule, but by copying:
+  its output is within 2.1 % of the rasterization, and its score tracks the rec-GT bar (34.6 vs
+  bar 34.8; 43.8 vs bar 44.5). It is the rasterizer wearing a 196M-parameter coat.
+* The canvas model's absolute quality on unseen objects is ~29–31 dB regardless of the object's
+  bar — it is a fixed-capability renderer, not a bar-tracker. That is why it loses badly on the
+  molecule (bar 44.5) and only moderately on the slipper (bar 34.8): the crossover band again.
+Conclusion for the write-up: report the canvas as INPUT (P1) as the contribution; report the
+residual (P1b) as the control that shows how much of a canvas-conditioned score can be obtained
+by copying — it is the right baseline to defend P1 against, not a method to ship.
