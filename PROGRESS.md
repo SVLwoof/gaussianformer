@@ -3669,3 +3669,21 @@ objects. Combined with the canvas-share finding (the edit is constant-size and s
 off-distribution), the limit is the ten-object training signal, not the schedule.
 Chain STOPPED at c3: the branch is a diagnostic and the question it was raised to answer is
 answered. Kept: p1res_p2_fg_c3 ep3000 (best residual model, for figures/comparison).
+
+## 2026-09-14 01:00: **FULL STACK cycle 4 = fit −2.15 / heldout 17.06 — four cycles, BOTH axes improve every time**
+`probe_p1p2_fg_c4` (31610166 → 31610167). The complete chain:
+
+  cycle   fit                       heldout300
+  c1       2.91                     17.27
+  c2       0.47                     17.26
+  c3      −1.12                     17.17
+  c4      −2.15                     17.06
+
+Fit is not saturating (~1 dB/cycle) and heldout improves monotonically — the opposite of every
+pre-canvas chain (P2+fg over the same four cycles would be ~19.4 → 20.6). At c4 the model is
+2.15 dB ABOVE the rasterizer on its ten objects with an LPIPS margin of −0.0014, while getting
+better on 300 objects it has never seen. This is the main line: no residual, the decoder still
+synthesises the image from Gaussian tokens.
+Cycle 5 launched (31631020 → 31631021). The case for the full-data V19 run is now much stronger than
+when it was first proposed: the canvas removes the memorisation tax that made "more cycles" and
+"more data" trade against each other.
