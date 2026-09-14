@@ -3735,3 +3735,10 @@ so the deficit narrows from −4.14 to −2.33. Linear in the bar, parity would 
 roughly **29 dB**, i.e. compression well below 2k Gaussians — or, equivalently, the model needs
 about +2.5 dB of absolute quality on unseen objects to win at 2k. That is the number the
 full-data run has to deliver, and it is a far more concrete target than "beat rec-GT".
+
+## 2026-09-14 07:00: disk 24 GB → 44 GB
+Freed: the two residual stage-R dirs (seeds long consumed), the ep2800 pre-finals of the two
+residual c1 runs, and the duplicate `gaussianformer_final` HF exports of seven superseded
+chain links (the .pt is what every eval loads). Untouched: every checkpoint referenced by a
+reported number — p1p2_fg{,_c2,_c3,_c4}, p1res_p2{,_fg,_fg_c2,_fg_c3}, p2r_fg{,_c2,_c3},
+p2_rope2d, p1_canvas, baseline — and the running c5.
