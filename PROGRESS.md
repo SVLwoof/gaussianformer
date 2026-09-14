@@ -3687,3 +3687,16 @@ synthesises the image from Gaussian tokens.
 Cycle 5 launched (31631020 → 31631021). The case for the full-data V19 run is now much stronger than
 when it was first proposed: the canvas removes the memorisation tax that made "more cycles" and
 "more data" trade against each other.
+
+## 2026-09-14 03:00: **adapter over the RESIDUAL base = −0.33, WORSE than the same base zero-shot (−0.18)**
+`lora_p1resfg_gopro_r4` (31604958 → 31604959; r4 attn+FFN, 27 ep, lr 1e-3, base = p1res_p2_fg
+ep3000). rand −0.67 (3/24), close **+1.02** (8/8), far −0.65 (0/8).
+Per-object training makes this base WORSE overall: −0.18 → −0.33. Close range improves (+0.15 →
++1.02) but rand and far degrade more than close gains. Mechanism, straight from the canvas-share
+result: the base's value is that it is pinned near the rasterization; 27 epochs of per-object
+fitting teach the adapter to depart from it, and off the training views those departures cost
+more than they buy. The safety rail is exactly what the adapter removes.
+Consequence: on the residual branch the best slipper number is the base with NO adapter
+(c2 base zero-shot −0.14). The win test on that branch fails twice over — never beats rec-GT,
+and per-object adaptation is counterproductive. The live question is now the adapter over the
+CANVAS base (31611528 → 31611529, ep 9+ and training lower than any previous adapter).
