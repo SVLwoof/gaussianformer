@@ -3393,3 +3393,24 @@ p1-canvas). Renders: docs/figures/v19_strips_{train,heldout}.png (job 31593436).
 **Open decisions.** (1) V19 full-data pretraining with the full stack (~3 days, full L40S node).
 (2) Whether the full-stack base or the fg_c3 base is the adapter base going forward (fg_c3
 adapter running). (3) Report section.
+
+## 2026-09-15 11:00: **P4 — the 8-px pattern is the PATCH GRID, not a ConvTranspose checkerboard** (branch exp/p4-deblock)
+Measured the spatial spectrum of each column's error vs GT on the winning slipper close-up
+(object bbox only, label strip excluded):
+
+  rec-GT error   top periods  x 38.2 / 30.5 / 24.1 px    y 31.2 / 39.0 / 22.3 px   (broadband = the fleece it cannot resolve)
+  model  error   top periods  x  8.0 /  7.9 / 14.3 px    y  8.0 /  8.2 /  7.8 px   (a spike at exactly patch_size)
+
+8 px IS `patch_size`. The token grid imprints on the output during DPT reassembly — the head
+fuses a 64x64 token grid and finishes with a single bilinear jump to 512, so nothing in the
+decoder ever looks across a patch boundary at full resolution. This CORRECTS the 2026-08-31
+note ("3.8-px ConvTranspose stripe"): the resize layers are kernel==stride (no overlap, so no
+Odena checkerboard), and the measured period is 8, not 3.8.
+Fix (`deblock_kernel`, default 0): `img = img + conv_kxk(img)` at full resolution with the conv
+ZERO-INIT, so it is an exact no-op at load and warm-starts from any checkpoint — 732 params at
+k=9. k must exceed patch_size to span a boundary (asserted). CPU test: new tensors are exactly
+the two zero ones, every pre-existing weight byte-identical, `x + deblock(x) == x`.
+Probe launched warm from the canvas c3 base: `p4_deblock9` 31652044 → 31652045. Readout is the
+usual fit/heldout margins PLUS a re-run of the spectrum on its renders — the margins may barely
+move (the artefact is ~1 % of energy) while the images look materially better, so the spectrum
+is the primary metric here, not the dB.
