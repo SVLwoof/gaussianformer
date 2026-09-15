@@ -1,0 +1,26 @@
+[
+ {
+  "label": "r=1 attn-only",
+  "params": 119808,
+  "bytes": 479232,
+  "gauss_equiv": 8557.714285714286
+ },
+ {
+  "label": "r=4 attn-only",
+  "params": 479232,
+  "bytes": 1916928,
+  "gauss_equiv": 34230.857142857145
+ },
+ {
+  "label": "r=16 attn-only",
+  "params": 1916928,
+  "bytes": 7667712,
+  "gauss_equiv": 136923.42857142858
+ },
+ {
+  "label": "r=4 attn+FFN",
+  "params": 1308672,
+  "bytes": 5234688,
+  "gauss_equiv": 93476.57142857143
+ }
+]
