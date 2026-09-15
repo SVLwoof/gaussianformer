@@ -3429,3 +3429,31 @@ Jobs 31652334 (zero) / 31652335 (rollviews). Prediction: zero collapses toward o
 no-canvas baseline (20.44 heldout) — the model has no path to the input geometry other than the
 scene tokens it has learned to under-use; rollviews should land in between, and how far tells us
 how much of the gain is view alignment rather than object statistics.
+
+## 2026-09-15 13:00: **CANVAS ABLATION RESULT — the rasterizer arm CANNOT be pruned; the canvas is used pixel-aligned**
+Same checkpoint (`probe_p1p2_fg_c3`), eval-only ablations of the canvas input:
+
+  canvas fed                     fit(10)   heldout300   model PSNR (heldout)
+  normal                         −1.12     17.17        27.80
+  right object, WRONG camera     27.80     29.42        15.54
+  all black (arm pruned)         30.15     32.49        12.48
+
+The model collapses to worse than the V18 seed. Two conclusions, both important and both
+uncomfortable:
+1. **You cannot drop the rasterizer after training.** It is not a hint the model could do
+   without — it is load-bearing at inference, every view, forever. The deliverable is
+   "splat + base + adapter + gsplat in the loop", not "splat + weights".
+2. **The canvas is consumed as a VIEW-ALIGNED reference, not as a generic object prior.**
+   A canvas of the same object from an adjacent camera is worth only ~3 dB more than a black
+   one (29.42 vs 32.49); both are catastrophic. The decoder reads it pixel-by-pixel.
+Combined with the weight audit (the canvas re-programs view-transformer L0 and turns the
+decoder into a refiner) and canvas-share (the output departs 18 % from the canvas on unseen
+objects, i.e. it is NOT copying), the honest characterisation of the winning model is:
+**a learned, view-aligned refiner of a rasterization that synthesises every pixel it emits.**
+It genuinely beats the rasterizer (+0.60 dB on an unseen real scan with a 5.3 MB adapter) and
+it genuinely is not copying — but it is not a standalone neural renderer, and the scene-token
+path has atrophied to the point of uselessness without the canvas. Say this plainly to Sagie;
+it is the first thing a reviewer will probe.
+Open question worth one probe later: canvas DROPOUT during training (feed a black canvas on a
+fraction of steps) would force the scene-token path to stay alive and might buy robustness —
+and would tell us whether the two paths can coexist.
