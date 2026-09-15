@@ -3414,3 +3414,18 @@ Probe launched warm from the canvas c3 base: `p4_deblock9` 31652044 → 31652045
 usual fit/heldout margins PLUS a re-run of the spectrum on its renders — the margins may barely
 move (the artefact is ~1 % of energy) while the images look materially better, so the spectrum
 is the primary metric here, not the dB.
+
+## 2026-09-15 12:00: **CANVAS ABLATION — what happens if you prune the rasterizer arm after training**
+`ceiling_eval.py --canvas_ablate {zero,rollviews}` (eval-only; it patches
+`gaussianformer.utils.canvas.render_canvas`, which the pipeline imports at call time, so no
+model change and no retraining). Two ablations of the canvas c3 model (`probe_p1p2_fg_c3`,
+normal: fit −1.12 / heldout 17.17):
+  zero       all-black canvas = literally pruning the rasterizer at test time. The encoder is
+             `ray_tokens += canvas_encoder(canvas_patches)`, so with a zero canvas only the
+             encoder's BIAS survives — a constant offset the model has never seen alone.
+  rollviews  the right object from the WRONG camera (views cyclically shifted by one). Separates
+             "uses the canvas as a view-aligned reference" from "uses it as a generic prior".
+Jobs 31652334 (zero) / 31652335 (rollviews). Prediction: zero collapses toward or below the
+no-canvas baseline (20.44 heldout) — the model has no path to the input geometry other than the
+scene tokens it has learned to under-use; rollviews should land in between, and how far tells us
+how much of the gain is view alignment rather than object statistics.
