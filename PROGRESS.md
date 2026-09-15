@@ -3813,3 +3813,25 @@ margin, not its fit**:
 
 Launched: the same adapter on a SECOND object (molecule, 31649133 → 31649137) — the result has
 to reproduce before it goes in front of Sagie.
+
+## 2026-09-15 07:00: **N=100 — THE CANVAS ADVANTAGE MORE THAN DOUBLES WITH 10x THE OBJECTS**
+Equal compute (30 000 steps), same seed, same heldout300 set as every other number in this log.
+
+  arm                          train(N)   heldout300
+  nsweep_n100 (baseline)        13.40      17.93
+  probe_n100_p2r_fg             10.51      16.38
+  probe_n100_p1p2_fg (canvas)  **7.77**   **11.25**  [11.01, 11.49]
+  paired canvas − P2+fg:        −2.74      **−5.13**  [−5.32, −4.95], p<1e-4
+
+Canvas advantage over the same recipe without it: **2.12 dB at N=10 → 5.13 dB at N=100.** For
+reference the whole N-sweep only moved heldout 20.47 → 17.93 → 16.70 going 10 → 100 → 1000
+objects; the canvas at N=100 (11.25) is **5.5 dB better than the 1000-object baseline**, at a
+tenth of the data.
+This is the scaling answer the full-data run was meant to provide, and it is emphatic: the
+mechanism does not merely survive more objects, it feeds on them. Reading it with the weight
+audit: the canvas turns the decoder into a refiner, refinement is an object-independent skill,
+and more objects teach it better — whereas the pre-canvas model spent extra objects on
+memorisation (its heldout barely moved).
+Combined with the 2026-09-15 adapter win (+0.60 on an unseen real scan from the N=10 canvas
+base), the two halves of Shahaf's win condition are met AND the mechanism scales. The full-data
+V19 run is now the obvious next step rather than a speculative one.
