@@ -76,6 +76,16 @@ class ViewTransformer(nn.Module):
             self.canvas_encoder = nn.Linear(3 * self.config.patch_size ** 2, self.config.view_transformer_latent_dim)
             nn.init.zeros_(self.canvas_encoder.weight)
             nn.init.zeros_(self.canvas_encoder.bias)
+        if self.config.deblock_kernel:
+            # P4: zero-init residual smoothing over the DPT output; the kernel must span a patch
+            # boundary to cancel the patch-grid imprint, hence k > patch_size.
+            k = self.config.deblock_kernel
+            assert k % 2 == 1 and k > self.config.patch_size, \
+                f"deblock_kernel must be odd and > patch_size ({self.config.patch_size}), got {k}"
+            ch = 4 if self.config.include_alpha else 3
+            self.deblock = nn.Conv2d(ch, ch, kernel_size=k, padding=k // 2)
+            nn.init.zeros_(self.deblock.weight)
+            nn.init.zeros_(self.deblock.bias)
         if self.config.proj_feat:
             # P2c: [log depth, log projected radius px, cam-frame quat(4)] -> context tokens, zero-init
             self.geom_feat = nn.Linear(6, self.config.latent_dim)
@@ -200,6 +210,8 @@ class ViewTransformer(nn.Module):
                     uv_q=uv_q, uv_k=uv_k,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
+            if self.config.deblock_kernel:
+                decoded_img = decoded_img + self.deblock(decoded_img)
             return self.out_proj_act(decoded_img)
         else:
             seq = self.transformer(

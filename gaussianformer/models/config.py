@@ -74,6 +74,12 @@ class GaussianFormerConfig:
     """P2a: 2-D RoPE on the projected patch coordinates for cross-attention KEYS and on patch
     centres for QUERIES (uses ray_rope_2d_dim / ray_rope_2d_scale). Alters pretrained function:
     needs a 256px recovery stage."""
+    deblock_kernel: int = 0
+    """P4: zero-init residual smoothing conv on the DPT output, `img = img + conv(img)`, at FULL
+    resolution. The model's error spectrum peaks sharply at the patch size (8 px) -- the token
+    grid imprinting on the output during DPT reassembly. A k x k conv with k > patch_size sees
+    across a patch boundary and can cancel it. Zero-init => exact no-op at load, so it warm-starts
+    from any checkpoint (same additive trick as canvas_cond / proj_feat). 0 disables; try 9."""
     canvas_cond: bool = False
     """P1: add a gsplat rasterization of the input splat (same camera, log10(x+1) space) to the ray
     tokens through a zero-init linear. Identity at init; the model starts at rec-GT quality once
