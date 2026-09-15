@@ -3785,3 +3785,31 @@ baseline. If that margin holds at N=100 the mechanism scales and the full-data r
 if it collapses toward the baseline's 17.93, the canvas was buying a small-sample effect and the
 full-data run would be a poor bet. Note the baseline's own heldout already improves with N
 (20.47 → 17.93 → 16.70), so the honest metric is the GAP, not the absolute.
+
+## 2026-09-15 03:00: **WIN — adapter over the CANVAS base beats rec-GT on an unseen real scan: +0.60 dB, 30/40**
+`lora_p1p2fgc3_gopro_r4` (31611528 → 31611529). Base = `probe_p1p2_fg_c3` (canvas + proj_rope_2d
++ fg, 3 cycles, heldout 17.17), r=4 attn+FFN, 5.3 MB, 27 epochs, lr 1e-3, slipper — an object
+the base has never seen. ALL THREE ranges positive:
+
+  novel_rand   model 35.95  rec-GT 35.79  +0.16  (16/24)
+  novel_close  model 30.20  rec-GT 28.20  +2.00  ( 8/8)
+  novel_far    model 38.92  rec-GT 38.39  +0.53  ( 6/8)
+
+**Shahaf's win condition is met, on the main line, with no residual trick**: shared base plus
+5.3 MB of per-object weights renders the compressed splat better than rasterizing it. For scale,
+the full fine-tune (786 MB of per-object weights) needed three cycles to pass this: c1 −0.55,
+c2 +0.48, c3 +1.26, c4 +1.82. The adapter reaches +0.60 in one 17-hour cycle at 0.7 % of the
+weights.
+
+And it confirms the 2026-09-13 prediction exactly — **adapter transfer tracks the BASE's heldout
+margin, not its fit**:
+
+  base                    base fit   base heldout   slipper adapter
+  p2r_fg                   3.35       19.39         −0.33
+  p2r_fg_c2                1.05       19.96         −0.44
+  p2r_fg_c3               −0.35       20.34         −0.50
+  p1p2_fg_c3              −1.12       17.17         **+0.60**
+  p1res_p2_fg (residual)  −3.97        2.46*        −0.33   (*different scale, see 09-13)
+
+Launched: the same adapter on a SECOND object (molecule, 31649133 → 31649137) — the result has
+to reproduce before it goes in front of Sagie.
