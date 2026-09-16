@@ -3394,6 +3394,447 @@ p1-canvas). Renders: docs/figures/v19_strips_{train,heldout}.png (job 31593436).
 (2) Whether the full-stack base or the fg_c3 base is the adapter base going forward (fg_c3
 adapter running). (3) Report section.
 
+## 2026-09-12 eve: P1b — residual over the canvas (branch exp/p1-residual, NOT on the main line until proven)
+Motivation (heldout strips): the runes/ridges are in the input and even in the canvas, yet the
+decoder outputs invented strokes (axe 27.5 vs rec-GT 46.9). A pass-through solution exists but
+one cycle on 10 objects never finds it because memorising beats copying on the train objects.
+Change: `canvas_residual=true` → output = canvas + residual_head(DPT out), residual_head a
+zero-init 1×1 conv; at init the model IS the rasterizer (CPU test: output == canvas to 1e-7 after
+seed load). Arms on killable, same N=10 protocol: `p1res_p2_fg` (31593854 → 31593855, full stack + fg)
+and `p1res_p2` (31593856 → 31593858, plain loss) vs p1p2_fg 2.91/17.27 and p1p2 6.07/16.95. Expectation:
+heldout moves by several dB (starts at 0 margin); fit unaffected or better. Shahaf: separate
+branch, does not become the standard unless it proves the ideal approach.
+
+## 2026-09-12 22:30: molecule adapter cycle 2 = −2.45 dB, 6/40 (c1 −2.70) — +0.25 per cycle, far stuck at −5.4
+`checkpoints_lora_p2fg_scene_1423_r4_c2` (31590780 → 31590781, lr 1e-3, init from c1 adapter).
+rand −2.27 (2/24), close −0.08 (4/8), far −5.36 (0/8). The full FT gained +1.2 dB from c1→c2
+on this object; the r=4 adapter gains +0.25. Close is at parity; far (bar 48 dB) does not move
+at all (−5.56 → −5.36). No c3 queued: the adapter's ceiling on the molecule is set by far-range
+capacity, not by epochs. Slipper c2 (tomorrow ~04:00) decides whether cycles pay on the easier object.
+
+## 2026-09-13 01:00: **full stack cycle 2 = fit 0.47 / heldout 17.26 — NO heldout drift**
+`probe_p1p2_fg_c2` (31591122 → moved to sagieb 31595484 → 31595485). Fit 2.91 → 0.47 (better
+than P2+fg's c2 at 1.05); heldout 17.27 → **17.26**, flat. Every earlier chain drifted +0.3–0.5
+per cycle (P2: 19.07 → 19.42 → 19.81 → 20.11; P2+fg: 19.39 → 19.96 → 20.34). With the canvas
+the fit improves without the memorisation cost — consistent with the weight audit (the decoder
+learns a refiner, cycles refine the refiner). Cycle 3 launched on sagieb (31595828 → 31595829).
+
+## 2026-09-13 02:00: disk 24 GB → 38 GB
+Deleted the deb13 uv cache (11 GB; the venv hardlinks its files, verified link count 2, venv
+intact) and the ep3000 ckpts of six finished null arms (p2_bias_feat, p2_full, p3_hf8, p3_ray2d,
+p2r_both, p2_rope2d_c4) — their audit deltas are saved in data_v10/weight_delta/probes_vs_v18.json.
+Kept: baseline, p2_rope2d, p1_canvas, p1p2, p2r_fg{,_c2,_c3}, p1p2_fg{,_c2} (bases / audit refs).
+
+## 2026-09-13 03:30: **P1b RESIDUAL-OVER-CANVAS: heldout 2.62 (from 17.27), fit −3.97 — in ONE cycle**
+`probe_p1res_p2_fg` (31593854 → 31593855): train 48.41 vs rec-GT 44.44 (margin −3.97; the
+non-residual full stack needed 3 cycles to reach −0.35); heldout300 42.35 vs 44.97 = **2.62**,
+LPIPS margin 0.0027 (was 0.0725). Plain-loss twin `p1res_p2` (full eval): −2.56 / **2.38** (heldout LPIPS margin 0.0019, the
+best on record; the fg loss buys 1.4 dB of fit and costs 0.24 dB of heldout, as before). The 15 dB heldout jump is the pass-through the decoder could not learn on its
+own: output = canvas + residual, so the model starts as the rasterizer and unseen objects keep
+that quality minus 2.6 dB of learned-on-10-objects correction. The caveat I set for this
+branch: heldout is +2.6 relative to the rasterizer, i.e. the residual still HURTS unseen
+objects slightly; whether cycles widen that gap is the test.
+Launched (killable): residual fg cycle 2 ( → ); zero-shot codec evals of the residual
+base on slipper (31599883) and molecule (31599884) — no adapter, the base as-is on an unseen real scan —
+with the P2+fg c3 base as control (31599885); slipper r4 adapter over the residual base
+(31599860 → 31599861, lr 1e-3). Strips of the residual models: job 31597799 (after evals).
+Infra: codec eval now takes MODEL_CFG for base checkpoints (was adapter-only).
+
+## 2026-09-13 04:30: **residual base, ZERO-SHOT on real scans (no adapter): slipper −0.18 dB (12/40, close +0.15 8/8), molecule −0.97**
+`p1res_fg_zeroshot` (31599883 / 31599884; base = p1res_p2_fg ep3000, trained on 10 studio
+objects, never saw either scan). Control: the P2+fg c3 base zero-shot on the slipper = −8.71
+(31599885). Ladder on the slipper, all vs rec-GT: V18 zero-shot −16.3 → P2+fg c3 zero-shot −8.7
+→ P2+fg-base adapter (27 ep, 5 MB) −0.33 → **residual base, zero-shot −0.18** → full FT c4
++1.82. Molecule: residual zero-shot −0.97 vs P2+fg-base adapter c2 −2.45 and full-FT c1 −1.11.
+Reading: with the rasterizer in the loop the network is a correction on top of the splat, and
+a correction learned on 10 objects already transfers to real scans at ~parity. The adapter
+over the residual base (31599860 → 31599861, slipper) is now the win test proper: it starts
+from −0.18 instead of −8.7.
+
+## 2026-09-13 06:00: slipper adapter cycle 2 (P2+fg base, lr 1e-3) = −0.14 dB, 18/40 (c1 −0.33) — +0.19 per cycle
+`checkpoints_lora_p2fg_gopro_r4_c2` (31590354 → 31590355). rand −0.68 (7/24), close +1.68 (8/8),
+far −0.34 (3/8). Cycles pay the adapter +0.2 (molecule +0.25) vs +1.0 for the full FT: the
+r=4 adapter on the P2+fg base saturates just under the bar. Superseded as a route by the
+residual base (zero-shot −0.18 with no adapter at all); no c3.
+
+## 2026-09-13 09:00: HANDOFF (Fable 5.1 → next session). Insights, state, and what to do next.
+
+### The five insights of this campaign (read these first)
+1. **The N=10 "capacity floor" was an architecture problem, not a capacity problem.** V18 could
+   not fit 10 objects to the rasteriser's quality (7.6 dB short). Three changes, each additive,
+   close it: projected 2-D RoPE in the ray→Gaussian cross-attention (P2, −1.2 dB fit),
+   fg-weighted loss (−3.1 fit), and warm-restart cycles under fp32 LPIPS (−1.5 to −2 per
+   cycle). P2+fg cycle 3 = −0.35 (beats rec-GT on the train objects).
+2. **The canvas (P1) is the generalisation lever and it is orthogonal to P2.** Rasterise the
+   input splat from the target camera, add it (zero-init linear) to the ray tokens. Heldout
+   19.1 → 17.0 (P1+P2), and cycles on the canvas model do NOT drift heldout (0.47/17.26 at c2
+   vs P2+fg's 19.4→20.3). Weight audit: canvas re-programs view-transformer layer 0 (2×
+   movement, new direction) and turns the decoder into a refiner; scene transformer untouched;
+   P2 = low-rank q_proj re-keying; fg = no re-programming; cycles = high-rank memorisation.
+3. **The decoder cannot copy fine detail through on its own** (axe runes: input has them, canvas
+   has them, output invents them — 27 dB vs rec-GT 47). Making the copy trivial fixes it:
+   **residual over the canvas** (`canvas_residual`, branch exp/p1-residual): output = canvas +
+   zero-init 1×1 head(DPT out). One cycle: heldout 17.3 → **2.6**, fit −4.0, and **zero-shot on
+   real scans never seen: slipper −0.18 (close +0.15 8/8), molecule −0.97** (P2+fg c3 base
+   zero-shot: −8.7). Shahaf's rule: this stays a side branch until proven the ideal approach.
+4. **Adapters: base quality ≫ rank.** V18-base LoRA on the slipper: r1 −3.65, r4 −3.11, r16
+   −2.68 (+0.3/doubling). Same r4 adapter on the P2+fg base: −0.33; cycle 2: −0.14 (saturating).
+   lr rule on the P2+fg base: 1e-3 (2.75e-3 diverged 2/3). Adapter over the RESIDUAL base is
+   the open win test (31604958 → 31604959, sagieb, slipper, ~Sun 22:00).
+5. **The remaining heldout gap is fine-detail bandwidth, not geometry** (stratification, strips):
+   the canvas fixes the "where", the residual fixes the "copy"; what is left (2.6 dB on heldout,
+   slightly WORSE than the rasteriser alone) is what a 10-object fit teaches the corrector.
+   Only more objects (full-data run) can turn that into a gain on unseen objects.
+
+### Live jobs at handoff (train → eval; logs runs/probe_<id>.out, runs/nsweval_<id>.out,
+### runs/codec_lora_<id>.out, runs/csoeval_<id>.out; verdicts: `uv run --no-sync python -m
+### data_v10.probe_report`, experiments/overfit/data/codec_scaleout/<scene>/*_verdict.json)
+- sagieb (12): p1p2_fg_c3 31595828→31595829 (full stack cycle 3, ~Sun 14:00; is no-drift
+  still true at c3?); slipper adapter over fg_c3 base 31591154→31591155 (~Sun 22:00);
+  **slipper adapter over RESIDUAL base 31604958→31604959** (the win test; ~Sun 22:00).
+- killable: residual fg cycle 2 31599856→31599857 (~Sun 12:00; does heldout stay ≤2.6 or
+  drift?); slipper adapter over fg_c2 base on drape-01 (A5000, reservation) 31590359→31590360.
+- Done, no follow-up queued: molecule adapter c2 −2.45 (far stuck), slipper adapter c2 −0.14,
+  V18 anchors, all P2 variants (scale1/both/dim32 null), P3 arms (null), P2 chain (c4 = 1.88).
+- Ops: tree on `exp/p1-residual` (superset of exp/p1-canvas ⊃ p2 ⊃ p3 ⊃ probe-infra ⊃
+  lora-feasibility; all pushed). Jobs import the tree at start → keep it on the superset.
+  claude_node 31588298 (wadi-02) until 2026-10-02. Disk ~38 GB (lab share fills at ~10 GB/3 h
+  from other users; delete finished-arm ckpts first, hold list: v10_9869, tomato_codec4*,
+  data_v10/renders+h5s_20k_rec, v14auglp10). deb13 venv rebuilt (hardlinked; uv cache deleted).
+  A5000 reservation nodes fit LoRA only. Spurious torchrun exit 7/135 after clean finishes:
+  scripts now exit 0 on a written final ckpt; use afterany for evals.
+
+### What I would do next (in order)
+1. Read the three pending verdicts (residual c2, full-stack c3, residual-base adapter). If the
+   residual-base adapter beats rec-GT on the slipper → Shahaf's win condition is met end to end
+   (N=10 matched AND unseen object beaten with an adapter).
+2. Residual branch validation before it can become standard: (a) does heldout drift with
+   cycles (c2 verdict); (b) failure modes where the rasteriser is bad — low-N splats (the
+   codec_scaleout/<scene>_n5k, _n2k data exist) — does the residual model still correct, or
+   does it inherit raster artefacts? (c) an object with strong view-dependent effects.
+3. Full-data V19 pretraining with the full stack (+ residual if 2 passes): ~3 days on a full
+   L40S node, warm from V18; that is where "2.6 dB worse than the rasteriser on unseen" should
+   become "better than the rasteriser on unseen". Needs Shahaf's go.
+4. Report section (docs/figures/v19_strips_*.png, PROGRESS 2026-09-08 … 09-13, weight audit in
+   data_v10/weight_delta/).
+
+## 2026-09-13 11:00: **residual cycle 2 = fit −5.02 / heldout 2.46 — cycles improve BOTH; the drift is gone**
+`probe_p1res_p2_fg_c2` (31599856 → 31599857). Fit −3.97 → **−5.02** (model 49.47 vs rec-GT
+44.44), heldout 2.62 → **2.46** (it went DOWN). Every non-canvas chain paid +0.3–0.5 heldout per
+cycle; the canvas chain held flat (17.27 → 17.26); the residual chain now *gains* on heldout
+while gaining 1 dB of fit. Gate condition #1 for the branch (does drift return with cycles?)
+PASSES. Launched: cycle 3 (31608707 → 31608708) and zero-shot codec evals of the c2 base on the slipper
+(31608709) and molecule (31608710) — does the real-scan zero-shot (c1: −0.18 / −0.97) also improve per cycle?
+Remaining gates before the residual could become standard: low-N splats (codec_scaleout/<scene>_n{5k,2k}
+data exist — does the corrector still help when the rasterizer is bad?) and a view-dependent object.
+
+## 2026-09-13 12:00: zero-shot of the residual c2 base: slipper −0.14, molecule −0.72 (c1: −0.18 / −0.97)
+`p1res_fg_c2_zeroshot` (31608709 / 31608710). Cycles on the 10 studio objects also improve the
+real-scan zero-shot, by ~0.05 (slipper) and ~0.25 (molecule) per cycle — the corrector is
+getting better at correcting in general, not at these 10 objects. Framing worth keeping: the
+residual base with **zero per-object training** (−0.14 slipper) now equals the best P2+fg-base
+adapter after TWO 17-hour cycles (−0.14, 5.3 MB of per-object weights). Molecule: −0.72
+zero-shot vs −2.45 for that object's own 2-cycle adapter.
+
+## 2026-09-13 13:30: **LOW-N TEST — the residual model does NOT correct a bad rasterizer; it converges to it**
+Zero-shot evals of the residual c2 base on pruned splats (`p1res_fg_c2_zeroshot`, 31608936-41).
+Codec-verdict convention: delta = model − rec-GT, so NEGATIVE = below the rasterizer.
+
+  object        N     rec-GT bar   model    delta
+  slipper       20k   34.8         34.6     −0.14
+  slipper        5k   32.0         31.9     −0.09
+  slipper        2k   31.1         31.1     −0.06
+  molecule      20k   44.5         43.8     −0.72
+  molecule       5k   35.6         35.5     −0.09
+  molecule       2k   33.1         33.1     −0.04
+  tomatoes       5k   —            —        −0.19
+  tomatoes       2k   —            —        −0.10
+
+Two readings, both damning for the "compression tool" claim as it stands:
+1. **On every unseen object, in every regime, the residual model is at or BELOW the rasterizer.**
+   It never adds value zero-shot. (The N=10 train margin of −5.02 in probe_report convention —
+   model 49.5 vs rec-GT 44.4 — is real, but it is on the ten memorised objects.)
+2. **The deficit SHRINKS as the rasterizer gets worse** (slipper −0.14 → −0.09 → −0.06; molecule
+   −0.72 → −0.09 → −0.04). That is the signature of the network falling back on copying the
+   canvas: the worse the input raster, the less it departs from it. A corrector worth its
+   inference cost would do the opposite — low-N is where a splat has the most fixable error.
+Correction to an earlier claim in this log (2026-09-13 04:30, "transfers to real scans at
+~parity"): parity is the CEILING of what the residual arm achieves zero-shot, never a win.
+Gate #2 for the branch: FAILED. Pending: the canvas-share diagnostic (31608934) quantifies how
+much of the output is literally the canvas.
+
+## 2026-09-13 15:00: **CANVAS-SHARE DIAGNOSTIC — it is NOT a pass-through; it is a constant-size edit that only generalises to the objects it was fit on**
+`data_v10/canvas_share.py` (31609053) on the residual c2 model, FG crop, PSNR against GT and
+against the canvas (= rec-GT, the rasterization of the same input Gaussians):
+
+  split            n    model-GT   rec-GT   model-rec   ||m-r||/||r||   margin
+  train (10 obj)   40   49.47      44.44    45.12       2.9 %          +5.02
+  heldout (60)    240   42.69      45.23    45.96       2.1 %          −2.54
+
+The edit is REAL and roughly the same size everywhere (2–3 % of canvas magnitude, ~45 dB away
+from the canvas on both splits). So "it's just a rasterizer" is wrong as a description of the
+mechanism: the network always departs from the canvas by a similar amount. What differs is the
+DIRECTION: on the ten memorised objects the departure is worth +5.0 dB, on unseen objects the
+same-sized departure costs −2.5 dB. It is a memorised correction, not a copy.
+
+This also revises the low-N reading (2026-09-13 13:30, "signature of falling back on copying").
+The likelier mechanism is scale: the raster's own rms error is 0.55 % at rec-GT 45 dB (studio
+20k), 1.8 % at 34.8 (slipper 20k), 2.5 % at 32.0 (5k), 2.8 % at 31.1 (2k). A ~2.5 % edit is 5x
+the raster's error on studio 20k (so a wrong edit is catastrophic: −2.54 dB) and roughly equal
+to it at 2k (so a wrong edit barely moves the dB: −0.06). The deficit shrinks at low N because
+the denominator grows, not because the model copies more. Confirming this would need
+PSNR(model, canvas) on the low-N splits — not yet measured.
+
+Bottom line for the branch, unchanged: on unseen objects the residual arm never beats the
+rasterizer, and its 10-object correction does not transfer. What the diagnostic adds is WHY:
+not a degenerate copy, but an overfit corrector. That is a much better argument for the
+full-data run (a corrector trained on thousands of objects is exactly what this predicts
+should work) than for shipping the branch.
+
+## 2026-09-13 15:40: canvas-share, CONTROL arm — the residual's advantage on unseen objects is a SAFETY RAIL, not better learning
+Same diagnostic on the non-residual canvas model (p1p2_fg_c2), alongside the residual c2:
+
+  model                  split      edit size   model-vs-canvas   margin vs rec-GT
+  residual  (p1res_fg)   train        2.9 %       45.1 dB           +5.02
+  residual  (p1res_fg)   heldout      2.1 %       46.0 dB           −2.54
+  canvas    (p1p2_fg)    train        4.2 %       41.7 dB           −0.47
+  canvas    (p1p2_fg)    heldout     18.0 %       27.5 dB          −17.82
+
+(Train margins reproduce probe_report's +5.02 / −0.47 exactly; the heldout −17.82 vs the
+reported 17.26 is the 60-scene subsample.)
+
+Read the bottom two rows: on an unseen object the ordinary canvas model wanders 18 % away from
+the canvas — a different image, 27.5 dB from it — and pays 17.8 dB. The residual model stays
+within 2.1 % and pays 2.5 dB. **The residual architecture's entire generalisation advantage is
+that it is structurally unable to be very wrong.** It is a safety rail bolted to the
+rasterizer, not a better-learned renderer; on an unseen object the optimal setting of its
+residual head would be zero, and it does not know that.
+So Shahaf's "isn't it effectively cheating" is right about the SOURCE of the heldout number
+(the rasterizer supplies it) and wrong about the mechanism (the network is not copying — it
+makes a real, constant-size, overfit edit). Both facts belong in any write-up of P1b.
+Gates: #1 (drift with cycles) PASSED, #2 (low-N) FAILED, #3 (is it a pass-through) answered —
+not a pass-through, but the win is the constraint. Branch stays a diagnostic; it does NOT
+become the standard. The transferable lesson for the main line: constrain the decoder's output
+to a neighbourhood of the rasterization WITHOUT handing it the raster as the answer, e.g. bound
+the residual or supervise the departure, and get the corrector's training signal from thousands
+of objects rather than ten.
+
+## 2026-09-13 16:10: adapter over the fg_c2 base = −0.44 (fg base: −0.33) — a tighter 10-object fit is not a better adapter base
+`lora_p2fgc2_gopro_r4` (31590359 → 31590360, drape-01). rand −0.99, close +1.40 (8/8), far −0.63.
+The fg_c2 base fits its 10 objects far better than the fg base (probe fit 1.05 vs 3.35) yet its
+adapter lands slightly WORSE on the unseen slipper. CAVEAT: lr differs (this run 1e-3, the −0.33
+run 2.75e-3), so the comparison is confounded; the clean one is the fg_c3-base adapter
+(31591154 → 31591155, also 1e-3), landing tonight. Working hypothesis, consistent with the
+heldout drift of the P2+fg chain: cycles buy train fit by memorising, and a more memorised base
+transfers no better — the same reason p1p2's no-drift property mattered.
+
+## 2026-09-13 17:00: **FULL STACK cycle 3 = fit −1.12 / heldout 17.17 — beats rec-GT on the train objects with NO heldout cost**
+`probe_p1p2_fg_c3` (31595828 → 31595829). Model 45.57 vs rec-GT 44.44 on its 10 objects
+(LPIPS margin also negative, −0.0006). Heldout across the chain: 17.27 → 17.26 → **17.17** —
+flat to slightly improving over three cycles. The P2-only chain over the same three cycles:
+19.39 → 19.96 → 20.34 (+0.95 drift) to reach a weaker fit (−0.35).
+
+  chain                 fit c1 → c2 → c3        heldout c1 → c2 → c3
+  P2 + fg               3.35 → 1.05 → −0.35     19.39 → 19.96 → 20.34
+  P1 + P2 + fg          2.91 → 0.47 → −1.12     17.27 → 17.26 → 17.17
+
+This is the headline for the MAIN line (no residual trick, the decoder still synthesises the
+image): the canvas makes cycles free. Everything the residual branch was invented to fix is a
+separate, additive question. Cycle 4 launched on sagieb (31610166 → 31610167) to find where the fit
+saturates and whether heldout finally moves.
+
+## 2026-09-13 19:00: **base heldout margin PREDICTS adapter transfer — tighter fit makes a WORSE adapter base**
+`lora_p2fgc3_gopro_r4` (31591154 → 31591155) = −0.50 on the slipper. With the fg_c2-base run
+(−0.44, same lr 1e-3) the trend across the P2+fg chain is monotone, and it tracks the BASE's
+heldout margin, not its fit:
+
+  base            base fit   base heldout   slipper adapter (r4, 27 ep)
+  p2r_fg          3.35       19.39          −0.33   (lr 2.75e-3)
+  p2r_fg_c2       1.05       19.96          −0.44   (lr 1e-3)
+  p2r_fg_c3      −0.35       20.34          −0.50   (lr 1e-3)
+
+Cycling the base improves its fit by 3.7 dB and makes the adapter 0.17 dB worse; the base's
+heldout margin moves the same way. So "memorise the 10 objects harder" is actively harmful as
+adapter preparation — the adapter inherits the base's generalisation, not its fit. Prediction:
+the CANVAS base (p1p2_fg_c3: fit −1.12, heldout **17.17**, the best heldout on record for a
+synthesising model) should give the best adapter yet. Launched: 31611528 → 31611529 (slipper, r4, lr 1e-3).
+Also running: the same adapter over the residual base (31604958 → 31604959).
+
+## 2026-09-13 21:00: residual cycle 3 = fit −5.71 / heldout 2.33 — improving but asymptoting ABOVE parity
+`probe_p1res_p2_fg_c3` (31608707 → 31608708). Chain: fit −3.97 → −5.02 → −5.71; heldout
+2.62 → 2.46 → **2.33**. Both still improve, but the heldout gains are decaying (−0.16, −0.13,
+ratio ≈ 0.85), which extrapolates to a plateau near **1.5–1.6 dB BELOW the rasterizer** — the
+residual arm would not reach parity on unseen studio objects with any number of cycles on ten
+objects. Combined with the canvas-share finding (the edit is constant-size and simply mis-aimed
+off-distribution), the limit is the ten-object training signal, not the schedule.
+Chain STOPPED at c3: the branch is a diagnostic and the question it was raised to answer is
+answered. Kept: p1res_p2_fg_c3 ep3000 (best residual model, for figures/comparison).
+
+## 2026-09-14 01:00: **FULL STACK cycle 4 = fit −2.15 / heldout 17.06 — four cycles, BOTH axes improve every time**
+`probe_p1p2_fg_c4` (31610166 → 31610167). The complete chain:
+
+  cycle   fit                       heldout300
+  c1       2.91                     17.27
+  c2       0.47                     17.26
+  c3      −1.12                     17.17
+  c4      −2.15                     17.06
+
+Fit is not saturating (~1 dB/cycle) and heldout improves monotonically — the opposite of every
+pre-canvas chain (P2+fg over the same four cycles would be ~19.4 → 20.6). At c4 the model is
+2.15 dB ABOVE the rasterizer on its ten objects with an LPIPS margin of −0.0014, while getting
+better on 300 objects it has never seen. This is the main line: no residual, the decoder still
+synthesises the image from Gaussian tokens.
+Cycle 5 launched (31631020 → 31631021). The case for the full-data V19 run is now much stronger than
+when it was first proposed: the canvas removes the memorisation tax that made "more cycles" and
+"more data" trade against each other.
+
+## 2026-09-14 03:00: **adapter over the RESIDUAL base = −0.33, WORSE than the same base zero-shot (−0.18)**
+`lora_p1resfg_gopro_r4` (31604958 → 31604959; r4 attn+FFN, 27 ep, lr 1e-3, base = p1res_p2_fg
+ep3000). rand −0.67 (3/24), close **+1.02** (8/8), far −0.65 (0/8).
+Per-object training makes this base WORSE overall: −0.18 → −0.33. Close range improves (+0.15 →
++1.02) but rand and far degrade more than close gains. Mechanism, straight from the canvas-share
+result: the base's value is that it is pinned near the rasterization; 27 epochs of per-object
+fitting teach the adapter to depart from it, and off the training views those departures cost
+more than they buy. The safety rail is exactly what the adapter removes.
+Consequence: on the residual branch the best slipper number is the base with NO adapter
+(c2 base zero-shot −0.14). The win test on that branch fails twice over — never beats rec-GT,
+and per-object adaptation is counterproductive. The live question is now the adapter over the
+CANVAS base (31611528 → 31611529, ep 9+ and training lower than any previous adapter).
+
+## 2026-09-14 05:00: **THE HEAD-TO-HEAD — what the rasterizer is worth, as input vs as output**
+Zero-shot on unseen objects, no per-object training, same 10-object training set for all three,
+same P2 + fg recipe; they differ only in how (and whether) the rasterization is used.
+
+  SLIPPER (real scan, rec-GT bar 34.8 dB)
+    no rasterizer      probe_p2r_fg_c3        model 26.1   delta −8.71
+    canvas as INPUT    probe_p1p2_fg_c4       model 30.7   delta −4.14
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 34.6   delta −0.14
+
+  MOLECULE (studio, rec-GT bar 44.5 dB)
+    canvas as INPUT    probe_p1p2_fg_c4       model 29.0   delta −15.51
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 43.8   delta −0.72
+
+Reading:
+* **Canvas conditioning is worth +4.6 dB zero-shot on an unseen real scan** (26.1 → 30.7) with
+  the decoder still synthesising every pixel. That is a genuine architectural gain and the
+  single most valuable thing the V19 campaign has produced for the main line.
+* The residual adds another +3.9 dB on the slipper and +14.8 on the molecule, but by copying:
+  its output is within 2.1 % of the rasterization, and its score tracks the rec-GT bar (34.6 vs
+  bar 34.8; 43.8 vs bar 44.5). It is the rasterizer wearing a 196M-parameter coat.
+* The canvas model's absolute quality on unseen objects is ~29–31 dB regardless of the object's
+  bar — it is a fixed-capability renderer, not a bar-tracker. That is why it loses badly on the
+  molecule (bar 44.5) and only moderately on the slipper (bar 34.8): the crossover band again.
+Conclusion for the write-up: report the canvas as INPUT (P1) as the contribution; report the
+residual (P1b) as the control that shows how much of a canvas-conditioned score can be obtained
+by copying — it is the right baseline to defend P1 against, not a method to ship.
+
+## 2026-09-14 06:00: canvas base on a 2k slipper = −2.33 (20k: −4.14) — where the crossover would be
+`p1p2fgc4_zeroshot` on gopro_n2k (31631773). The canvas model's own quality falls slowly with
+the input splat (30.7 dB at 20k → 28.8 at 2k) while the rec-GT bar falls faster (34.8 → 31.1),
+so the deficit narrows from −4.14 to −2.33. Linear in the bar, parity would arrive at a bar of
+roughly **29 dB**, i.e. compression well below 2k Gaussians — or, equivalently, the model needs
+about +2.5 dB of absolute quality on unseen objects to win at 2k. That is the number the
+full-data run has to deliver, and it is a far more concrete target than "beat rec-GT".
+
+## 2026-09-14 07:00: disk 24 GB → 44 GB
+Freed: the two residual stage-R dirs (seeds long consumed), the ep2800 pre-finals of the two
+residual c1 runs, and the duplicate `gaussianformer_final` HF exports of seven superseded
+chain links (the .pt is what every eval loads). Untouched: every checkpoint referenced by a
+reported number — p1p2_fg{,_c2,_c3,_c4}, p1res_p2{,_fg,_fg_c2,_fg_c3}, p2r_fg{,_c2,_c3},
+p2_rope2d, p1_canvas, baseline — and the running c5.
+
+## 2026-09-14 09:00: **CONFIDENCE INTERVALS (cluster bootstrap over scenes) — one headline claim does NOT survive**
+New tool `data_v10/probe_ci.py`: the 4 views of a scene are not independent, so it resamples
+SCENES, and compares arms with the SAME resampling (paired), which is far tighter than two
+independent CIs. 10 000 replicates on the rows we already have; no GPU.
+
+Heldout300 (n = 300 scenes):
+  baseline            20.44  [20.22, 20.67]
+  P2                  19.07  [18.84, 19.29]     vs baseline  −1.38 [−1.47, −1.28] *
+  P1 canvas           17.47  [17.24, 17.70]     vs P2        −1.60 [−1.69, −1.51] *
+  P1+P2               16.95  [16.73, 17.18]     vs P1        −0.52 [−0.56, −0.47] *
+  P1+P2+fg            17.27  [17.04, 17.49]     vs P1+P2     +0.32 [+0.25, +0.38] *
+  P1+P2+fg c4         17.06  [16.78, 17.34]     vs c1        −0.21 [−0.34, −0.07] * (p=0.002)
+Every architectural step is significant, and the canvas chain's cycles significantly IMPROVE
+heldout (the earlier "flat" reading was conservative). Contrast, same test on the P2+fg chain:
+c3 − c1 = **+0.95 [+0.89, +1.02]** — the drift is real and highly significant.
+
+Train (n = 10 scenes — the small-sample caveat bites):
+  baseline             7.62  [ 5.86,  9.48]
+  P2+fg c3            −0.35  [−1.73, +0.93]   ← **CROSSES ZERO**
+  P1+P2+fg c4         −2.15  [−3.25, −1.08]   ← below zero at 95 %
+  c4 vs P2+fg c3      −1.80 [−2.10, −1.46] *
+
+**Correction to the 2026-09-12 headline.** "P2+fg cycle 3 beats rec-GT on its train objects
+(−0.35)" is NOT supported at 95 % on ten scenes; the interval includes zero. The claim that
+survives is the canvas model's: P1+P2+fg c4 at −2.15 [−3.25, −1.08]. Use that one with Sagie,
+and quote intervals for every N=10 number — ten objects is a small sample and the per-object
+spread is ±1.5 dB.
+
+## 2026-09-14 10:00: **N=100 arms launched — does the canvas advantage survive 10x more objects?**
+`probe_n10.sh` now takes `N` from the environment (default 10); everything else identical, and
+TARGET_STEPS stays 30 000 so the arms are compared at EQUAL COMPUTE (N=100 → 100 steps/epoch,
+300 epochs, stage R 30 epochs). Launched on sagieb, 4 GPUs each:
+  n100_p1p2_fg  (canvas + proj_rope_2d + fg)  31641386 → 31641387
+  n100_p2r_fg   (proj_rope_2d + fg)           31641388 → 31641389
+The baseline at this N already exists from the old sweep — `nsweep_n100` = train 13.40 /
+heldout 17.93 (and nsweep_n1000 = 15.79 / 16.70, nsweep_n10 = 7.57 / 20.47), same seed and
+step budget, so the three-point comparison at N=100 needs no new baseline run.
+What the result means either way: at N=10 the canvas bought −3.0 dB heldout against the
+baseline. If that margin holds at N=100 the mechanism scales and the full-data run is justified;
+if it collapses toward the baseline's 17.93, the canvas was buying a small-sample effect and the
+full-data run would be a poor bet. Note the baseline's own heldout already improves with N
+(20.47 → 17.93 → 16.70), so the honest metric is the GAP, not the absolute.
+
+## 2026-09-15 03:00: **WIN — adapter over the CANVAS base beats rec-GT on an unseen real scan: +0.60 dB, 30/40**
+`lora_p1p2fgc3_gopro_r4` (31611528 → 31611529). Base = `probe_p1p2_fg_c3` (canvas + proj_rope_2d
++ fg, 3 cycles, heldout 17.17), r=4 attn+FFN, 5.3 MB, 27 epochs, lr 1e-3, slipper — an object
+the base has never seen. ALL THREE ranges positive:
+
+  novel_rand   model 35.95  rec-GT 35.79  +0.16  (16/24)
+  novel_close  model 30.20  rec-GT 28.20  +2.00  ( 8/8)
+  novel_far    model 38.92  rec-GT 38.39  +0.53  ( 6/8)
+
+**Shahaf's win condition is met, on the main line, with no residual trick**: shared base plus
+5.3 MB of per-object weights renders the compressed splat better than rasterizing it. For scale,
+the full fine-tune (786 MB of per-object weights) needed three cycles to pass this: c1 −0.55,
+c2 +0.48, c3 +1.26, c4 +1.82. The adapter reaches +0.60 in one 17-hour cycle at 0.7 % of the
+weights.
+
+And it confirms the 2026-09-13 prediction exactly — **adapter transfer tracks the BASE's heldout
+margin, not its fit**:
+
+  base                    base fit   base heldout   slipper adapter
+  p2r_fg                   3.35       19.39         −0.33
+  p2r_fg_c2                1.05       19.96         −0.44
+  p2r_fg_c3               −0.35       20.34         −0.50
+  p1p2_fg_c3              −1.12       17.17         **+0.60**
+  p1res_p2_fg (residual)  −3.97        2.46*        −0.33   (*different scale, see 09-13)
+
+Launched: the same adapter on a SECOND object (molecule, 31649133 → 31649137) — the result has
+to reproduce before it goes in front of Sagie.
+
+## 2026-09-15 07:00: **N=100 — THE CANVAS ADVANTAGE MORE THAN DOUBLES WITH 10x THE OBJECTS**
+Equal compute (30 000 steps), same seed, same heldout300 set as every other number in this log.
+
+  arm                          train(N)   heldout300
+  nsweep_n100 (baseline)        13.40      17.93
+  probe_n100_p2r_fg             10.51      16.38
+  probe_n100_p1p2_fg (canvas)  **7.77**   **11.25**  [11.01, 11.49]
+  paired canvas − P2+fg:        −2.74      **−5.13**  [−5.32, −4.95], p<1e-4
+
+Canvas advantage over the same recipe without it: **2.12 dB at N=10 → 5.13 dB at N=100.** For
+reference the whole N-sweep only moved heldout 20.47 → 17.93 → 16.70 going 10 → 100 → 1000
+objects; the canvas at N=100 (11.25) is **5.5 dB better than the 1000-object baseline**, at a
+tenth of the data.
+This is the scaling answer the full-data run was meant to provide, and it is emphatic: the
+mechanism does not merely survive more objects, it feeds on them. Reading it with the weight
+audit: the canvas turns the decoder into a refiner, refinement is an object-independent skill,
+and more objects teach it better — whereas the pre-canvas model spent extra objects on
+memorisation (its heldout barely moved).
+Combined with the 2026-09-15 adapter win (+0.60 on an unseen real scan from the N=10 canvas
+base), the two halves of Shahaf's win condition are met AND the mechanism scales. The full-data
+V19 run is now the obvious next step rather than a speculative one.
 ## 2026-09-15 11:00: **P4 — the 8-px pattern is the PATCH GRID, not a ConvTranspose checkerboard** (branch exp/p4-deblock)
 Measured the spatial spectrum of each column's error vs GT on the winning slipper close-up
 (object bbox only, label strip excluded):

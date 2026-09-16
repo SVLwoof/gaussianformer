@@ -86,6 +86,12 @@ class ViewTransformer(nn.Module):
             self.deblock = nn.Conv2d(ch, ch, kernel_size=k, padding=k // 2)
             nn.init.zeros_(self.deblock.weight)
             nn.init.zeros_(self.deblock.bias)
+        if self.config.canvas_residual:
+            # P1b: output = canvas + residual_head(DPT output); zero-init -> the rasterizer at init.
+            assert self.config.canvas_cond and self.config.use_dpt_decoder, "canvas_residual needs canvas_cond + DPT"
+            self.residual_head = nn.Conv2d(3, 3, kernel_size=1)
+            nn.init.zeros_(self.residual_head.weight)
+            nn.init.zeros_(self.residual_head.bias)
         if self.config.proj_feat:
             # P2c: [log depth, log projected radius px, cam-frame quat(4)] -> context tokens, zero-init
             self.geom_feat = nn.Linear(6, self.config.latent_dim)
@@ -212,6 +218,8 @@ class ViewTransformer(nn.Module):
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
             if self.config.deblock_kernel:
                 decoded_img = decoded_img + self.deblock(decoded_img)
+            if self.config.canvas_residual:
+                decoded_img = self.residual_head(decoded_img) + canvas.permute(0, 3, 1, 2).to(decoded_img.dtype)
             return self.out_proj_act(decoded_img)
         else:
             seq = self.transformer(
