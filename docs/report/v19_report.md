@@ -124,8 +124,20 @@ the *base's* held-out margin, not its fit:
 | P2+fg c3 | -0.35 | 20.34 | -0.50 |
 | **P1+P2+fg c3** | -1.12 | **17.17** | **+0.60** |
 
-Fitting the base harder makes the adapter worse. Reproduction on a second object is
-running at the time of writing.
+Fitting the base harder does not help the adapter; the canvas does. The same ordering
+reproduces on a second unseen scan (the molecule), where the rasterizer's own bar is
+9 dB higher because the object is simple:
+
+| object | rasterizer PSNR | P2+fg base | P2+fg c2 base | canvas c3 base |
+|---|---:|---:|---:|---:|
+| slipper | 35.8 | -0.33 | -0.44 | **+0.60** (30/40) |
+| molecule | 44.6 | -2.70 | -2.45 | **-1.41** (12/40) |
+
+On the molecule the canvas base gains +1.3 dB over the best non-canvas base and wins
+the close-range views (+1.22, 7/8), but loses the far views by 4.4 dB and does not beat
+the rasterizer overall. On this object even the full fine-tune needed five cycles to get
+to +1.47 dB. The win is therefore object-dependent: it exists where the rasterizer is
+weak (fine texture, close range) and not where it is already near-perfect.
 
 # 4. Three honest caveats
 

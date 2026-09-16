@@ -3924,3 +3924,20 @@ Consequence: the fix has to be trained where the artefact is — in the ADAPTER 
 object's close-range views — not in the base. That needs train_lora.py to also train the
 732-param deblock layer and to save it with the adapter (3 KB). Not launched: code change to the
 adapter script, and a ~17 h run that cannot finish before the meeting. Proposed instead.
+
+## 2026-09-16 15:40: **Molecule (scene_1423) canvas-base adapter: −1.41 dB overall (12/40) — base ordering reproduces, overall win does not**
+`checkpoints_lora_p1p2fgc3_scene_1423_r4` (canvas c3 base, r4 attn+FFN, lr 1e-3, 27 ep), codec
+delta = model − rec-GT (POSITIVE = model wins):
+
+  base for the adapter        rand (24)       close (8)        far (8)         all 40
+  P2+fg                       −2.53  0/24     −0.36  3/8       −5.56  0/8      −2.70   3/40
+  P2+fg c2                    −2.27  2/24     −0.08  4/8       −5.36  0/8      −2.45   6/40
+  canvas c3                   −1.31  5/24     +1.22  7/8       −4.35  0/8      −1.41  12/40
+  (slipper, canvas c3)        +0.16 16/24     +2.00  8/8       +0.53  6/8      +0.60  30/40
+
+The canvas base is +1.3 dB better than the best non-canvas base on the molecule, and wins the
+close range (7/8), same shape as the slipper. But the molecule's rasterizer bar is 44.6 dB (vs
+35.8 on the slipper — rec-GT bar inverts on simple objects), and the far views lose by 4.4 dB.
+The full fine-tune on this object needed five cycles to reach +1.47. Verdict: the "adapter over
+fit" win is OBJECT-DEPENDENT — it exists where the rasterizer is weak (fine texture, close
+range) and not where the rasterizer is already near-perfect. Report §3 updated with this table.
