@@ -1,8 +1,8 @@
 ---
 title: "GaussianFormer: per-object adapters and the rasterized-canvas architecture"
-subtitle: "Week of 8-15 September 2026"
+subtitle: "Week of 8-16 September 2026"
 author: "Shahaf Valencia Levy"
-date: "16 September 2026"
+date: "17 September 2026"
 geometry: margin=2.0cm
 fontsize: 10.5pt
 ---
@@ -127,7 +127,7 @@ the *base's* held-out margin, not its fit:
 Fitting the base harder makes the adapter worse. Reproduction on a second object is
 running at the time of writing.
 
-# 4. Two honest caveats
+# 4. Three honest caveats
 
 **The rasterizer cannot be pruned after training.** Feeding the winning model a black
 canvas at inference collapses it to worse than its own starting checkpoint. Feeding it
@@ -154,6 +154,24 @@ The accurate description is therefore: **a learned, view-aligned refiner of a
 rasterization that synthesises every pixel it emits.** Not a standalone neural
 renderer.
 
+**A patch-grid artefact survives, and only where we win.** The fleece in Figure 4 carries
+a faint regular pattern. Its period is exactly 8 px, the patch size. Scored as error power
+at that frequency over its spectral neighbours (1.0 = no grid; the rasterizer is 1.0
+everywhere):
+
+| model | views | grid score |
+|---|---|---:|
+| base | its 10 training objects | 1.00 |
+| base | 40 unseen objects | 1.08 |
+| adapter, slipper | random and far | 1.1-1.3 |
+| adapter, slipper | **close range** | **1.6-1.9** |
+
+It appears where one patch covers the most object detail. A zero-initialised 9x9 residual
+convolution on the decoder output (732 parameters) was trained into the base to remove it
+and did nothing: margins and renders unchanged, learned gain on an 8-px grid 1.2%. The base
+never sees the artefact, so the layer never received a gradient. The fix has to be trained
+in the adapter stage, on the object's close-range views.
+
 # 5. Proposed next steps
 
 1. **Rank-1 attention-only adapter on the canvas base.** 0.48 MB, 8.5k
@@ -163,10 +181,8 @@ renderer.
    justification; about three days on one node.
 3. **Canvas dropout during training.** Feed a black canvas on a fraction of steps so
    the scene-token path stays alive, and measure whether the two paths can coexist.
-4. **Patch-grid artefact.** The model's error spectrum spikes at exactly 8 px, the
-   patch size, while the rasterizer's is broadband. A zero-initialised 9x9 residual
-   convolution on the decoder output (732 params, warm-starts from any checkpoint) is
-   training now.
+4. **Train the deblock layer with the adapter**, on the object's own views, where the
+   grid actually lives. 3 KB added to the adapter; about 17 hours.
 
 Code is on branches `exp/p1-canvas` (main line), `exp/p1-residual` (rejected control,
 kept for the write-up), `exp/p4-deblock`. All results reproduce from
