@@ -3898,3 +3898,29 @@ it is the first thing a reviewer will probe.
 Open question worth one probe later: canvas DROPOUT during training (feed a black canvas on a
 fraction of steps) would force the scene-token path to stay alive and might buy robustness —
 and would tell us whether the two paths can coexist.
+
+## 2026-09-16 13:00: **P4 deblock = NULL, and the reason corrects the P4 diagnosis: the grid is not where the base trains**
+`probe_p4_deblock9` finished: fit −2.23 / heldout 17.09 vs plain c4 −2.15 / 17.06 — identical.
+Zoomed native-resolution renders (`data_v10/deblock_zoom.py`, docs/report/fig_deblock_zoom_*.png):
+c4 and deblock are visually indistinguishable, crop PSNR within 0.1 dB on all 16 views.
+The trained layer did essentially nothing: ||W||_F = 0.017, gain on an 8-px grid pattern 1.2 %
+(1.0 would cancel it). Why — measured with the new `data_v10/patch_artifact.py` (error power at
+the patch frequency / its spectral neighbours; 1.0 = no grid, rasterizer ≈ 1.0 everywhere):
+
+  model                                     where               x      y
+  c4 base                                   10 train objects    0.99   1.01    no grid
+  c4 base                                   40 heldout objects  1.08   1.07    faint
+  slipper adapter (canvas base), rand       real scan           1.12–1.28        weak
+  slipper adapter, far                      real scan           1.24–1.27        weak
+  slipper adapter, CLOSE                    real scan           1.59–1.93        strong
+
+The grid lives where the model is most stretched — close-range views of an unseen real scan,
+where one 8-px patch covers the most object detail — and is absent on the base's own training
+views. The deblock layer was trained on exactly the views that have no grid, so its gradient
+was ~0 and it stayed at its zero init. The 2026-09-15 claim "the token grid imprints on the
+output" was right in mechanism but over-general in scope: it is an off-distribution / close-range
+effect, not a property of the base.
+Consequence: the fix has to be trained where the artefact is — in the ADAPTER stage, on the
+object's close-range views — not in the base. That needs train_lora.py to also train the
+732-param deblock layer and to save it with the adapter (3 KB). Not launched: code change to the
+adapter script, and a ~17 h run that cannot finish before the meeting. Proposed instead.
