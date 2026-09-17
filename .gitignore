@@ -434,3 +434,8 @@ checkpoints_lora_*/
 data_external/**/*.ply
 data_external/**/*.zip
 data_external/*_sog/
+
+# scale-out object metadata / licences (data lives outside git)
+data_external/*/codec_eval_*_c2w.npy
+data_external/*/license.txt
+data_external/flowers/flowers_*/

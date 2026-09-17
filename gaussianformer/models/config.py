@@ -49,49 +49,20 @@ class GaussianFormerConfig:
     """Rotary dim per stage (channel pairs rotated = pos_dim * rope_dim/2). None = pos_pe_num_freqs
     (12: 18 of 64 pairs rotated, 1..5 rad/unit). Raising it rotates previously position-blind
     pairs, so a warm init needs a 256px recovery stage."""
-    rope_pos_scale: float = 1.0
-    """Positions are multiplied by this before RoPE in BOTH stages: k shifts the frequency band
-    to k..5k rad per world unit (P3: spatial bandwidth of position-dependent attention)."""
-    rope_hf_scale: float = 0.0
-    """P3 (warm-safe variant): ADD a second 3-D RoPE band at this position scale in the channel
-    pairs right after the pretrained ones (which stay untouched), in both stages. 0 = off.
-    e.g. 8 -> extra band 8..40 rad/unit; rotates 18 previously position-blind pairs."""
-    ray_rope_2d: bool = False
-    """2-D RoPE on the patch-grid position for ray-token SELF-attention in the view transformer
-    (today it is permutation-invariant: every patch carries the camera origin as its position)."""
-    ray_rope_2d_dim: int = 16
-    """Rotary dim of the 2-D ray RoPE (8 log-spaced freqs per axis), placed after the 3-D pairs."""
-    proj_bias: bool = False
-    """P2b: zero-init-gated cross-attention bias -|u_patch - u_gaussian|^2 / sigma^2 in PATCH units,
-    from the explicit perspective projection of each Gaussian (replaces the low-contrast cos-angle
-    geom_bias). Gaussians behind the camera get a large distance; register slots get 0."""
-    proj_sigma_patches: float = 2.0
-    """Width of the proximity bias in patches (2 = 16 px at patch 8)."""
-    proj_feat: bool = False
-    """P2c: inject per-view [log depth, log projected radius (px), camera-frame quaternion] into the
-    context tokens through a zero-init linear, so the view stage sees depth and footprint."""
     proj_rope_2d: bool = False
-    """P2a: 2-D RoPE on the projected patch coordinates for cross-attention KEYS and on patch
-    centres for QUERIES (uses ray_rope_2d_dim / ray_rope_2d_scale). Alters pretrained function:
-    needs a 256px recovery stage."""
-    deblock_kernel: int = 0
-    """P4: zero-init residual smoothing conv on the DPT output, `img = img + conv(img)`, at FULL
-    resolution. The model's error spectrum peaks sharply at the patch size (8 px) -- the token
-    grid imprinting on the output during DPT reassembly. A k x k conv with k > patch_size sees
-    across a patch boundary and can cancel it. Zero-init => exact no-op at load, so it warm-starts
-    from any checkpoint (same additive trick as canvas_cond / proj_feat). 0 disables; try 9."""
-    canvas_cond: bool = False
-    """P1: add a gsplat rasterization of the input splat (same camera, log10(x+1) space) to the ray
-    tokens through a zero-init linear. Identity at init; the model starts at rec-GT quality once
-    the linear learns to pass the canvas through, and the transformer's job becomes refinement."""
-    canvas_residual: bool = False
-    """P1b (exp/p1-residual): the decoder predicts a RESIDUAL over the canvas. Output =
-    canvas + residual_head(DPT output), residual_head a zero-init 1x1 conv, so the model starts
-    exactly at the rasterizer (rec-GT quality on every object, seen or not) and only has to
-    learn corrections. Requires canvas_cond and the DPT decoder."""
+    """P2 (2026-09-09, positive): every Gaussian is perspective-projected into the view; its
+    projected patch coordinate (u, v) gets a 2-D RoPE on the cross-attention KEYS and each ray
+    token its patch centre on the QUERIES, in the channel pairs right after the pretrained 3-D
+    ones. Alters pretrained function: needs a 256px recovery stage."""
+    ray_rope_2d_dim: int = 16
+    """Rotary dim of that 2-D RoPE (8 log-spaced freqs per axis)."""
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""
+    canvas_cond: bool = False
+    """P1 (2026-09-10; line dropped 2026-09-17, kept to load its checkpoints): add a gsplat
+    rasterization of the input splat (same camera, log10(x+1) space) to the ray tokens through a
+    zero-init linear. Identity at init."""
     pos_pe_num_freqs: int = 12
     """The number of frequencies in the positional encoding for gaussian positions."""
     gaussian_encoder_norm_type: Literal['layer_norm', 'rms_norm'] = 'rms_norm'

@@ -2,7 +2,7 @@
 # Submit one N=10 architecture probe: train (probe_n10.sh) -> eval (run_nsweep_eval.sh, afterok).
 #   data_v10/submit_probe.sh TAG "MODEL_CFG" STAGE_R ACCOUNT [SEED.pt] ["--extra;train;args"]
 #   cycle 2: data_v10/submit_probe.sh p2_rope2d_c2 "proj_rope_2d=true" 0 sagieb checkpoints_probe_p2_rope2d/phase2_epoch_3000.pt
-#   e.g. data_v10/submit_probe.sh p3_rope32 "rope_dim=32 rope_pos_scale=4" 3000 sagieb
+#   e.g. data_v10/submit_probe.sh p2_rope2d "proj_rope_2d=true" 3000 sagieb
 #        data_v10/submit_probe.sh baseline "" 0 killable
 set -e
 TAG=${1:?TAG}; CFG=${2:-}; STAGE_R=${3:-0}; ACCT=${4:-killable}; SEEDP=${5:-}; XT=${6:-}

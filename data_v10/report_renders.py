@@ -24,13 +24,27 @@ from PIL import Image, ImageDraw, ImageFont
 
 from data_external.orbit import c2w_to_viewmat, make_orbit_views
 from data_v10.ceiling_eval import FOV, RADIUS, RES, SPLITS, psnr, render_model_all, render_rec_all
-from data_v10.deblock_zoom import WIN, UP, best_window
 from data_v10.model_on_v10 import _fg_crop
 from data_v10.prune_recovery import rasterize
 from infer_gaussian import load_single_gaussian_h5_data
 from render_compare import ModelSpec, load_gt, load_model
 
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+WIN, UP = 96, 4  # zoom window (px) and nearest-neighbour upscale
+
+
+def best_window(gt: np.ndarray) -> tuple[int, int]:
+    """Top-left of the WIN x WIN window with the most GT gradient energy (and some brightness)."""
+    lum = gt.mean(-1)
+    g = np.abs(np.diff(lum, axis=0))[:, :-1] + np.abs(np.diff(lum, axis=1))[:-1, :]
+    ii = np.pad(g, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    best, pos = -1.0, (0, 0)
+    for y in range(0, g.shape[0] - WIN, 8):
+        for x in range(0, g.shape[1] - WIN, 8):
+            s = ii[y + WIN, x + WIN] - ii[y, x + WIN] - ii[y + WIN, x] + ii[y, x]
+            if lum[y:y + WIN, x:x + WIN].mean() > 0.08 and s > best:
+                best, pos = s, (y, x)
+    return pos
 CANVAS = "canvas_cond=true proj_rope_2d=true"
 LADDER = [  # label, ckpt, model_cfg
     ("V18 seed", "checkpoints_v18_256/phase2_epoch_30.pt", ""),

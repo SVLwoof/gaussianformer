@@ -504,8 +504,7 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = norm_module(query_dim, eps=EPS)
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, geom_align=None,
-                rope_self_cos=None, rope_self_sin=None):
+                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, geom_align=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -548,11 +547,8 @@ class AttentionLayer(nn.Module):
                 self_attn_output = self.self_attn(q)
                 self_attn_output = self_attn_output.view(bs, patch_h * patch_w, -1)
             else:
-                # rope_self_* (2-D patch-grid RoPE) when provided; otherwise the query RoPE,
-                # which for ray tokens is the identity (all patches share the camera origin).
-                sc = rope_cos if rope_self_cos is None else rope_self_cos
-                ss = rope_sin if rope_self_sin is None else rope_self_sin
-                self_attn_output = self.self_attn(q, q, q, None, sc, ss, force_sdpa=force_sdpa)
+                # query RoPE, which for ray tokens is the identity (all patches share the camera origin)
+                self_attn_output = self.self_attn(q, q, q, None, rope_cos, rope_sin, force_sdpa=force_sdpa)
             query = query + self.dropout(self_attn_output)
 
         # feed forward
@@ -577,8 +573,6 @@ class TransformerEncoder(nn.Module):
             pos_dim: int = 3,
             rope_double_max_freq: bool = False,
             qk_norm: bool = False,
-            rope_pos_scale: float = 1.0,
-            rope_hf_scale: float = 0.0,
     ):
         super().__init__()
         assert norm_first, "Only support norm_first=True"
@@ -605,25 +599,13 @@ class TransformerEncoder(nn.Module):
                 dim=rope_dim,
                 pos_dim=pos_dim,
                 double_max_freq=rope_double_max_freq,
-                pos_scale=rope_pos_scale,
             )
-            # Additive high-frequency band in the pairs after the pretrained ones (warm-safe:
-            # the pretrained rotations are untouched, previously unrotated pairs start rotating).
-            self.rope_hf = SpatialRotaryEmbedding(dim=rope_dim, pos_dim=pos_dim, pos_scale=rope_hf_scale) \
-                if rope_hf_scale > 0 else None
-            if self.rope_hf is not None:
-                assert 2 * pos_dim * rope_dim // 2 <= self.head_dim // 2, "not enough head channels for the HF band"
 
     def forward(self, x, src_key_padding_mask=None, spatial_pos=None):
         # src_key_padding_mask: (B, N), key padding mask, things you want to attend to is True
         if self.rope_dim is not None:
             assert spatial_pos is not None, "spatial_pos must be provided if rope_dim is not None"
             rope_freqs = self.rope_emb.get_spatial_freqs(spatial_pos)
-            if self.rope_hf is not None:
-                f = rope_freqs[..., : rope_freqs.shape[-1] // 2]
-                fh = self.rope_hf.get_spatial_freqs(spatial_pos)
-                f = torch.cat([f, fh[..., : fh.shape[-1] // 2]], -1)
-                rope_freqs = torch.cat([f, f], -1)
             rope_cos, rope_sin = freqs_to_cos_sin(rope_freqs, head_dim=self.head_dim)
         else:
             rope_cos = rope_sin = None
@@ -656,12 +638,9 @@ class TransformerDecoder(nn.Module):
             pos_dim: int = 3,
             rope_double_max_freq: bool = False,
             geom_bias: bool = False,
-            rope_pos_scale: float = 1.0,
-            ray_rope_2d: bool = False,
             ray_rope_2d_dim: int = 16,
             ray_rope_2d_scale: float = 0.25,
             proj_rope_2d: bool = False,
-            rope_hf_scale: float = 0.0,
     ):
         """
         Transformer decoder. Each layer has cross-attention and self-attention.
@@ -716,39 +695,27 @@ class TransformerDecoder(nn.Module):
                 dim=rope_dim,
                 pos_dim=pos_dim,
                 double_max_freq=rope_double_max_freq,
-                pos_scale=rope_pos_scale,
             )
-        # 2-D RoPE over the patch grid for ray-token self-attention. Occupies the channel pairs
-        # right after the 3-D pairs (which end at pos_dim*rope_dim/2), so it never overlaps the
-        # pretrained rotation layout.
-        # Additive high-frequency 3-D band (see TransformerEncoder); occupies the pairs after
-        # the pretrained ones; any 2-D band goes after it.
-        self.rope_hf = (SpatialRotaryEmbedding(dim=rope_dim, pos_dim=pos_dim, pos_scale=rope_hf_scale)
-                        if (rope_dim is not None and rope_hf_scale > 0) else None)
-        n3 = 0 if rope_dim is None else pos_dim * rope_dim // 2
-        self.ray_rope_2d = ray_rope_2d
+        # P2: 2-D RoPE on projected patch coordinates, in the channel pairs right after the
+        # pretrained 3-D pairs (which end at pos_dim*rope_dim/2), so it never overlaps them.
         self.proj_rope_2d = proj_rope_2d
-        if ray_rope_2d or proj_rope_2d:
+        if proj_rope_2d:
             assert rope_dim is not None
+            n3 = pos_dim * rope_dim // 2
             self.rope_uv = SpatialRotaryEmbedding(dim=ray_rope_2d_dim, pos_dim=2, pos_scale=ray_rope_2d_scale)
-            self.rope_uv_start = n3 * (2 if self.rope_hf is not None else 1)
-            assert self.rope_uv_start + ray_rope_2d_dim <= self.head_dim // 2, "not enough head channels for 2-D RoPE"
+            assert n3 + ray_rope_2d_dim <= self.head_dim // 2, "not enough head channels for 2-D RoPE"
 
     def _freqs_3d(self, pos3):
-        """Pretrained 3-D band (+ optional HF band), un-duplicated: [B,1,N,n_pairs]."""
+        """Pretrained 3-D band, un-duplicated: [B,1,N,n_pairs]."""
         f3 = self.rope_emb.get_spatial_freqs(pos3)
-        f3 = f3[..., : f3.shape[-1] // 2]
-        if self.rope_hf is not None:
-            fh = self.rope_hf.get_spatial_freqs(pos3)
-            f3 = torch.cat([f3, fh[..., : fh.shape[-1] // 2]], -1)
-        return f3
+        return f3[..., : f3.shape[-1] // 2]
 
     def _cos_sin_3d(self, pos3):
         f = self._freqs_3d(pos3)
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
 
     def _cos_sin_3d_2d(self, pos3, uv):
-        """3-D band(s) in the pretrained channel pairs plus 2-D (u,v) RoPE in the pairs right after."""
+        """3-D band in the pretrained channel pairs plus 2-D (u,v) RoPE in the pairs right after."""
         f2 = self.rope_uv.get_spatial_freqs(uv)
         f = torch.cat([self._freqs_3d(pos3), f2[..., : f2.shape[-1] // 2]], -1)
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
@@ -758,7 +725,7 @@ class TransformerDecoder(nn.Module):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
             if self.proj_rope_2d and uv_k is not None:
-                # P2a: queries carry their patch centre, keys the Gaussian's projected patch coords
+                # P2: queries carry their patch centre, keys the Gaussian's projected patch coords
                 rope_cos, rope_sin = self._cos_sin_3d_2d(ray_pos, uv_q)
                 rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d_2d(spatial_pos, uv_k)
             else:
@@ -766,21 +733,12 @@ class TransformerDecoder(nn.Module):
                 rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d(spatial_pos)
         else:
             rope_cos = rope_sin = rope_ctx_cos = rope_ctx_sin = None
-        rope_self_cos = rope_self_sin = None
-        if self.ray_rope_2d:
-            assert patch_h is not None and patch_w is not None
-            ii, jj = torch.meshgrid(torch.arange(patch_h, device=x.device), torch.arange(patch_w, device=x.device),
-                                    indexing="ij")
-            uv = torch.stack([jj, ii], -1).reshape(1, -1, 2).float().expand(x.size(0), -1, -1)  # patch (col,row)
-            uv_freqs = self.rope_uv.get_spatial_freqs(uv)
-            rope_self_cos, rope_self_sin = freqs_to_cos_sin(uv_freqs, start_index=self.rope_uv_start,
-                                                            head_dim=self.head_dim)
 
         out_list = []
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w, geom_align=geom_align, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin)
+                      patch_w=patch_w, geom_align=geom_align)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list

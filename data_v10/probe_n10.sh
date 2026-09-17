@@ -13,7 +13,7 @@
 # baseline: train-fit margin 7.57 / heldout300 20.47) with GaussianFormerConfig overrides.
 # STAGE_R (steps) prepends a 256px log-L1 recovery stage for changes that alter pretrained
 # function (RoPE dim/frequency); zero-init additions (gates, canvas) run without it.
-#   sbatch -A sagieb --export=TAG=p3_rope32,MODEL_CFG="rope_dim=32 rope_pos_scale=4",STAGE_R=3000 data_v10/probe_n10.sh
+#   sbatch -A sagieb --export=TAG=p2_rope2d,MODEL_CFG="proj_rope_2d=true",STAGE_R=3000 data_v10/probe_n10.sh
 #   eval: sbatch --dependency=afterok:<id> --export=N=10,TAG=probe_<TAG>,CKPT=...,EXTRA="--model_cfg ..." data_v10/run_nsweep_eval.sh
 
 source /etc/profile.d/huji-lmod.sh

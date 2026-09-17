@@ -62,41 +62,16 @@ class ViewTransformer(nn.Module):
             bias=self.config.bias,
             include_self_attn=self.config.view_transformer_include_self_attn,
             use_swin_attn=self.config.view_transformer_use_swin_attn,
-            geom_bias=self.config.geom_bias or self.config.proj_bias,  # both use the per-layer zero-init gate
-            rope_pos_scale=self.config.rope_pos_scale,
-            ray_rope_2d=self.config.ray_rope_2d,
+            geom_bias=self.config.geom_bias,
             ray_rope_2d_dim=self.config.ray_rope_2d_dim,
             ray_rope_2d_scale=self.config.ray_rope_2d_scale,
             proj_rope_2d=self.config.proj_rope_2d,
-            rope_hf_scale=self.config.rope_hf_scale,
         )
-        assert not (self.config.geom_bias and self.config.proj_bias), "pick one cross-attention bias"
         if self.config.canvas_cond:
             # P1: rasterized canvas patches -> ray tokens, zero-init (exactly the baseline at init)
             self.canvas_encoder = nn.Linear(3 * self.config.patch_size ** 2, self.config.view_transformer_latent_dim)
             nn.init.zeros_(self.canvas_encoder.weight)
             nn.init.zeros_(self.canvas_encoder.bias)
-        if self.config.deblock_kernel:
-            # P4: zero-init residual smoothing over the DPT output; the kernel must span a patch
-            # boundary to cancel the patch-grid imprint, hence k > patch_size.
-            k = self.config.deblock_kernel
-            assert k % 2 == 1 and k > self.config.patch_size, \
-                f"deblock_kernel must be odd and > patch_size ({self.config.patch_size}), got {k}"
-            ch = 4 if self.config.include_alpha else 3
-            self.deblock = nn.Conv2d(ch, ch, kernel_size=k, padding=k // 2)
-            nn.init.zeros_(self.deblock.weight)
-            nn.init.zeros_(self.deblock.bias)
-        if self.config.canvas_residual:
-            # P1b: output = canvas + residual_head(DPT output); zero-init -> the rasterizer at init.
-            assert self.config.canvas_cond and self.config.use_dpt_decoder, "canvas_residual needs canvas_cond + DPT"
-            self.residual_head = nn.Conv2d(3, 3, kernel_size=1)
-            nn.init.zeros_(self.residual_head.weight)
-            nn.init.zeros_(self.residual_head.bias)
-        if self.config.proj_feat:
-            # P2c: [log depth, log projected radius px, cam-frame quat(4)] -> context tokens, zero-init
-            self.geom_feat = nn.Linear(6, self.config.latent_dim)
-            nn.init.zeros_(self.geom_feat.weight)
-            nn.init.zeros_(self.geom_feat.bias)
 
         # --- Output Head ---
         if not config.use_dpt_decoder:
@@ -176,27 +151,12 @@ class ViewTransformer(nn.Module):
 
         # --- P2: explicit perspective projection of every Gaussian (what rasterization uses) ---
         uv_q = uv_k = None
-        if self.config.proj_bias or self.config.proj_feat or self.config.proj_rope_2d:
-            assert fov is not None, "projection features need fov (radians) per view"
-            uv_k, depth, behind, focal = self.project(spatial_pos, fov, ray_map.size(1), ray_map.size(2))
+        if self.config.proj_rope_2d:
+            assert fov is not None, "proj_rope_2d needs fov (radians) per view"
+            uv_k, _, _, _ = self.project(spatial_pos, fov, ray_map.size(1), ray_map.size(2))
             ii, jj = torch.meshgrid(torch.arange(patch_h, device=ray_map.device),
                                     torch.arange(patch_w, device=ray_map.device), indexing="ij")
             uv_q = (torch.stack([jj, ii], -1).reshape(1, -1, 2).float() + 0.5).expand(ray_map.size(0), -1, -1)
-            if self.config.proj_bias:
-                # squared image-plane distance in patch units; high contrast unlike the cos-angle
-                d2 = (uv_q[:, :, None, :] - uv_k[:, None, :, :]).pow(2).sum(-1)  # [B, N_PATCHES, N_CTX]
-                d2 = d2.masked_fill(behind[:, None, :], 1e4)
-                d2[:, :, :n_reg] = 0.0
-                geom_align = -d2 / (self.config.proj_sigma_patches ** 2)
-            if self.config.proj_feat:
-                assert view_extra is not None and view_extra.size(-1) >= 7, "proj_feat needs cam-frame scale+quat"
-                radius_px = focal * view_extra[..., :3].amax(-1) / depth
-                feats = torch.cat([depth.log()[..., None], radius_px.clamp_min(1e-3).log()[..., None],
-                                   view_extra[..., 3:7]], -1)
-                feats[:, :n_reg] = 0.0
-                ctx_tokens = ctx_tokens + self.geom_feat(feats.to(ctx_tokens.dtype))
-            if not self.config.proj_rope_2d:
-                uv_q = uv_k = None
 
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.
@@ -216,10 +176,6 @@ class ViewTransformer(nn.Module):
                     uv_q=uv_q, uv_k=uv_k,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
-            if self.config.deblock_kernel:
-                decoded_img = decoded_img + self.deblock(decoded_img)
-            if self.config.canvas_residual:
-                decoded_img = self.residual_head(decoded_img) + canvas.permute(0, 3, 1, 2).to(decoded_img.dtype)
             return self.out_proj_act(decoded_img)
         else:
             seq = self.transformer(

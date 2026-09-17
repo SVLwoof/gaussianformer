@@ -1,0 +1,115 @@
+{
+ "agg": {
+  "psnr_model_gt": 49.667589348290186,
+  "psnr_rec_gt": 45.76902249175441,
+  "psnr_model_rec": 46.53322412428617,
+  "resid_rel": 0.024357700409988563,
+  "n_rows": 12,
+  "margin_model_minus_rec": 3.8985668565357727
+ },
+ "ckpt": "checkpoints_probe_p1res_p2_fg_c2/phase2_epoch_3000.pt",
+ "split": "train",
+ "model_cfg": [
+  "canvas_cond=true",
+  "canvas_residual=true",
+  "proj_rope_2d=true"
+ ],
+ "rows": [
+  {
+   "scene": 387,
+   "view": 0,
+   "psnr_model_gt": 50.229513666238745,
+   "psnr_rec_gt": 46.90554589166416,
+   "psnr_model_rec": 47.492078444370804,
+   "resid_rel": 0.017877336591482162
+  },
+  {
+   "scene": 387,
+   "view": 4,
+   "psnr_model_gt": 48.978472797030896,
+   "psnr_rec_gt": 44.96039713344162,
+   "psnr_model_rec": 45.89864015746812,
+   "resid_rel": 0.02006009966135025
+  },
+  {
+   "scene": 387,
+   "view": 7,
+   "psnr_model_gt": 50.65242398763718,
+   "psnr_rec_gt": 46.58234155715037,
+   "psnr_model_rec": 46.93853589435966,
+   "resid_rel": 0.020090265199542046
+  },
+  {
+   "scene": 387,
+   "view": 11,
+   "psnr_model_gt": 50.8382645595956,
+   "psnr_rec_gt": 46.807317763582745,
+   "psnr_model_rec": 46.88338812560482,
+   "resid_rel": 0.020169692113995552
+  },
+  {
+   "scene": 1875,
+   "view": 0,
+   "psnr_model_gt": 49.88024999632217,
+   "psnr_rec_gt": 44.9722796924022,
+   "psnr_model_rec": 45.702726782289304,
+   "resid_rel": 0.033550430089235306
+  },
+  {
+   "scene": 1875,
+   "view": 4,
+   "psnr_model_gt": 49.42052815061424,
+   "psnr_rec_gt": 45.36634434092427,
+   "psnr_model_rec": 46.10533663416475,
+   "resid_rel": 0.03155070170760155
+  },
+  {
+   "scene": 1875,
+   "view": 7,
+   "psnr_model_gt": 50.21177736853873,
+   "psnr_rec_gt": 45.39869699767158,
+   "psnr_model_rec": 45.92660686571588,
+   "resid_rel": 0.033317163586616516
+  },
+  {
+   "scene": 1875,
+   "view": 11,
+   "psnr_model_gt": 50.95375379064951,
+   "psnr_rec_gt": 47.55379070741889,
+   "psnr_model_rec": 47.86135371810022,
+   "resid_rel": 0.025650616735219955
+  },
+  {
+   "scene": 1881,
+   "view": 0,
+   "psnr_model_gt": 48.93820311869706,
+   "psnr_rec_gt": 45.57477126420464,
+   "psnr_model_rec": 46.90767909890361,
+   "resid_rel": 0.021249327808618546
+  },
+  {
+   "scene": 1881,
+   "view": 4,
+   "psnr_model_gt": 45.005394491030664,
+   "psnr_rec_gt": 41.580231124782486,
+   "psnr_model_rec": 42.744885707229756,
+   "resid_rel": 0.02355016954243183
+  },
+  {
+   "scene": 1881,
+   "view": 7,
+   "psnr_model_gt": 52.27670169194433,
+   "psnr_rec_gt": 48.184121031672746,
+   "psnr_model_rec": 49.12015269570727,
+   "resid_rel": 0.025113170966506004
+  },
+  {
+   "scene": 1881,
+   "view": 11,
+   "psnr_model_gt": 48.625788561183086,
+   "psnr_rec_gt": 45.342432396137156,
+   "psnr_model_rec": 46.81730536751993,
+   "resid_rel": 0.02011343091726303
+  }
+ ]
+}

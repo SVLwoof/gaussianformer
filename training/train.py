@@ -442,7 +442,7 @@ def main():
                         "(prune older ones after each save). None = keep all (default).")
     parser.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
                         help="GaussianFormerConfig overrides for architecture probes, e.g. "
-                             "--model_cfg rope_pos_scale=4 ray_rope_2d=true. With --init_from, "
+                             "--model_cfg proj_rope_2d=true. With --init_from, "
                              "parameters absent from the seed must be zero-init (warm-safe).")
     parser.add_argument("--data_seed", type=int, default=0,
                         help="Offsets the per-epoch data order (sampler shuffle + view draw). 0 = the "

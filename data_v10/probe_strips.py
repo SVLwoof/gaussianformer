@@ -2,7 +2,7 @@
 
   uv run --no-sync python -m data_v10.probe_strips --out tmp/probe_strips.png \
      --models "seed:checkpoints_v18_256/phase2_epoch_30.pt:" \
-              "p2_bias_feat:checkpoints_probe_p2_bias_feat/phase2_epoch_3000.pt:proj_bias=true proj_feat=true" \
+              "p2_rope2d:checkpoints_probe_p2_rope2d/phase2_epoch_3000.pt:proj_rope_2d=true" \
      --scenes 387 4447 12092 --views 0 7
 model spec = label:ckpt:model_cfg (space-separated key=val, may be empty).
 """
