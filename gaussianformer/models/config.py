@@ -61,6 +61,10 @@ class GaussianFormerConfig:
     a 256px recovery stage."""
     ray_rope_2d_dim: int = 16
     """Rotary dim of that 2-D RoPE (8 log-spaced freqs per axis)."""
+    ray_self_rope_2d: bool = True
+    """Whether the ray-token SELF-attention also uses the patch-centre 2-D band (True = what every
+    P2 run since 09-09 did). False = pure P2: the self-attention sees only the 3-D table, which is
+    the identity among patches. Ablation knob (review finding, 2026-09-17)."""
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""

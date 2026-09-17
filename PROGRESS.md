@@ -3985,3 +3985,28 @@ Launched (all on the P2+fg recipe: proj_rope_2d + fg 0.05, V18 seed, stage R 300
 Sagieb budget: 3 x 4 GPUs; the aug training waits for r256p8 to finish (afterany) to stay <= 12.
 Pass criteria: vrope fit moves by dB (not tenths); r256p4 >> r256p8 on fit; aug wins at r1.15 without
 losing at r1.7. ETA: 256 pair ~3 h after start, vrope ~10 h, aug data ~2 h then ~10 h.
+
+## 2026-09-17 evening: **/code-review of PR #14 (24 confirmed findings) — acted on; three touched the live arms**
+Review (Shahaf ran `/code-review 14`; branch v20/placement vs main). Acted on, now in PR #14 (v19/cleanup,
+1dc0a16) and rebased into v20/placement:
+- Checkpoints store their GaussianFormerConfig (`"config"`); one shared loader
+  (`gaussianformer/utils/checkpoint.py`: config_from_checkpoint / load_seed / load_checkpoint) replaces
+  three copy-pasted filters. `*.freqs` dropped only on a shape change; an ABSENT table now raises — a
+  proj_rope_2d seed could previously load silently into a plain model.
+- `--model_cfg` is the only architecture knob (train.py 37 -> 30 args; ceiling_eval drops 6 flags);
+  coercion by field annotation. geom_bias, view_extra plumbing ([..., :10]), log_scale_input,
+  lora_param_count, the LoRA "args" blob removed; grad_accum steps on trailing micro-batches;
+  30 retired launchers/tools deleted; diagnostic rows untracked.
+- Live-run fixes: value-RoPE band was 1..15 rad/patch (dim 32 spans 1..15 at scale 1; 5 freqs wrap inside
+  a patch) -> scale 0.47 = 0.47..7; arm RESTARTED (31686383). run_radius_eval.sh lacked the CUDA module
+  loads. ceiling_eval had a SyntaxError (global after use) that would have sunk every eval — fixed.
+- FINDING TO REMEMBER: with proj_rope_2d the QUERY table (3-D + patch-centre 2-D band) is also what the
+  ray-token self-attention uses, so every P2 run since 09-09 also had relative 2-D RoPE among patches.
+  P3 ray2d (that alone) was null, so the projected keys are the likely driver, but it is confounded.
+  New knob `ray_self_rope_2d` (default True = current behaviour); pure-P2 ablation arm queued after
+  r256p4 frees its GPUs (same seed + schedule as p2r_fg, per the reviewer's note).
+- Documented, not changed: RoPE frequency tables are nn.Parameters trained in phase 2 (V18's differ from
+  the config table; all arms share this). Deferred until verdicts: value-RoPE band-slice efficiency,
+  ray-embed fold into a 4x4 Linear.
+Timing correction: at 256 px an epoch costs 8.3 s (patch 8) / 10.8 s (patch 4) vs 10.2 s at 512/8 —
+the 20k-token scene encoder dominates, so the 256 pair takes ~7 h / ~9 h, not 2.5 h.

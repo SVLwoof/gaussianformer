@@ -519,7 +519,8 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = norm_module(query_dim, eps=EPS)
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, rope_v=None):
+                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, rope_v=None,
+                rope_self_cos=None, rope_self_sin=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -558,10 +559,11 @@ class AttentionLayer(nn.Module):
                 self_attn_output = self.self_attn(q)
                 self_attn_output = self_attn_output.view(bs, patch_h * patch_w, -1)
             else:
-                # the query RoPE table: identity among ray tokens in the 3-D pairs (all patches share the
-                # camera origin); with proj_rope_2d it also carries the patch-centre 2-D band, so the
-                # patches get relative 2-D RoPE among themselves (see config.proj_rope_2d)
-                self_attn_output = self.self_attn(q, q, q, None, rope_cos, rope_sin, force_sdpa=force_sdpa)
+                # rope_self_*: the table for ray-token self-attention (3-D only = identity among patches,
+                # or with the patch-centre 2-D band, see config.ray_self_rope_2d); defaults to the query table
+                sc = rope_cos if rope_self_cos is None else rope_self_cos
+                ss = rope_sin if rope_self_sin is None else rope_self_sin
+                self_attn_output = self.self_attn(q, q, q, None, sc, ss, force_sdpa=force_sdpa)
             query = query + self.dropout(self_attn_output)
 
         # feed forward
@@ -653,6 +655,7 @@ class TransformerDecoder(nn.Module):
             ray_rope_2d_dim: int = 16,
             ray_rope_2d_scale: float = 0.25,
             proj_rope_2d: bool = False,
+            ray_self_rope_2d: bool = True,
             value_rope_2d: bool = False,
             value_rope_2d_dim: int = 32,
             value_rope_2d_scale: float = 1.0,
@@ -714,6 +717,7 @@ class TransformerDecoder(nn.Module):
         # P2: 2-D RoPE on projected patch coordinates, in the channel pairs right after the
         # pretrained 3-D pairs (which end at pos_dim*rope_dim/2), so it never overlaps them.
         self.proj_rope_2d = proj_rope_2d
+        self.ray_self_rope_2d = ray_self_rope_2d
         if proj_rope_2d:
             assert rope_dim is not None
             n3 = pos_dim * rope_dim // 2
@@ -745,15 +749,18 @@ class TransformerDecoder(nn.Module):
                 patch_h=None, patch_w=None, uv_q=None, uv_k=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
+            rope_self_cos = rope_self_sin = None
             if self.proj_rope_2d and uv_k is not None:
                 # P2: queries carry their patch centre, keys the Gaussian's projected patch coords
                 rope_cos, rope_sin = self._cos_sin_3d_2d(ray_pos, uv_q)
                 rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d_2d(spatial_pos, uv_k)
+                if not self.ray_self_rope_2d:
+                    rope_self_cos, rope_self_sin = self._cos_sin_3d(ray_pos)
             else:
                 rope_cos, rope_sin = self._cos_sin_3d(ray_pos)
                 rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d(spatial_pos)
         else:
-            rope_cos = rope_sin = rope_ctx_cos = rope_ctx_sin = None
+            rope_cos = rope_sin = rope_ctx_cos = rope_ctx_sin = rope_self_cos = rope_self_sin = None
         rope_v = None
         if self.value_rope_2d and uv_k is not None:
             v_cos, v_sin = freqs_to_cos_sin(self.rope_v.get_spatial_freqs(uv_k), head_dim=self.head_dim)
@@ -764,7 +771,7 @@ class TransformerDecoder(nn.Module):
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w, rope_v=rope_v)
+                      patch_w=patch_w, rope_v=rope_v, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list

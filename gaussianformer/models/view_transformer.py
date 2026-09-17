@@ -65,6 +65,7 @@ class ViewTransformer(nn.Module):
             ray_rope_2d_dim=self.config.ray_rope_2d_dim,
             ray_rope_2d_scale=self.config.ray_rope_2d_scale,
             proj_rope_2d=self.config.proj_rope_2d,
+            ray_self_rope_2d=self.config.ray_self_rope_2d,
             value_rope_2d=self.config.value_rope_2d,
             value_rope_2d_dim=self.config.value_rope_2d_dim,
             value_rope_2d_scale=self.config.value_rope_2d_scale,
