@@ -18,7 +18,8 @@ module load cuda
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1 PYTHONPATH=.
 export PATH="$HOME/.local/bin:$PATH"
-export HF_HOME=/cs/labs/sagieb/shahaf_levy/tmp/hf
+export HF_HOME=/cs/labs/sagieb/shahaf_levy/tmp/hf   # zips land on the lab volume, not ~/.cache
+export HF_TOKEN=$(cat ~/.cache/huggingface/token)      # gated dataset; the token lives in the default cache
 ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
 mkdir -p "$TORCH_EXTENSIONS_DIR" "$HF_HOME"

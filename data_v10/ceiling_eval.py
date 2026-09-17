@@ -100,6 +100,7 @@ def render_model_all(pipe, data, views, res, chunk) -> np.ndarray:
 
 
 def main() -> None:
+    global RES, RADIUS
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=sorted(SPLITS), required=True)
     ap.add_argument("--scenes_file", type=Path, required=True)
@@ -135,7 +136,6 @@ def main() -> None:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     device = "cuda"
-    global RES, RADIUS
     RES, RADIUS = args.res, args.radius
     h5_dir, ren_dir = SPLITS[args.split]
     if args.renders_dir is not None:
