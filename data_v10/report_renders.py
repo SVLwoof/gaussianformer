@@ -108,6 +108,10 @@ def zoom_row(gt: np.ndarray, others: list[tuple[str, np.ndarray]], font, tag: st
 
 
 def ladder(a: argparse.Namespace, device) -> None:
+    global RES, LADDER
+    RES = a.res
+    if a.models:  # label:ckpt:cfg (cfg space-separated key=val, may be empty)
+        LADDER = [tuple(m.split(":", 2)) for m in a.models]
     font, small = ImageFont.truetype(FONT, 17), ImageFont.truetype(FONT, 12)
     h5_dir, ren_dir = SPLITS["val"]
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
@@ -229,6 +233,8 @@ def main() -> None:
     l.add_argument("--sheet_panel", type=int, default=192)
     l.add_argument("--sheet_cols", type=int, default=4)
     l.add_argument("--out", type=Path, required=True)
+    l.add_argument("--res", type=int, default=RES, help="render/eval resolution (GT resized)")
+    l.add_argument("--models", nargs="*", default=None, help="override the ladder: label:ckpt:cfg")
     c = sub.add_parser("codec")
     c.add_argument("--scene", choices=sorted(CODEC), required=True)
     c.add_argument("--n_close", type=int, default=8)

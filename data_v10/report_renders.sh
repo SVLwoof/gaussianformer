@@ -19,4 +19,4 @@ ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | he
 export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 : ${ARGS:?}
-PYTHONPATH=. uv run --no-sync python data_v10/report_renders.py ${(z)ARGS}
+PYTHONPATH=. uv run --no-sync python data_v10/report_renders.py "${(Q)${(z)ARGS}[@]}"
