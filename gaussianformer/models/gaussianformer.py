@@ -20,7 +20,16 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         # RoPE stays ON for both pe_types: the RenderFormer backbone is RoPE-pretrained.
         self.gaussian_encoder_norm = norm_class(self.config.latent_dim)
-        self.rope_dim = self.config.pos_pe_num_freqs
+        if self.config.input_mlp_hidden:
+            # Residual input-head MLP, zero-init output -> exactly the baseline at init.
+            self.gaussian_encoder_mlp = nn.Sequential(
+                nn.Linear(self.config.latent_dim, self.config.input_mlp_hidden),
+                nn.GELU(),
+                nn.Linear(self.config.input_mlp_hidden, self.config.latent_dim),
+            )
+            nn.init.zeros_(self.gaussian_encoder_mlp[-1].weight)
+            nn.init.zeros_(self.gaussian_encoder_mlp[-1].bias)
+        self.rope_dim = self.config.rope_dim or self.config.pos_pe_num_freqs
 
         if self.config.pe_type == 'nerf':
             # Concat encoder: position lifted into a NeRF basis, concatenated with the
@@ -51,7 +60,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             pos_dim=self.config.pos_dim,
             bias=self.config.bias,
             qk_norm=self.config.view_indep_qk_norm,
-            rope_double_max_freq=self.config.rope_double_max_freq
+            rope_double_max_freq=self.config.rope_double_max_freq,
         )
 
         self.view_transformer = ViewTransformer(config)
@@ -97,10 +106,16 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             rest = gaussians[..., 6:14]  # quat(4) + color(3) + opacity(1)
             log_scale = torch.log(scale.clamp(min=1e-6))
             feat = torch.cat([self.gaussian_pos_pe(pos), log_scale, rest], dim=-1)
-            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(feat))
+            e = self.gaussian_encoder(feat)
+            if self.config.input_mlp_hidden:
+                e = e + self.gaussian_encoder_mlp(e)
+            gaussian_emb = self.gaussian_encoder_norm(e)
             tokens.append(self.gaussian_token + gaussian_emb)
         else:  # rope
-            gaussian_emb = self.gaussian_encoder_norm(self.gaussian_encoder(gaussians))
+            e = self.gaussian_encoder(gaussians)
+            if self.config.input_mlp_hidden:
+                e = e + self.gaussian_encoder_mlp(e)
+            gaussian_emb = self.gaussian_encoder_norm(e)
             tokens.append(self.gaussian_token + gaussian_emb)
 
         seq = torch.cat(tokens, dim=1)
@@ -111,7 +126,8 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         return seq, valid_mask_padded, pos_list_padded
 
-    def forward(self, gaussians, valid_mask, rays_o, rays_d, gaussians_view_tf, tf32_view_tf=False):
+    def forward(self, gaussians, valid_mask, rays_o, rays_d, gaussians_view_tf, tf32_view_tf=False, fov=None,
+                canvas=None):
         """
         Forward pass of the transformer.
 
@@ -134,7 +150,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         rays_o = rays_o.view(-1, *rays_o.shape[2:])
         rays_d = rays_d.view(-1, *rays_d.shape[2:])
 
-        pos_view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])
+        pos_view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])[..., :self.config.pos_dim]
         valid_mask_repeated = valid_mask.repeat_interleave(num_views, dim=0)
 
         pos_seq_view, valid_mask_padded_view = self._prepare_padded_positions(pos_view_tf, valid_mask_repeated)
@@ -145,7 +161,9 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             seq,
             pos_seq_view,
             valid_mask_padded_view,
-            tf32_mode=tf32_view_tf
+            tf32_mode=tf32_view_tf,
+            fov=None if fov is None else fov.reshape(-1),
+            canvas=canvas,  # [B*V, H, W, 3] or None
         )
 
         res = res.view(

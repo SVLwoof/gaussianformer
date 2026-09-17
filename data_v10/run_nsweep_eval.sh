@@ -5,8 +5,6 @@
 #SBATCH --job-name=nsweval
 #SBATCH --output=runs/nsweval_%j.out
 #SBATCH --gres=gg:g4:1
-#SBATCH --account=sagieb
-#SBATCH --killable
 #SBATCH --requeue
 #SBATCH --exclude=cyril-01,firefoot-01,firefoot-08
 
@@ -17,7 +15,7 @@
 #   HELDOUT -- a common 300-object val set, disjoint from the val100 used for in-training
 #             validation, so generalisation is not read off objects the run was monitored on.
 #
-#   N=10 sbatch --export=N=10 data_v10/run_nsweep_eval.sh
+#   sbatch --killable --account=killable-cs --export=N=10,TAG=probe_x,CKPT=...,EXTRA="--model_cfg;proj_rope_2d=true" data_v10/run_nsweep_eval.sh
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia
@@ -33,7 +31,9 @@ export PATH="$HOME/.local/bin:$PATH"
 # ~5 min compile per job and cannot race anything.
 ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 SHARED="$HOME/.cache/torch_ext_sm${ARCH:-unknown}"
-export TORCH_EXTENSIONS_DIR="$HOME/.cache/torch_ext_job${SLURM_JOB_ID}"
+# node-local /tmp, NOT ~/.cache: the volume backing ~/.cache (tomhope) hit 100% and evals died
+# on makedirs. /tmp is per-node, faster, and freed on reboot; seed still read from the shared dir.
+export TORCH_EXTENSIONS_DIR="${TMPDIR:-/tmp}/torch_ext_job${SLURM_JOB_ID}"
 mkdir -p "$TORCH_EXTENSIONS_DIR"
 # Seed from the shared per-arch cache if it holds a complete build, to skip the compile.
 if [ -f "$SHARED/gsplat_cuda/gsplat_cuda.so" ]; then
@@ -42,7 +42,10 @@ fi
 trap 'rm -rf "$TORCH_EXTENSIONS_DIR"' EXIT
 
 N=${N:?N required}
+TAG=${TAG:-nsweep_n${N}}   # override for variants (ctrl, fgloss, scratch) -- rows and resume
+                           # state are keyed by output file, so variants MUST NOT share one
 CKPT=${CKPT:-$(ls -t checkpoints_nsweep_n${N}/phase2_epoch_*.pt 2>/dev/null | head -1)}
+EXTRA=${EXTRA//;/ }   # ;-separated from sbatch --export; e.g. "--encoder_layers 6 --view_layers 3" for depth-pruned ckpts
 [ -z "$CKPT" ] && { echo "FATAL: no checkpoint for N=$N"; exit 1; }
 echo "N=$N ckpt=$CKPT node=$(hostname) sm_${ARCH}"
 
@@ -53,14 +56,14 @@ rc=0
 # Own training objects -- the fit measure.
 uv run --no-sync python -m data_v10.ceiling_eval \
   --split train --scenes_file data_v10/nsweep/n${N}_scenes.json \
-  --out data_v10/ceiling/nsweep_n${N}_train.jsonl \
-  --model_tag nsweep_n${N}_train --views 0,4,7,11 --ckpt "$CKPT" || rc=1
+  --out data_v10/ceiling/${TAG}_train.jsonl \
+  --model_tag ${TAG}_train --views 0,4,7,11 --ckpt "$CKPT" ${=EXTRA} || rc=1
 
 # Common held-out set -- generalisation.
 uv run --no-sync python -m data_v10.ceiling_eval \
   --split val --scenes_file data_v10/nsweep/heldout300_scenes.json \
-  --out data_v10/ceiling/nsweep_n${N}_heldout.jsonl \
-  --model_tag nsweep_n${N}_heldout --views 0,4,7,11 --ckpt "$CKPT" || rc=1
+  --out data_v10/ceiling/${TAG}_heldout.jsonl \
+  --model_tag ${TAG}_heldout --views 0,4,7,11 --ckpt "$CKPT" ${=EXTRA} || rc=1
 
 echo "DONE_NSWEEP_EVAL rc=$rc"
 exit $rc

@@ -17,7 +17,7 @@
 import torch
 from torch import nn
 from torch import Tensor
-from typing import Optional
+
 
 
 class NeRFEncoding(nn.Module):
@@ -37,7 +37,7 @@ class NeRFEncoding(nn.Module):
             in_dim: int,
             num_frequencies: int,
             min_freq_exp: float = 0.,
-            max_freq_exp: Optional[float] = None,
+            max_freq_exp: float | None = None,
             include_input: bool = False
     ) -> None:
         super().__init__()

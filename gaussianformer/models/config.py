@@ -1,5 +1,7 @@
-from dataclasses import dataclass, field
-from typing import Literal, List, Optional
+from dataclasses import dataclass, field, fields, replace
+import types
+import typing
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -17,6 +19,8 @@ class GaussianFormerConfig:
     """The number of layers in the transformer."""
     num_heads: int = 6
     """The number of heads in the transformer."""
+    input_mlp_hidden: int = 0
+    """Hidden dim of the residual input-head MLP (0 = single-linear baseline)."""
     dim_feedforward: int = 768 * 4
     """The dimension of the feedforward network in the transformer."""
     num_register_tokens: int = 16
@@ -43,6 +47,24 @@ class GaussianFormerConfig:
     fields -> single Linear, RoPE still on."""
     rope_double_max_freq: bool = False
     """Whether to double the max frequency for RoPE."""
+    rope_dim: int | None = None
+    """Rotary dim per stage (channel pairs rotated = pos_dim * rope_dim/2). None = pos_pe_num_freqs
+    (12: 18 of 64 pairs rotated, 1..5 rad/unit). Raising it rotates previously position-blind
+    pairs, so a warm init needs a 256px recovery stage."""
+    proj_rope_2d: bool = False
+    """P2 (2026-09-09, positive): every Gaussian is perspective-projected into the view; its
+    projected patch coordinate (u, v) gets a 2-D RoPE on the cross-attention KEYS and each ray
+    token its patch centre on the QUERIES, in the channel pairs right after the pretrained 3-D
+    ones. Alters pretrained function: needs a 256px recovery stage."""
+    ray_rope_2d_dim: int = 16
+    """Rotary dim of that 2-D RoPE (8 log-spaced freqs per axis)."""
+    ray_rope_2d_scale: float = 0.25
+    """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
+    (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""
+    canvas_cond: bool = False
+    """P1 (2026-09-10; line dropped 2026-09-17, kept to load its checkpoints): add a gsplat
+    rasterization of the input splat (same camera, log10(x+1) space) to the ray tokens through a
+    zero-init linear. Identity at init."""
     pos_pe_num_freqs: int = 12
     """The number of frequencies in the positional encoding for gaussian positions."""
     gaussian_encoder_norm_type: Literal['layer_norm', 'rms_norm'] = 'rms_norm'
@@ -73,9 +95,9 @@ class GaussianFormerConfig:
     """Whether to use DPT decoder for rendering."""
     dpt_features: int = 128
     """The dim of internal features in the DPT decoder."""
-    dpt_out_channels: List[int] = field(default_factory=lambda: [96, 192, 384, 768])
+    dpt_out_channels: list[int] = field(default_factory=lambda: [96, 192, 384, 768])
     """The number of output channels per layer in the DPT decoder."""
-    dpt_out_layers: Optional[List[int]] = None
+    dpt_out_layers: list[int] | None = None
     """The layers to use for the DPT decoder."""
     turn_to_cam_coord: bool = True
     """Whether to transform the scene to camera coordinates before rendering."""
@@ -84,3 +106,36 @@ class GaussianFormerConfig:
 
     def get(self, key, default=None):
         return getattr(self, key, default)
+
+    def with_overrides(self, pairs: list[str] | None) -> "GaussianFormerConfig":
+        """Apply `key=value` overrides (CLI `--model_cfg`), coerced by the field's annotation.
+
+        One generic knob for architecture changes instead of a flag per feature. Unknown keys
+        raise; bools accept true/false/1/0; `X | None` coerces to X; list[int] is comma-separated.
+        """
+        if not pairs:
+            return self
+        hints = typing.get_type_hints(type(self))
+        out = {}
+        for p in pairs:
+            key, _, raw = p.partition("=")
+            if key not in hints:
+                raise KeyError(f"unknown GaussianFormerConfig field {key!r}")
+            out[key] = _coerce(hints[key], raw)
+        return replace(self, **out)
+
+
+def _coerce(tp, raw: str):
+    if isinstance(tp, types.UnionType):  # X | None
+        inner = [a for a in typing.get_args(tp) if a is not type(None)]
+        return None if raw.lower() in ("none", "null") else _coerce(inner[0], raw)
+    origin = typing.get_origin(tp)
+    if origin is list:
+        (item,) = typing.get_args(tp)
+        return [_coerce(item, x) for x in raw.split(",") if x]
+    if origin is Literal:
+        assert raw in typing.get_args(tp), f"{raw!r} not in {typing.get_args(tp)}"
+        return raw
+    if tp is bool:
+        return raw.lower() in ("1", "true", "yes")
+    return tp(raw)

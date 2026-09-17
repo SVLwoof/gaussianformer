@@ -11,6 +11,8 @@ Usage:
 import argparse
 import os
 import time
+from contextlib import nullcontext
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
@@ -21,6 +23,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+from gaussianformer.utils.checkpoint import config_from_checkpoint, load_seed
 from gaussianformer.utils.ray_generator import RayGenerator
 from gaussianformer.utils.transform import transform_gaussians_to_cam_coord
 
@@ -110,6 +113,12 @@ def training_forward(
     # Generate rays (detached -- rays don't need gradients)
     with torch.no_grad():
         rays_o, rays_d = ray_generator(c2w_for_view_tf, fov / 180.0 * torch.pi, resolution)
+        canvas = None
+        if config.canvas_cond:
+            # P1: gsplat rasterization of the (possibly rotation-augmented) input splat for the
+            # same camera; augmentation rotates scene + camera jointly so the canvas stays valid.
+            from gaussianformer.utils.canvas import render_canvas
+            canvas = render_canvas(gaussians, mask, c2w, fov.reshape(bs, nv), resolution)
 
     # Model forward (gradients flow here)
     rendered_imgs = model(
@@ -117,8 +126,10 @@ def training_forward(
         valid_mask=mask,
         rays_o=rays_o,
         rays_d=rays_d,
-        gaussians_view_tf=gaussians_for_view_tf[..., :config.pos_dim],
+        gaussians_view_tf=gaussians_for_view_tf[..., :config.pos_dim],  # camera-frame position
         tf32_view_tf=True,
+        fov=(fov / 180.0 * torch.pi).reshape(bs, nv),
+        canvas=canvas,
     )
 
     # [bs, nv, C, H, W] -> [bs, nv, H, W, C]
@@ -146,6 +157,7 @@ def compute_loss(
     log_w: float,
     lpips_w: float,
     device: torch.device,
+    fg_bg_weight: float = 1.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return (total, log_term, lpips_term).
 
@@ -156,17 +168,33 @@ def compute_loss(
     lpips_term = LPIPS-VGG(pred_ldr, target) on display-space values in [-1, 1].
                  pred_ldr = clamp(10^pred - 1, 0, 1) brings the log-HDR prediction
                  back to the same display-referred space the PNG target lives in.
+
+    fg_bg_weight < 1 down-weights BACKGROUND pixels (target luminance <= 0.02, the
+    same threshold as the eval-side _fg_crop) in the log term. Objects cover 2-7% of
+    pixels, so the plain mean dilutes the object's gradient 14-50x; at 0.05 the
+    foreground carries ~60% of the log term instead of ~7%. LPIPS is left whole-image
+    (its conv stats are not meaningfully maskable). 1.0 = exact baseline behavior.
     """
     log_target = torch.log10(target + 1.0)
-    log_term = F.l1_loss(pred.squeeze(1), log_target)
+    if fg_bg_weight != 1.0:
+        fg = (target.amax(dim=-1, keepdim=True) > 0.02).float()
+        w = (fg + (1.0 - fg) * fg_bg_weight).expand_as(log_target)
+        log_term = (w * (pred.squeeze(1) - log_target).abs()).sum() / w.sum()
+    else:
+        log_term = F.l1_loss(pred.squeeze(1), log_target)
     total = log_w * log_term
 
     lpips_term = torch.tensor(0.0, device=device)
     if lpips_w > 0:
-        pred_ldr = torch.clamp(10.0 ** pred.squeeze(1) - 1.0, 0.0, 1.0)
-        p = pred_ldr.permute(0, 3, 1, 2) * 2.0 - 1.0
-        g = target.permute(0, 3, 1, 2) * 2.0 - 1.0
-        lpips_term = get_lpips(device)(p, g).mean()
+        # LPIPS in fp32 regardless of the caller's autocast: a VGG feature distance between two
+        # nearly identical images has ~3 significant digits in bf16, and its gradient turns to
+        # noise exactly when training converges (the late-cycle collapses of 2026-09-10 were
+        # 90 % LPIPS jumps at train loss ~0.0006).
+        with torch.autocast(device_type="cuda", enabled=False):
+            pred_ldr = torch.clamp(10.0 ** pred.squeeze(1).float() - 1.0, 0.0, 1.0)
+            p = pred_ldr.permute(0, 3, 1, 2) * 2.0 - 1.0
+            g = target.float().permute(0, 3, 1, 2) * 2.0 - 1.0
+            lpips_term = get_lpips(device)(p, g).mean()
         total = total + lpips_w * lpips_term
 
     return total, log_term, lpips_term
@@ -187,12 +215,14 @@ def run_phase(
     save_interval: int,
     log_loss_weight: float,
     lpips_loss_weight: float,
+    fg_bg_weight: float,
     model_config,
     global_step: int = 0,
     val_dataloader: DataLoader | None = None,
     train_sampler: DistributedSampler | None = None,
     start_epoch: int = 0,
     keep_last_n: int | None = None,
+    grad_accum: int = 1,
 ) -> int:
     """Run a training phase (shared logic for phase 1 and 2)."""
     model.train()
@@ -218,28 +248,39 @@ def run_phase(
         epoch_steps = 0
         t0 = time.time()
 
-        for batch in dataloader:
+        optimizer.zero_grad()
+        for micro, batch in enumerate(dataloader):
             b = {k: batch[k].to(device, non_blocking=True)
                  for k in ("gaussians", "mask", "c2w", "fov", "target")}
 
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                pred = training_forward(
-                    model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
-                    config.resolution, model_config,
-                )
-                loss, log_term, lpips_term = compute_loss(
-                    pred, b["target"], log_loss_weight, lpips_loss_weight, device,
-                )
-
-            optimizer.zero_grad()
-            loss.backward()
-            if config.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
-            optimizer.step()
+            # Gradient accumulation: `grad_accum` micro-batches per optimizer step, so
+            # world_size x grad_accum x batch_size is the effective batch (e.g. 4 GPUs x 2 == 8 GPUs x 1).
+            # DDP all-reduce is skipped on non-final micro-steps via no_sync().
+            is_last_micro = (micro + 1) % grad_accum == 0 or micro + 1 == len(dataloader)
+            sync_ctx = (model.no_sync() if (grad_accum > 1 and not is_last_micro
+                                            and hasattr(model, "no_sync")) else nullcontext())
+            with sync_ctx:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    pred = training_forward(
+                        model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
+                        config.resolution, model_config,
+                    )
+                    loss, log_term, lpips_term = compute_loss(
+                        pred, b["target"], log_loss_weight, lpips_loss_weight, device,
+                        fg_bg_weight=fg_bg_weight,
+                    )
+                (loss / grad_accum).backward()
 
             with torch.no_grad():
                 epoch_sums += torch.stack([loss.detach(), log_term.detach(), lpips_term.detach()])
             epoch_steps += 1
+            if not is_last_micro:
+                continue
+
+            if config.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
+            optimizer.step()
+            optimizer.zero_grad()
             global_step += 1
 
             if global_step % log_interval == 0 and is_main_process():
@@ -280,6 +321,7 @@ def run_phase(
                     )
                     total, log_term, lpips_term = compute_loss(
                         pred, b["target"], log_loss_weight, lpips_loss_weight, device,
+                        fg_bg_weight=fg_bg_weight,
                     )
                     val_sums += torch.stack([total, log_term, lpips_term])
                     val_steps += 1
@@ -305,6 +347,7 @@ def run_phase(
                 "phase": phase_name,
                 "epoch": epoch + 1,
                 "global_step": global_step,
+                "config": asdict(unwrap_model(model).config),
                 "model_state_dict": unwrap_model(model).state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
@@ -338,6 +381,8 @@ def main():
     parser.add_argument("--phase2_epochs", type=int, default=TrainingConfig.phase2_epochs)
     parser.add_argument("--phase2_lr", type=float, default=TrainingConfig.phase2_lr)
     parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--grad_accum", type=int, default=1,
+                        help="Micro-batches per optimizer step (effective batch = world x batch_size x grad_accum)")
     parser.add_argument("--max_samples", type=int, default=None, help="Limit dataset to N samples (for quick experiments)")
     parser.add_argument("--resume", type=Path,
                         help="Escape hatch for crash recovery: resume from a phase1/phase2 "
@@ -358,6 +403,13 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
+    parser.add_argument("--from_scratch", action="store_true",
+                        help="Random init (no RenderFormer transfer, no phase 1). Required for "
+                        "widths/depths that cannot load RenderFormer weights (--model_cfg latent_dim=...).")
+    parser.add_argument("--fg_bg_weight", type=float, default=1.0,
+                        help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
+                        "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
+                        "term instead of ~7%%. LPIPS stays whole-image.")
     parser.add_argument("--weight_decay", type=float, default=0.01,
                         help="AdamW weight decay for phase 2 (0 disables; used by memorization controls)")
     parser.add_argument("--num_workers", type=int, default=None,
@@ -375,6 +427,14 @@ def main():
     parser.add_argument("--keep_last_n", type=int, default=None,
                         help="Retain only the N most recent same-phase checkpoints "
                         "(prune older ones after each save). None = keep all (default).")
+    parser.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
+                        help="GaussianFormerConfig overrides (every architecture knob), e.g. "
+                             "--model_cfg proj_rope_2d=true latent_dim=512. With --init_from/--resume "
+                             "they apply on top of the checkpoint's stored config; parameters absent "
+                             "from the seed must be zero-init (warm-safe).")
+    parser.add_argument("--data_seed", type=int, default=0,
+                        help="Offsets the per-epoch data order (sampler shuffle + view draw). 0 = the "
+                             "default epoch-keyed order; use e.g. 1 to test order-dependence on resume.")
     parser.add_argument("--views_per_epoch", type=int, default=None,
                         help="Per-epoch view subsampling for the TRAIN set: draw this many "
                         "random views per scene each epoch (redrawn per epoch; all views seen "
@@ -409,11 +469,13 @@ def main():
         max_samples=args.max_samples,
         augment_rotation=args.augment_rotation,
         views_per_epoch=args.views_per_epoch,
+        data_seed=args.data_seed,
     )
     train_sampler: DistributedSampler | None = None
     if world_size > 1:
         train_sampler = DistributedSampler(
             dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=False,
+            seed=args.data_seed,
         )
     dataloader = DataLoader(
         dataset,
@@ -456,9 +518,14 @@ def main():
     # --- Model ---
     from gaussianformer.models.config import GaussianFormerConfig
     from gaussianformer.models.gaussianformer import GaussianFormer
-    gf_config = GaussianFormerConfig(
-        pe_type=args.pe_type,
-    )
+    seed_path = args.resume or args.init_from
+    if seed_path:
+        seed_ckpt = torch.load(seed_path, map_location="cpu", weights_only=True)
+        gf_config = config_from_checkpoint(seed_ckpt, args.pe_type, args.model_cfg)
+    else:
+        gf_config = GaussianFormerConfig(pe_type=args.pe_type).with_overrides(args.model_cfg)
+    if args.model_cfg and is_main_process():
+        print(f"model_cfg overrides: {args.model_cfg}", flush=True)
 
     # --resume is a phase-aware escape hatch (crash recovery), not the normal recipe:
     # it carries the phase + epoch so training continues from where it stopped. The
@@ -467,7 +534,7 @@ def main():
     resume_phase = None
     resume_epoch = 0
     if args.resume:
-        resume_ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
+        resume_ckpt = seed_ckpt
         resume_phase = resume_ckpt["phase"]
         resume_epoch = resume_ckpt["epoch"]
         module = GaussianFormer(gf_config)
@@ -479,12 +546,16 @@ def main():
         # so nothing about the prior optimizer/scheduler/epoch is carried over -- the
         # Phase-2 restore block below is not taken (fresh optimizer + fresh cosine from
         # phase2_lr, global_step/start_epoch = 0). Phase 1 is skipped via the gate below.
-        init_ckpt = torch.load(args.init_from, map_location="cpu", weights_only=True)
         module = GaussianFormer(gf_config)
-        module.load_state_dict(init_ckpt["model_state_dict"])
+        missing = load_seed(module, seed_ckpt["model_state_dict"])
         if is_main_process():
-            print(f"Warm-start (weights only) from {args.init_from} "
-                  f"-> fresh Phase 2 fine-tune", flush=True)
+            if missing:
+                print(f"init_from: {len(missing)} zero-init tensors absent from seed (e.g. {missing[0]})", flush=True)
+            print(f"Warm-start (weights only) from {args.init_from} -> fresh Phase 2 fine-tune", flush=True)
+    elif args.from_scratch:
+        module = GaussianFormer(gf_config)
+        if is_main_process():
+            print(f"FROM SCRATCH: random init, latent_dim={gf_config.latent_dim}", flush=True)
     else:
         module = transfer_weights(config.renderformer_model_id, gf_config)
 
@@ -500,7 +571,7 @@ def main():
     # DDP is constructed per phase, AFTER requires_grad is set. Freezing the backbone
     # before the wrap means DDP's reducer registers only the trainable encoder params,
     # so find_unused_parameters=False is correct (no Phase-1 crash, no corruption).
-    if resume_phase != "phase2" and args.init_from is None:
+    if resume_phase != "phase2" and args.init_from is None and not args.from_scratch:
         trainable_names = freeze_backbone(module)
         if is_main_process():
             print(f"Phase 1 trainable params: {trainable_names}", flush=True)
@@ -524,9 +595,9 @@ def main():
             "phase1", p1, ray_generator, dataloader, optimizer, scheduler,
             config, config.phase1_epochs, device, config.save_dir,
             config.log_interval, args.save_interval,
-            args.log_loss_weight, args.lpips_loss_weight,
+            args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
             model_config, global_step, val_dataloader=val_dataloader,
-            train_sampler=train_sampler, start_epoch=phase1_start,
+            train_sampler=train_sampler, start_epoch=phase1_start, grad_accum=args.grad_accum,
             keep_last_n=args.keep_last_n,
         )
         del p1  # drop the Phase-1 DDP wrapper; its reducer hooks go inert once unused
@@ -553,9 +624,9 @@ def main():
         "phase2", p2, ray_generator, dataloader, optimizer, scheduler,
         config, config.phase2_epochs, device, config.save_dir,
         config.log_interval, args.save_interval,
-        args.log_loss_weight, args.lpips_loss_weight,
+        args.log_loss_weight, args.lpips_loss_weight, args.fg_bg_weight,
         model_config, global_step, val_dataloader=val_dataloader,
-        train_sampler=train_sampler, start_epoch=phase2_start,
+        train_sampler=train_sampler, start_epoch=phase2_start, grad_accum=args.grad_accum,
         keep_last_n=args.keep_last_n,
     )
 

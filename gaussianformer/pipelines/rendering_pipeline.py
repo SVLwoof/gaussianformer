@@ -81,15 +81,21 @@ class GaussianFormerRenderingPipeline:
         # Flatten triangles: [bs, num_tris, 3, 3] -> [bs, num_tris*9]
         # Flatten vn: [bs, num_tris, 3, 3] -> [bs, num_tris*9]
         # Flatten tri_vpos_view_tf: [bs, nv, num_tris, 3, 3] -> [bs, nv, num_tris*9]
+        canvas = None
+        if self.config.canvas_cond:
+            from gaussianformer.utils.canvas import render_canvas
+            canvas = render_canvas(gaussians, mask, c2w, fov.reshape(bs, nv), resolution)
+
         with torch.no_grad(), torch.autocast(device_type=self.device.type, dtype=torch_dtype):
             rendered_imgs = self.model(
                 gaussians=gaussians,
                 valid_mask=mask,
                 rays_o=rays_o,
                 rays_d=rays_d,
-                # Pass only the positional part for view transformation
-                gaussians_view_tf=gaussians_for_view_tf[..., :self.config.pos_dim],
+                canvas=canvas,
+                gaussians_view_tf=gaussians_for_view_tf[..., :self.config.pos_dim],  # camera-frame position
                 tf32_view_tf=tf32_view_tf,
+                fov=(fov / 180. * torch.pi).reshape(bs, nv),
             )
 
         # Process output

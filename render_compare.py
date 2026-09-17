@@ -29,7 +29,7 @@ from simple_ocio import ToneMapper
 
 from data_external.orbit import make_orbit_views
 from gaussianformer.models.config import GaussianFormerConfig
-from gaussianformer.models.gaussianformer import GaussianFormer
+from gaussianformer.utils.checkpoint import load_checkpoint
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
 from infer_gaussian import load_single_gaussian_h5_data
 
@@ -75,6 +75,7 @@ class ModelSpec:
     ckpt: Path
     label: str
     pe_type: str
+    model_cfg: list[str] | None = None  # GaussianFormerConfig overrides for a BASE checkpoint
 
 
 def parse_model(s: str) -> ModelSpec:
@@ -83,10 +84,15 @@ def parse_model(s: str) -> ModelSpec:
 
 
 def load_model(spec: ModelSpec, device: torch.device) -> GaussianFormerRenderingPipeline:
-    config = GaussianFormerConfig(pe_type=spec.pe_type)
-    model = GaussianFormer(config)
     ckpt = torch.load(spec.ckpt, map_location="cpu", weights_only=True)
-    model.load_state_dict(ckpt["model_state_dict"])
+    if "lora" in ckpt:
+        # Adapter-only checkpoint: the recorded base (its stored config + the adapter's recorded
+        # overrides), re-wrapped, A/B loaded and folded in.
+        from gaussianformer.layers.lora import load_lora
+        model, _ = load_checkpoint(Path(ckpt["lora"]["base_ckpt"]), spec.pe_type, ckpt["lora"].get("model_cfg") or None)
+        load_lora(model, ckpt, merge=True)
+    else:
+        model, _ = load_checkpoint(spec.ckpt, spec.pe_type, spec.model_cfg)
     model.eval()
     pipe = GaussianFormerRenderingPipeline(model)
     pipe.to(device)

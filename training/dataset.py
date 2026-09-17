@@ -30,6 +30,7 @@ class GaussianRenderDataset(Dataset):
         max_samples: int | None = None,
         augment_rotation: bool = False,
         views_per_epoch: int | None = None,
+        data_seed: int = 0,
     ):
         self.gaussian_h5_dir = Path(gaussian_h5_dir)
         self.renders_dir = Path(renders_dir)
@@ -39,6 +40,7 @@ class GaussianRenderDataset(Dataset):
         # granularity, while the model still covers all views across epochs. Call set_epoch()
         # each epoch to redraw (seeded by epoch so every DDP rank agrees on the selection).
         self.views_per_epoch = views_per_epoch
+        self.data_seed = data_seed  # 0 = order keyed on the epoch alone (default, reproducible)
         # On-the-fly Haar-uniform scene+camera rotation (RenderFormer's RoMa aug). The
         # render is invariant under a joint scene+camera rotation (sh_degree=None ->
         # constant per-Gaussian color, no world-fixed lighting), so the GT image is
@@ -88,7 +90,7 @@ class GaussianRenderDataset(Dataset):
         if not self.views_per_epoch:
             self._active = list(range(len(self.samples)))
             return
-        rng = random.Random(epoch)
+        rng = random.Random(epoch if self.data_seed == 0 else epoch + self.data_seed * 10_000_019)
         active: list[int] = []
         for idxs in self._by_scene.values():
             active.extend(rng.sample(idxs, min(self.views_per_epoch, len(idxs))))

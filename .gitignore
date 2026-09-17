@@ -423,3 +423,23 @@ data_v10/nsweep/*_renders/
 
 # N-sweep checkpoints (large; regenerated)
 checkpoints_nsweep_*/
+checkpoints_depthprune/
+
+# Per-object codec checkpoints (scale-out full fine-tunes, tomato lineage, LoRA adapters, HPO trials)
+checkpoints_codec_*/
+checkpoints_tomato_*/
+checkpoints_lora_*/
+
+# External 3DGS scans: downloaded splats (ply/zip/sog); scripts, licenses and frozen eval-view .npy stay tracked
+data_external/**/*.ply
+data_external/**/*.zip
+data_external/*_sog/
+
+# scale-out object metadata / licences (data lives outside git)
+data_external/*/codec_eval_*_c2w.npy
+data_external/*/license.txt
+data_external/flowers/flowers_*/
+
+# per-scene metric rows of retired diagnostics (canvas share, patch-grid score)
+data_v10/canvas_share/
+data_v10/patch_artifact/

@@ -1873,6 +1873,8 @@ gain).
 
 ## 2026-07-23 — V17 finished; NEW BEST MODEL; skull-fidelity ceiling; scale-up prep + paper renders
 
+> **[CORRECTION 2026-08-06]** The "unseen object" evaluations in this and earlier V16/V17 sections were measured on objects that were in the models' TRAINING set (`dataset.py` globs the whole h5 dir). True held-out mean for V17 is **30.29 dB**. The "generalisation gap" framing is also superseded: the blur is UNDER-fitting (capacity-limited memorisation). See the 2026-08-02..05 and 2026-08-05..07 sections.
+
 ### V17 completed — `checkpoints_v17_512lp/phase2_epoch_36.pt` is the new best model
 Two-stage chain, all 8×g4 killable, seeded from V15's known-good phase1:
 - **Stage A** (`train_v17_256.sh`) — 60 phase-2 epochs @256, pure log-L1. Converged flat at
@@ -2090,3 +2092,1865 @@ blur, not data quantity. Remaining candidates, discriminated by the next experim
 - **ROUTING**: cross-attention can't resolve which of 20k Gaussians land in which 8×8 ray patch
   (rasterisation does this trivially by sort+splat — exactly why rec-GT is flat across detail).
   If wider models don't close the train-fit margin, this is it.
+
+## 2026-08-05..07 — THE CONTROL CAMPAIGN: the floor is CAPACITY
+
+Follow-up to the diagnosis arc: five controlled experiments that turned "architectural floor"
+from a diagnosis into a mechanism. All N=* runs share the nested subsets
+(1 ⊂ 10 ⊂ 100 ⊂ 1000, `data_v10/nsweep/`), the v18_256-ep30 init, 512+LPIPS(0.5), and equal
+optimizer steps unless stated; readout = FG-cropped margin vs the rec-GT ceiling on each run's
+OWN training objects (fit) + a common 300-object held-out set.
+
+### Training-code cleanup first (semantics-preserving, PR'd)
+`train.py`/`dataset.py`: EXR-resize corruption fixed, uint8 target re-quantization removed,
+`--max_samples` prefix bias → seeded subset, per-step `.item()` syncs → on-device accumulators,
+`--weight_decay`/`--fg_bg_weight`/`--latent_dim`/`--encoder_layers`/`--view_layers`/
+`--from_scratch` flags added. Same-node OLD/NEW bench: **identical 117.4 s/epoch** (sync removal
+is NOT a speedup at production shape — GPU-bound) with loss curves matching to 3 decimals.
+
+### Recipe controls: aug + weight decay are EXONERATED at scale
+| arm (N=100 unless noted) | train-fit margin | heldout margin |
+|---|---|---|
+| baseline (V17 recipe) | 13.40 | 17.93 |
+| N=10 baseline → aug off + wd 0 | 7.57 → **5.72** | 20.47 → 20.55 |
+| N=100 aug off + wd 0 | **13.13** | 17.90 |
+| N=100 **fg-weighted loss** (`--fg_bg_weight 0.05`) | **11.77** | **17.66** |
+
+- The aug/wd effect is −1.85 dB at N=10 but **−0.27 dB at N=100** — a small-N artifact
+  (rotation-equivariance is a big relative burden on 10 objects). Not a lever at scale; keep both.
+- **fg-weighted loss is the only intervention improving BOTH columns** (−1.63 fit, +0.27
+  heldout; eval LPIPS unchanged → real pixel accuracy). The loss had the same whole-image
+  dilution as the metric we already distrusted: objects are 2–7% of pixels, and the log-L1 val
+  "floors" sit at the 8-bit target quantization noise. **Production-recipe candidate.**
+- N=10 ctrl also exposed a perceptual/pixel split: train LPIPS reaches ~N=1 level (0.0011)
+  while PSNR stays 5.7 dB short — fits perceptually, not pixel-precisely (coherence story).
+
+### From-scratch is UNTRAINABLE — RenderFormer pretraining is load-bearing
+Width pair (d768-scratch control vs d384-scratch, depth preserved): both arms — straight to 512
+AND with a matched 256 log-L1 warmup — park at **LPIPS ≈ 0.092–0.093** and never move (d384 ran
+its full 600-epoch schedule flat; from-scratch 256 converges only to log 0.013 vs warm 0.0008).
+**The 0.092 plateau is a degenerate attractor** that swallowed four inits this week; only intact
+pretrained weights escape it, and the 512+LPIPS objective supplies no useful gradient until the
+output is roughly right. Width capacity comparison therefore unanswerable from scratch — but
+"pretraining is structural, not convenience" is a finding.
+
+### Depth-pruned probe: CAPACITY BINDS
+d=768 kept (weights load), enc 12→6 + view 6→4 (**DPT taps the LAST 4 view layers — view depth
+≥4 is an architectural minimum**; take-1 died on the unpack), warm layer-drop init
+(`make_pruned_ckpt.py`, even layers, 114.6M vs 194.9M), 256-recovery stage R (escapes the
+attractor; recovered to 0.0011 vs intact 0.0008 → init damage bounded small), then the exact
+N=100 baseline schedule:
+**train-fit margin 17.23 vs 13.40 (−40% params → −3.8 dB fit), heldout 22.75 vs 17.93.**
+
+### N=1 controls (user-requested): anchors validated, and the model BEATS the ceiling
+Under the CURRENT recipe (aug ON, wd ON, 30k steps): objav scene_0387 margin **−2.15 dB**
+(48.47 vs rec-GT 46.31, LPIPS 0.001 — it corrects pruning artifacts toward true GT; **rec-GT is
+an information bound, not a pixel bound**); tomatoes train LPIPS 0.00007 ≈ the June probe.
+Heldout collapses to 19 dB (catastrophic forgetting, as expected).
+
+### SYNTHESIS — the mechanism of the 14 dB floor
+- fit vs **N** at fixed capacity: **−2.15 → 7.57 → 13.40 dB** (N=1→10→100)
+- fit vs **capacity** at fixed N=100: **13.40 → 17.23 dB** (194.9M → 114.6M)
+
+Both axes move together: GaussianFormer is a **capacity-limited memorizer** — per-object
+fidelity tracks objects-per-parameter. That is why V17 under-fits its own training set by 14 dB
+and why 2× data (V18) could never have helped. **V19 levers, evidence-backed:** (1) more
+capacity via warm depth-EXPANSION (layer duplication; width is closed — scratch untrainable);
+(2) fg-weighted loss; (3) keep aug/wd, keep the pretrained init.
+
+### Infra (memory + scripts updated)
+khan-01/02 insta-fail all jobs at prolog (0–1 s, no output file) while sinfo reports healthy —
+excluded everywhere, report to admins. Killable preemptions register FAILED (not requeued) —
+resubmit manually; checkpoint cadence must beat the preemption interval or a run thrashes.
+
+## 2026-08-08..13 — capacity fully eliminated; the READING CEILING isolated; tomato-codec pivot
+
+### The elimination table completed (all N=100, vs baseline train-fit margin 13.40)
+Depth 18/9 (287M) 13.43 | enc-only 13.38 | view-only 13.42 | FFN x8 (322M) 13.35 | input-head MLP
+13.43 | log-scale input 13.43 — **all exactly flat**. From-scratch untrainable at any width (LPIPS
+~0.092 attractor; only intact pretrained inits escape; 256-ramp required for any damaged init).
+What DID move fit: **fg-weighted loss 11.77** and **cosine-cycle restarts**: 30k→60k→90k steps =
+13.40→12.26→11.48, IDENTICAL for 195M and 287M at every point (capacity dead at all budgets);
+decelerating toward an extrapolated ~10 dB optimization asymptote.
+
+### Tomatoes rebuilt with the modern pipeline (219k-Gaussian real scan, 11x prune)
+Recovery lifts the ceiling 29.61 → **46.05 dB** — its biggest validated win; the June "20k can't
+hold real scans" cap was pruning quality, not representation. 4-way (same rec input to both
+models): GT | rec-GT 46.05 | **plain V17 32.44** | **overfit 53.02** (train views).
+
+### THE KEYSTONE: the ~30 dB reading ceiling (novel-view overfit probe, user-suggested)
+Overfit on train views 52.8 dB; on NOVEL views **29.9 dB while the input holds 44.9 dB at those
+same angles**. June's 30.5-vs-29.7 was input-starved and ambiguous; now input +15 dB → output +0.
+Convergence across regimes: overfit-novel 29.9 ≈ V17-on-tomatoes 32.4 ≈ general-model 30.9.
+**Reading scenes from tokens caps at ~30 dB regardless of training regime, data, capacity,
+optimization, conditioning, or input quality. Weights-recall (train views, N=1) bypasses it.**
+The bottleneck is the cross-attention readout (ray tokens must approximate projection+occlusion
+with learned dot-products; rasterization does it exactly — why rec-GT is flat at ~45-46).
+
+### NEXT ARCHITECTURE DIRECTION (flagged for after the codec work): geometry-biased cross-attention
+Add computed projection proximity as a zero-init-gated bias on view-transformer attention logits
+(camera-space positions already available as gaussians_view_tf). Warm-safe by construction;
+falsifiable on the tomatoes-novel-view harness (prediction: 30 → toward 45). Alternatives ranked:
+projection-restricted top-k keys; splat-then-refine hybrid (rasterized canvas as conditioning);
+transmittance/occlusion bias. See session notes 2026-08-13.
+
+### IN FLIGHT: tomato "neural codec" overfit (branch exp/tomato-codec)
+Rationale (user): a per-scene model that beats rasterizing its own compressed splat on EVERY view
+is a useful artifact. Train = 200 RANDOMIZED views (az/el free, radius 1.35-2.15 zoom) targeted on
+full-splat renders, input = recovered 20k. Eval = disjoint random views + radius EXTRAPOLATION
+(1.15 / 2.45) so view-interpolation cannot masquerade as reading. Jobs 31272109 (datagen) →
+31272110 (train, Sagie 4x; no idle 8-GPU killable at submit). Gate: novel-view PSNR vs rec-GT 46.
+
+## 2026-08-13..16 — the CODEC arc: view coverage is a lever; near-parity with rasterization at N=1
+
+### The reading-ceiling revision (codec v1, 200 randomized views incl. zoom 1.35-2.15)
+Novel-view (in-range) 39.6 dB vs the 14-view overfit's 29.9 — **the "~30 dB reading ceiling" was
+substantially VIEW SPARSITY**, not a hard readout limit. But zoom EXTRAPOLATION collapsed
+(close 27.0 / far 27.4 vs rec-GT 38.7/45.8): the model learns the covered view MANIFOLD, not a
+camera-independent object. 0/40 views beat rec-GT.
+
+### v2 (500 views, radius 1.05-2.55 = eval interior): zoom collapse GONE
+40.7 / 36.1 / 42.0 (rand/close/far) — close +9.1, far +14.6 purely from radius coverage in
+training. First 3 individual novel-view wins over rec-GT.
+
+### v3 (1500 views + 2nd cosine cycle): NEAR-PARITY
+**42.38 / 38.60 / 43.83 vs rec-GT 44.00 / 38.66 / 45.79** — close-range statistical parity
+(-0.06 dB, wins 5/8); 11/40 views beat rec-GT overall; far-set LPIPS BETTER than rec-GT.
+Trajectory 39.6→40.7→42.4 not yet bent. Strips: data_external/tomatoes/renders/codec*_verdict*.
+User rationale: a per-scene model beating rasterization of its own compressed splat = useful
+artifact (neural codec for single Gaussian scenes). Remaining ~1.6-2.0 dB: more views/cycles
+(brute) vs geometry-biased attention (mechanistic) — direction call for Sagie.
+
+### IN FLIGHT: the codec method at N=10 (jobs 31286027→28→29→30, branch exp/tomato-codec)
+150 random views/object x the 10 nested objects (full-splat targets from the retained full_h5s),
+2 cycles = 60k steps; eval = the standard orbit views, which are NOVEL for this model. Question:
+does the coverage lever survive weight sharing? Ladder refs: N=10 ctrl train-view fit 5.72;
+reading regime ~30; codec-at-N=1 novel 42.4. If it transfers -> view-dense supervision (free via
+rasterization) joins the V19 recipe; if not -> coverage was substituting for per-object capacity
+and geometry-biased attention inherits the burden.
+
+### Standing V19 recipe facts (unchanged): fg-weighted loss + multi-cycle schedule; architecture
+changes all flat at N=100; geometry-biased cross-attention = flagged next architectural probe.
+
+### LATE-READ VERDICT (2026-08-16): fg-loss STACKS with cycling
+expand-r2+fg (60k steps + fg-weighted loss): train-fit margin **10.04 dB** — best of the campaign
+(vs 11.48 for 90k plain cycles, 11.77 for fg alone at 30k). The two validated levers are additive.
+Heldout 18.44 (vs 17.93): at fixed N=100 the extra fit is memorization-flavored — full-N behavior
+is the V19 question. V19 recipe: fg + multi-cycle, confirmed compound.
+
+## 2026-08-16 (later): geometry-biased cross-attention BUILT + N=100 probe launched
+Branch exp/geom-bias-attn. Implementation surfaced the smoking gun: the view transformer's RoPE
+assigns EVERY patch token the same position (the camera origin), so cross-attention logits carry
+zero per-patch geometry — "which Gaussians lie on my ray" is inferred from direction features
+alone (consistent with the coherence probe: energy present, spatially misplaced). Change: per
+view layer, a zero-init scalar gate x cos(patch ray dir, camera->Gaussian dir) added to the
+cross-attn logits (--geom_bias, train + ceiling_eval). Gate=0 verified BIT-EXACT vs v18_256-ep30;
+biased layers run SDPA (~105 s/epoch, roughly baseline cost). Chain: probe 31287211 (passed,
+no OOM on 45G) -> main 31287212 (EXACT N=100 baseline schedule, 30k steps, killable) -> eval
+31287213 (TAG=nsweep_n100_geombias). Read: train-fit margin vs baseline 13.40; also read the
+learned gate values — gates parked at zero mean the model declined the hint. 8-GPU attempt
+abandoned: no whole node free (firefoot-13 IDLE+DRAIN bad GPU; khan excluded), and the 4-GPU
+fallback restores exact step-count comparability anyway.
+
+## 2026-08-17: BOTH probes land — two clean negatives
+### Geom-bias verdict: the model DECLINED the geometry hint
+nsweep_n100_geombias train-fit margin **13.40 dB — identical to baseline 13.40** (heldout 17.93,
+also identical). The learned gates settled at -0.005..-0.029, i.e. essentially zero: given a free,
+exact "which Gaussians are on your ray" signal in the cross-attn logits, 30k steps of training
+chose not to use it. The routing-prior hypothesis is falsified at this scale — the bandwidth
+bottleneck is NOT cross-attention routing. (Chain 31287211-13, branch exp/geom-bias-attn.)
+
+### N=10 codec verdict: view coverage does NOT survive weight sharing (at this budget)
+nsweep_n10codec on the standard orbit views (NOVEL for this model): model 30.21 dB, margin
+14.24 — parked exactly at the old ~30 dB reading regime, nowhere near codec-N=1's 42.4 novel.
+150 views/object at N=10 (vs 1500 at N=1) does not transfer; dense-view supervision was
+substituting per-object capacity, not teaching generalizable rendering. Heldout300 margin 20.76
+(worse than V17's 14.65 — expected, 10 training objects). (Chain 31286027-30.)
+
+### Where this leaves V19
+Both mechanistic escape routes just closed: not routing (geom-bias declined), not supervision
+density (codec doesn't share). Confirmed levers remain fg-weighted loss + multi-cycle schedule
+(stack to 10.04 at N=100). Remaining open hypotheses: pruning-score bias (input quality) and
+raw optimization budget (cycles asymptote ~10 dB).
+
+## 2026-08-18: CODEC4 — GOAL MET on the tomatoes: model beats rec-GT on average
+Direction (Sagie + user, 2026-08-17): the per-object codec line IS the line — beat rec-GT on
+average on the tomatoes, then scale to other objects. Codec4 scaled v3's two validated levers:
+**3x views** (4500 randomized, r 1.05-2.55, seed 41, free supervision from the full 219k splat)
+and **cycle continuation** (seeded from codec3_r2 ep80, two more ~30k-step cosine cycles;
+27 ep x 1125 steps each). Branch exp/tomato-codec4; chain 31290091-95, flash-attn confirmed.
+
+**Cycle 1** (checkpoints_tomato_codec4/phase2_epoch_27.pt): rand -0.50 / close **+1.74** /
+far -0.81 — close-set flips positive for the first time; average gap -0.11 dB (v3 was -1.38).
+
+**Cycle 2 FINAL** (checkpoints_tomato_codec4_r2/phase2_epoch_27.pt): rand **-0.06** (13/24
+views won) / close **+2.29** (6/8) / far **-0.34** (3/8) = view-weighted average **+0.36 dB
+over rec-GT, 22/40 views won**; model LPIPS beats rec-GT on all three sets. Verdicts:
+data_external/tomatoes/renders/codec4{_c1,}_verdict.{png,json}.
+
+Both levers still deliver: 3x views alone was worth ~+1.3 dB average, the extra cycle ~+0.45.
+Residual loss is concentrated in ONE view — the grazing-angle plate view (close v1, -3.5);
+targeted view sampling near grazing elevations is the obvious next lever if we need margin.
+**Next per the direction: scale the recipe to other objects.**
+
+## 2026-08-18: CODEC5 launched — squeeze pass targeting views-won
+User directive: before scaling out, push the tomatoes further; the KPI is a higher views-won
+count (codec4: 22/40). Two changes: (1) **9000 views** = codec4's 4500 (reused via symlinks) +
+4500 new views drawn from GRAZING elevations (el -15..20 deg, same az/radius coverage) — the
+surviving losses concentrate there (close v1 = edge-on plate view, -3.5); (2) **8xbs1** on a
+whole idle node (firefoot-09/10/17 were free; runs on firefoot-17), so 9000/8 = the same 1125
+steps/epoch and each ~30k-step cosine cycle sweeps 2x the data at codec4's wall time (~8.5h).
+Seeded from codec4_r2 ep27 (cycle continuation). Effective batch 4->8 (user-approved).
+Chain: 31296841 datagen -> 31296842 cycle1 -> 31296843 eval-c1 (TAG codec5_c1) -> 31296844
+cycle2 -> 31296845 eval-c2 (TAG codec5). Eval sets FROZEN (codec_eval_*) for v1-v5
+comparability; evals reuse tomatoes_codec4_eval.py via CKPT/TAG env. Faster-iteration knob
+if needed: EPOCHS_OVR=14 = ~15k-step cycle in ~4.5h (untested annealing, kept at 30k for now).
+Next in parallel: pick 10 scale-out objects with the user (color-rich + high-freq, >=1 simple
+object as a convergence case study; NO HDR-streak/emissive objects). NOTE: data_v10/full_h5s
+was deleted 2026-08-17 — chosen objects need their FULL splats rebuilt via the data_v10
+pipeline before dense-view rasterization.
+
+### Scale-out object list LOCKED (user + Claude, 2026-08-18)
+10 objects from the 1806-object UNSEEN val pool (full splats in data_v10/full_h5s_val, recovered
+20k in h5s_20k_rec_val — nothing to rebuild). Rich: scene_0262 painted plate, scene_0772 sandal,
+scene_1078 anime figure, scene_1342 boxing ring, scene_0031 seahorse, scene_0223 circus tent,
+scene_1423 molecule toy, scene_1223 brain-hair doll. Simple (cycles-to-beat-rec-GT case study):
+scene_0959 apple, scene_0874 clay vase. All pass the HDR-streak screen (blown<2% + halo/core
+ratio + visual curation; the first auto-pick surfaced the chest & two glow objects — dim
+volumetric streaks evade a saturation-only filter). One model per object; recipe frozen after
+the codec5 verdict lands.
+
+## 2026-08-18 (late): CODEC5 cycle 1 — ALL sets beat rec-GT; recipe FROZEN; fleet launched
+Codec5 c1 verdict (checkpoints_tomato_codec5/phase2_epoch_27.pt): rand **+0.56** (17/24) /
+close **+2.89** (7/8) / far **+0.28** (6/8) = **+0.97 dB view-weighted avg, 30/40 views won**
+(codec4: +0.36, 22/40). The grazing-view half did its job: the edge-on plate view went
+-3.5 -> -1.8 and both rand & far flipped positive. Cycle 2 (31296844) running for the margin.
+
+**RECIPE FROZEN for scale-out:** 9000 views (4500 uniform el -15..55 + 4500 grazing el
+-15..20, r 1.05-2.55), 8xbs1, ~30k-step cosine cycles (27 ep x 1125 steps, lr 5e-5, aug ON,
+LPIPS 0.5), 2 cycles, cold start from v18_256-ep30. Apple pilot (scene_0959, 31300959)
+already running this exact recipe on firefoot-10, save_interval 9 for crossing-point analysis.
+**9-object fleet launched** (killable + requeue; cluster saturated, they queue for freed
+GPUs): 0262/0772/1078/1342/0031/0223/1423/1223/0874, each c1 -> evals(9/18/27) -> c2 ->
+evals, jobs 31304895-31304963. Generic scripts: data_v10/train_codec_scaleout.sh,
+data_v10/codec_scaleout_eval.sh, data_external/codec_scaleout_eval.py.
+
+## 2026-08-19: CODEC5 FINAL — tomatoes decisively closed: +1.30 dB avg, 34/40 views
+Cycle-2 verdict (checkpoints_tomato_codec5_r2/phase2_epoch_27.pt): rand **+0.88** (20/24) /
+close **+3.23** (7/8) / far **+0.61** (7/8). Ladder: v3 -1.38 avg -> v4 +0.36 (22/40) -> v5c1
++0.97 (30/40) -> **v5 final +1.30 (34/40)**. Model LPIPS beats rec-GT on every set. The 6
+remaining losses are all small; the grazing plate view is down to -1.2 (from -3.5 at v4).
+The tomato squeeze directive (higher views-won) is satisfied; per-object codec DECISIVELY
+beats rasterizing its own compressed splat. Attention shifts to the 10-object scale-out
+fleet (running under the 2-slot GPU throttle per user request; first verdicts pending).
+
+## 2026-08-19: branch/PR hygiene — the campaign stack is now reviewable
+Local `main` was stale at the public-release commit (87fce5e) while origin/main had already
+merged PR #5 (data/v10-scaleup). Measured against the *real* origin/main (8109ae6) the whole
+experiment stack is **42 commits / ~3.2K insertions**, not the ~310K the stale baseline
+implied — the giant diff was entirely data_v10/object_list_train.json (240K lines), already
+upstream. Local main fast-forwarded.
+
+The nine branches are strictly nested (each contains its predecessors), so they were opened
+as a **stacked PR chain**, each based on the one below — merge in numeric order:
+  #6  exp/capacity-controls    -> main            N=100 memorization control (aug off, wd 0)
+  #7  exp/fg-weighted-loss     -> #6              --fg_bg_weight; 13.40 -> 11.77 (surviving lever)
+  #8  exp/width-capacity       -> #7              --latent_dim/--from_scratch; width FLAT
+  #9  exp/depth-capacity       -> #8              layer-pruned probes + N=1 controls; depth FLAT
+                                                  (+ real fix: view transformer needs >=4 layers,
+                                                   DPT taps the last 4)
+  #10 docs/campaign-log        -> #9              campaign log; corrects superseded claims
+  #11 exp/v19-depth-expansion  -> #10             growth arms FLAT; r2 gain was steps not capacity;
+                                                  tomato rec-20k rebuild (ceiling 29.61 -> 46.05)
+  #12 exp/tomato-codec         -> #11             codec v1-v3 (near-parity) + N=10 NEGATIVE
+  #13 exp/geom-bias-attn       -> #12             --geom_bias FALSIFIED (gates ~0); bit-exact off
+`exp/tomato-codec4` (codec4/codec5 + the 10-object scale-out, 11 commits) is pushed as a
+backup but deliberately NOT PR'd yet — the fleet is still producing verdicts on it.
+
+**Repo fix while doing this:** the 2026-08-18 storage cleanup had deleted *tracked source*
+under data_v2/, data_v9/ and gaussian_h5s/ (the bulk data there was gitignored, the scripts
+and demo h5s were not). Restored via `git checkout` — 142 MB, 25 files. Lesson: `rm -rf` on a
+data directory needs a `git status` check afterwards.
+
+## 2026-08-20: warm-restart dip — mid-cycle evals are NOT comparable
+Evaluated the apple's cycle-2 epoch-9 checkpoint early (job 31332255) instead of waiting for
+the cycle to finish. Result looked alarming: **41.35/39.03/39.83 vs rec-GT 50.17/46.03/53.07
+= -9.34 avg, 0/40** — a ~7 dB REGRESSION from cycle 1's end (47.96/45.65/49.17, -2.18, 6/40).
+The rec-GT baseline is byte-identical across all four apple evals, so this is not an eval bug.
+
+**Cause: the cosine warm restart.** Each cycle re-instantiates CosineAnnealingLR at
+phase2_lr=5e-5, so epoch 1 of a cycle yanks LR back to peak and knocks the model out of the
+minimum it had annealed into; it re-anneals over the cycle. Epoch 9/27 is measured near peak
+LR, i.e. at the worst point. This retro-explains why every END-of-cycle number in the tomato
+ladder improved monotonically (-1.38 -> +0.36 -> +0.97 -> +1.30) while nothing mid-cycle was
+ever measured.
+
+**Consequences:**
+- Only END-of-cycle checkpoints (epoch 27; epoch 20 for the 6-GPU vase c1) are comparable
+  across objects/cycles. Intra-cycle points measure schedule phase, not capability.
+- My earlier extrapolation ("apple crosses rec-GT early-to-mid cycle 2", from the +2 dB/9
+  epochs trend inside cycle 1) was WRONG for this reason — within-cycle slope cannot be
+  extended across a restart boundary. Expect the crossing at the END of cycle 2.
+- The fleet's scheduled epoch-9/18 evals still run (they cost ~15 min on a killable GPU) but
+  should be read as progress traces only, never as cross-object comparisons.
+- Dashboard updated: end-of-cycle points draw solid, mid-cycle points hollow, with a legend
+  note (data_v10/codec_scaleout_dashboard.py).
+
+### Checkpoint cadence vs preemption window (2026-08-20)
+The ring and vase killables spent ~12 h making ZERO durable progress: the cluster was handing
+out slots shorter than their save intervals (9 ep ~3 h, 5 ep ~2.5 h), so every preemption
+discarded the whole slot's work. Neither had written a checkpoint since Aug 19.
+**Rule: save_interval must be shorter than the typical preemption window, and must DIVIDE the
+epoch count** (else the final epoch gets no numbered checkpoint — 27 admits 1/3/9/27, 20
+admits 1/2/4/5/10/20). Rebuilt both chains: ring saves every 3 ep (~1 h, resumes from ep 18),
+vase every 2 ep (~1 h on 6 GPUs, resumes from ep 15). Mid-cycle evals dropped — per the
+warm-restart finding only end-of-cycle checkpoints are comparable, so each cycle now has
+exactly one eval. Jobs: ring 31333331/33, vase 31333335/37.
+
+## 2026-08-20: apple cycle 2 — FLAT, and the "simple object" premise inverts
+Apple (scene_0959) end-of-cycle results: **c1 −2.18 dB / 6-of-40 → c2 −2.14 dB / 7-of-40**.
+A full second 30k-step cycle bought +0.04 dB and one view. Cycles have SATURATED for this
+object, unlike the tomato ladder where every cycle paid (−1.38 → +0.36 → +0.97 → +1.30).
+
+**Why — the bar, not the model.** Per set the apple's c2 is model 48.00/45.64/49.26 against
+rec-GT **50.17/46.03/53.07**. Compare the finished tomato: model 44.88/41.89/46.40 against
+rec-GT 44.00/38.66/45.79. **The apple's model is ~3 dB BETTER in absolute PSNR than the
+tomato's and still loses**, because a smooth simple object is rasterized almost perfectly by
+its recovered 20k splat, putting rec-GT ~6 dB higher.
+
+So "beat rec-GT" difficulty is governed by **how well the compressed splat represents the
+object**, not by how hard the object is to render:
+- SIMPLE/smooth (apple): model renders it superbly (48 dB) but rec-GT is near-perfect (50) → hard.
+- RICH/detailed (plate, sandal, figure at ~−8.5): rec-GT is beatable in principle, but the
+  MODEL cannot yet render the detail → hard for the opposite reason.
+- TOMATOES: the sweet spot — a real scan detailed enough to handicap the 20k splat (rec-GT
+  44.0) yet learnable to 44.9 with 180k steps + 9000 views.
+
+This reframes the scale-out: the tomato win may sit in a middle band rather than generalising
+uniformly, and the simple-object case study answers its own question — a simple object is NOT
+the quick win we assumed. Open question for the remaining objects: where does the crossover
+band actually lie, measured as (rec-GT quality) vs (model attainable PSNR)?
+
+**Bug fixed while reading this:** the eval's default TAG was scene+epoch, so cycle-2 verdicts
+silently OVERWROTE cycle-1's (both end at phase2_epoch_27). Cycle-1 apple JSON/PNG were lost
+and are being regenerated with cycle-qualified tags; the numbers themselves survived in this
+log. Tag now includes the checkpoint dir (data_external/codec_scaleout_eval.py).
+
+## 2026-08-22: cycle-2 seed bug — empty _r2 dir cold-started c2 from v18
+The c2 seed check tested `[ ! -d ..._r2 ]`. A preempted first slot mkdir's the r2 dir
+before saving anything, so the requeue found the dir, skipped SEED_OVERRIDE, and
+cold-started from v18_256 — i.e. re-ran cycle 1 labelled as cycle 2. Bit **plate 0262**
+(its r2 ep9, quarantined as TAINTED_*.pt.bad) and **sandal 0772** (caught at ~1.2k steps,
+requeued). Fix (ca42da4): cycle 2 always sets SEED_OVERRIDE (the resume glob still wins
+when checkpoints exist), and default save_interval 9→3 per the preemption-cadence rule.
+0959/0874/1342 r2 runs predate the empty-dir path and their c2 numbers improved over c1 —
+lineages clean.
+
+**Fleet standing (end-of-cycle only, view-weighted avg / views won):**
+apple −2.14 7/40 (c2, SATURATED) · vase −5.49 0/40 (c2) · boxing ring −7.18 3/40 (c2) ·
+plate −8.61 0/40 (c1) · sandal −8.21 0/40 (c1) · figure −8.80 0/40 (c1).
+No scale-out object beats rec-GT yet; cycles pay ~+1 dB on the rich objects (ring c1→c2
+−8.13→−7.18, vase −6.66→−5.49). 0031/0223/1423/1223 still user-held (2-slot throttle).
+
+## 2026-08-22: two real-scan objects added — octopus & crocs slipper (superspl.at, CC BY 4.0)
+Octopus `f9063eda` (1.84M g, fine sucker detail + Rubik's cube color patch) and "new_gopro"
+`6bc0df7c` (actually a fuzzy Crocs slipper, 1.17M g, high-freq fleece texture). Found the
+scriptable download path: the viewer's SOG bundle is public on CloudFront, and the site's
+official PLY download is generated FROM it (MD5-identical) — no lossless original exists.
+Both need the tomato flip_x (superspl.at gravity-down); probes confirmed. New generic prep
+(data_external/prep_external_codec.{py,sh}): raw PLY -> normalize -> 20k prune+recovery ->
+codec_scaleout layout (seed bases 200000/200100). Prep jobs 31351309/10; training chains
+submitted HELD per the 2-slot throttle: octopus c1 31351312 / c2 31351314, gopro c1
+31351316 / c2 31351318, end-of-cycle evals chained (31351313/15/17/19).
+
+## 2026-08-23: c2 sweep COMPLETE — rich objects converge to −7.0…−7.4, none crosses
+All six active objects now have two full 30k-step cycles (end-of-cycle verdicts, weighted
+avg / won-of-40): plate **−6.99** 0 · sandal **−7.13** 0 · ring −7.18 3 · figure **−7.37**
+0 · vase −5.49 0 · apple −2.14 7 (saturated). Cycle-2 gains: plate +1.62, figure +1.43,
+vase +1.17, sandal +1.08, ring +0.95, apple +0.04 — NO decay yet on rich objects, and the
+four rich ones converged to a 0.4 dB band from an 0.7 dB-wide c1 spread. The quota burst
+(user-approved, then rescinded: lab strained, killable-only until further notice) ran the
+three c2s in ~1 day. Proposed next: c3 on vase+ring to measure cycle-gain decay before
+concluding whether cycles can close the gap or the band is bandwidth-limited.
+Octopus c1 (killable, epona-02) training; slipper c1 held.
+
+## 2026-08-24: OCTOPUS c1 — best cold-start in the campaign: −2.44 avg after ONE cycle
+First from-the-wild scan verdict (octopus f9063eda, 1.84M g → 20k rec = 92× compression):
+rand −3.18 (0/24) / close **−0.75** (1/8) / far −1.91 (0/8) = **−2.44 avg, 1/40** at 30k
+steps. Fleet objects sat at −8…−12 at the same budget. Cause per the rec-GT thesis: the
+92× squeeze wrecks the recovered splat — rec-GT bars 38.1/30.6/39.9 are the lowest yet
+(fleet: 43–53) — while the model's 34.9/29.9/38.0 absolute is unbothered by scan density.
+Crossover band reframed: not "tomato-like objects" but "scans dense enough to break their
+own 20k compression." c2 released (killable). Slipper (~60×) is the obvious next test.
+
+## 2026-08-24 (eve): OCTOPUS c2 −1.68 — first regime crossing; 4-GPU accum recipe validated
+Octopus c2 (31351314, 60k steps, seeded from c1 ep27): rand −2.43 (1/24) / close **+0.07
+(4/8)** / far −1.16 (0/8) = **−1.68 avg, 5/40** (c1 −2.44, gain +0.76). Close-range is the
+first eval regime on any scale-out object with a positive delta. Gain per cycle is smaller
+than the rich objects' +0.95…+1.62 — expected since it started nearer the bar.
+
+**4-GPU runs.** Full 8-GPU killable nodes are rare (only firefoot-01/khan-01 free, both
+inside the debian13 upgrade reservation 5787), 4-free slots exist. bs=2 is out (OOM @512 on
+45 GB, no speedup @256 — attention is compute-bound), so `training/train.py` gained
+`--grad_accum` (DDP no_sync on inner micro-steps) and the scale-out script pins the
+effective batch to 8 via `GRAD_ACCUM=8/NPROC` (c41f2a9, 77f4109 adds SAVE_OVR). Sanity
+(31374203, octopus, 4×L40S×accum2, same schedule): ep1 0.015988 / ep2 0.011319 vs the 8×A40
+c1's 0.016186 / 0.011448 — ~1% match. Wall time 2210 s/epoch vs 2257 s on 8×A40 (L40S ≈ 2×
+A40), so 4×L40S costs nothing vs 8×epona. Slipper chain resubmitted as 4-GPU killable:
+c1 31374518 (running epona-02) → eval 31374519 → c2 31374520 → eval 31374521.
+Cluster upgrades to debian13 on 2026-10-05 (test via --reservation=5787); smoke test with an
+isolated venv pending. Standing policy: killable only.
+
+## 2026-08-25: debian13 reservation nodes put to work — 16 idle GPUs claimed (killable)
+The cluster upgrades to debian13-5787 on 2026-10-05; the upgraded test nodes (firefoot-01
+8×L40S, khan-01 8×RTX Pro 6000) sit idle behind `--reservation=5787`. Smoke test
+(`data_v10/deb13_smoke.sh`, isolated venv `/cs/labs/sagieb/shahaf_levy/venvs/gf-deb13`):
+first run failed "no NVIDIA driver" — the 595.80 user-space libs exist in
+`/etc/lib64/nvidia` but ld.so.cache is stale and nvidia-smi is absent; `module load nvidia
+cuda` (nvidia/595.80, cuda/13.3) + `LD_LIBRARY_PATH=/etc/lib64/nvidia` fixes it. Octopus c2
+eval on debian13 reproduces the debian12 verdict to 0.002 dB. Scripts now auto-detect
+debian13 (c7aee4b: venv/cache/lib path/arch-from-torch). Chains launched on the reservation:
+scene_0031 c1 31375607 → 08 → c2 31375609 → 10 (firefoot-01), scene_0223 c1 31375611 → 12 →
+c2 31375616 → 17 (khan-01, sm_120 — flash_attn works). Slipper c1 31374518 (4×A40) running.
+Stale held 8-GPU chains for 0031/0223 (31304927–34, 31304935–42) still queued-held; cancel.
+
+## 2026-08-25: scene_0223 c1 −2.02 (best c1 in the campaign) — khan-01 runs a cycle in 5 h
+scene_0223 c1 (31375611, khan-01 RTX Pro 6000 ×8, 657 s/epoch ≈ 3.4× A40): rand −1.90 (1/24) /
+close −0.21 (3/8) / far −4.19 (0/8) = **−2.02 avg, 4/40** after one cycle — better than octopus
+c1 (−2.44) with a HIGH rec-GT bar (43.8/38.9/46.5), i.e. the model's absolute PSNR (41.9/
+38.7/42.4) is the highest seen; far-range is the whole deficit. c2 31375616 seeded from c1
+ep27, running on khan-01. scene_0031 (firefoot-01) at ep16/27, 1118 s/epoch.
+
+## 2026-08-25: seahorse (scene_0031) c1 −10.4 — highest rec-GT bar yet; debian13 HC drains nodes
+seahorse c1 (31375607, firefoot-01, 8.5 h): rand −10.84 (0/24) / close −8.06 (0/8) / far −11.41
+(0/8) = **−10.4 avg, 0/40**. Model 40.2/36.6/40.4 is ordinary; the bar is 51.0/44.7/51.8 — the
+highest in the campaign (simple object → near-perfect 20k rasterization; cf. apple/vase).
+Confirms the rec-GT-bar thesis from the other side: the fleet spread (−1.7 … −10.4) is bar
+spread, not model spread (model absolute sits at 35–42 for every object).
+Ops: the debian13 health check flags the RUNNING job's own slurm_script as "fugitive" and
+DRAINs the node (firefoot-01 01:31, khan-01 07:27) → chained jobs pinned there hung. Unpinned
+the evals (scontrol update ReqNodeList= Reservation=), seahorse c2 resubmitted 4×L40S
+killable off-reservation (31377176 → eval 31377177). Reported to system group.
+
+## 2026-08-25 (eve): TENT c2 −0.78, 17/40 — closest scale-out object yet; c3 queued
+tent c2 (31377511; resumed from ep21 after the disk-full truncation of ep24/27): rand −0.57
+(**10/24**) / close **+1.00 (7/8)** / far −3.21 (0/8) = **−0.78 avg, 17/40**. Gain +1.24 over c1
+(−2.02) — the largest c2 gain so far. Model 43.2/39.9/43.3 is the highest absolute PSNR of any
+object; far (bar 46.5) is the whole deficit. Script generalised to CYCLE=N (_rN, seeds from
+_r{N-1}); tent c3 submitted 4-GPU killable. Lab share hit 100 % at ~11:00 (2 TB quota, mine
+351 GB): freed ~80 GB by dropping intermediate ckpts of finished cycles; keep_last_n 2.
+
+## 2026-08-26: seahorse c2 −9.11 (gain +1.3); bar-limited as expected
+seahorse c2 (31377491, 4×L40S): rand −9.66 / close −6.35 / far −10.19 = **−9.11 avg, 0/40**
+(c1 −10.4). Same +1.3 dB cycle gain as the rich objects; with a 51 dB bar it is the clearest
+case for the K-sweep (rate–distortion) framing: the model, not the bar, is the constant.
+
+## 2026-08-26: SLIPPER c1 −0.55, 14/40 — best c1 ever; close-range sweep 8/8 (+1.64)
+gopro/crocs slipper c1 (31374518, 4×A40 accum2, 33 h): rand −1.15 (5/24) / close **+1.64
+(8/8)** / far −0.94 (1/8) = **−0.55 avg, 14/40** after ONE cycle. rec-GT bars 35.8/28.2/38.4
+are the lowest in the campaign (1.17M g → 20k = 60× compression of fuzzy fabric). Model
+34.6/29.8/37.5. The dense-wild-scan thesis holds a third time (octopus, tent, slipper): the
+crossover band is set by how lossy the 20k compression is. c2 31374520 running (seeded from
+c1 ep27); expected to cross on avg if the +1 dB cycle gain holds.
+
+## 2026-08-26: K-sweep pilot (rate–distortion, no retraining) — NEGATIVE; codec is realization-specific
+`data_v10/k_sweep.py` (1 GPU, jobs 31383269–72): re-prune the FULL splat to K ∈ {20k,10k,5k,
+2.5k} with the fleet recipe, feed the trained c2 codec the K-splat unchanged, compare with
+rasterizing the same K-splat (both vs full-splat renders; avg over the 40 frozen views).
+
+| object (full N) | K=20k model/raster/Δ | 10k | 5k | 2.5k |
+|---|---|---|---|---|
+| seahorse (50k) | 40.1 / 49.9 / −9.9 | 32.5 / 46.5 / −14.0 | 28.9 / 42.5 / −13.6 | 26.7 / 38.4 / −11.7 |
+| plate (50k) | 36.4 / 44.0 / −7.7 | 27.9 / 38.3 / −10.5 | 23.8 / 33.3 / −9.5 | 21.4 / 29.7 / −8.4 |
+| tent (50k) | 39.2 / 43.3 / −4.1 | 26.3 / 33.4 / −7.0 | 23.3 / 30.0 / −6.8 | 20.6 / 28.7 / −8.1 |
+| octopus (1.84M) | 33.4 / 36.9 / −3.5 | 28.4 / 34.4 / −6.0 | 24.3 / 31.0 / −6.7 | 21.7 / 28.5 / −6.8 |
+
+1. **No free crossing from compressing harder**: the un-retrained model degrades FASTER than
+   the rasterizer at every step (Δ widens by 2–4 dB from 20k→10k, then flattens). The RD
+   framing only survives if retraining at each K recovers the model's 20k-level absolute
+   PSNR; nothing here suggests it would, and it costs a full cycle per (object, K).
+2. **The codec is specific to the splat REALIZATION, not the object**: a fresh 20k prune of the
+   same object costs the model 2–4 dB (tent 43.2→39.2, octopus 35.6→33.4, seahorse 41.4→40.1,
+   plate 37.0→36.4) while the rasterizer moves ≤1.2 dB. Per-object codec models overfit the
+   exact token set they were trained on — a real caveat for any "train once, re-prune later"
+   deployment story, and for eval protocols that regenerate inputs.
+3. Studio scenes are only 50k splats, so 20k is a 2.5× "compression" — which is WHY their bars
+   are 44–51 dB. Octopus at 20k is 92×. The crossover band is a property of the source scan
+   density, consistent with everything since 2026-08-24.
+Decision: K-sweep idea shelved (retrain-at-K unjustified). Stay on cycles for the three wild
+scans (tent c3, slipper c2, octopus c3 running) + 1423/1223 c1s.
+
+## 2026-08-27: TENT c3 −0.05, 25/40 — parity; rand crosses (+0.13, 16/24); c4 queued
+tent c3 (31380320, 4×A40): rand **+0.13 (16/24)** / close **+1.69 (8/8)** / far −2.36 (1/8) =
+**−0.05 avg, 25/40**. Cycle gains: +1.24 (c2) → +0.73 (c3) — decaying but not exhausted; far
+(bar 46.5) is the only losing regime. First scale-out object to win a majority of views and the
+random-view regime. c4 submitted (4-GPU killable) — expected to cross on avg.
+
+## 2026-08-27: octopus c3 −1.21 (gain decaying); MOLECULE c1 −1.11 — a studio object in the band
+octopus c3 (31383257): rand −1.95 (3/24) / close +0.49 (6/8) / far −0.70 (2/8) = **−1.21, 11/40**.
+Gains +0.76 → +0.47: decaying; no c4 queued (would need ~3 more cycles at this rate).
+molecule/scene_1423 c1 (31383249): rand −0.69 (8/24) / close **+0.75 (5/8)** / far −4.26 (0/8) =
+**−1.11, 13/40** — second-best c1 in the campaign, and a STUDIO 50k object. Model 43.9/41.4/43.7
+(highest absolute yet) vs bar 44.6/40.6/48.0. Revises the band: not "wild scans only" but
+"moderate bar" — some studio objects (molecule, tent) sit there; seahorse/plate/sandal do not.
+c2 31383251 running (seeded from c1 ep27). Far-range remains the universal deficit.
+
+## 2026-08-27: doll (scene_1223) c1 −7.32 — bar-limited like plate/sandal
+doll c1 (31383253): rand −7.64 / close −4.07 / far −9.60 = **−7.32 avg, 0/40**; bar 48.2/41.9/50.8.
+Joins the high-bar studio group. c2 31383255 running.
+
+## 2026-08-28: SLIPPER c2 **+0.48 dB, 23/40 — FIRST SCALE-OUT OBJECT TO BEAT rec-GT ON AVERAGE**
+gopro/crocs slipper c2 (31374520, 4×A40 accum2, seeded from c1 ep27): rand −0.10 (11/24) /
+close **+2.90 (8/8)** / far −0.20 (4/8) = **+0.48 avg, 23/40** at 60k steps. Gain +1.03 over c1
+(−0.55). Model 35.7/31.1/38.2 vs bar 35.8/28.2/38.4. The tomato result (+1.30 after 5 cycles)
+now reproduces on a second, independently sourced real scan after only two cycles — and with the
+frozen scale-out recipe, no per-object tuning. Rand and far are at parity (−0.1/−0.2); close is
+the model's regime everywhere (+2.9 here, +1.7 tent, +0.5 octopus). c3 submitted (4-GPU killable).
+Standing: slipper +0.48 (c2) · tent −0.05 (c3, c4 running) · molecule −1.11 (c1, c2 running) ·
+octopus −1.21 (c3) · apple −2.14 · vase −5.49 · doll −7.32 (c2 running) · plate/sandal/ring/figure
+−7.0…−7.4 · seahorse −9.11.
+
+### Slipper vs tomato at equal budget
+| steps | tomato (codec3→5, tuned campaign) | slipper (frozen scale-out recipe) |
+|---|---|---|
+| 30k | — | −0.55 (14/40) |
+| 60k | −1.38 | **+0.48 (23/40)** |
+| 120k | +0.36 (first crossing, cycle 4) | c3 → 90k running |
+| 150k | +0.97 | |
+| 180k | +1.30 (34/40, final) | |
+The slipper crosses ~2 cycles earlier than the tomato did, without per-object tuning. Why easier:
+lower bar (35.8/28.2/38.4 — 60× compression of fuzzy fabric costs the rasterizer more than the
+model) and a large close-range margin (+2.9). Open: whether it keeps climbing like the tomato
+(+0.9 over its last three cycles) — c3 answers that.
+
+## 2026-08-28 (eve): MOLECULE c2 **+0.08, 23/40 — second crossing, and a STUDIO object**
+scene_1423 c2 (31383251, 4×L40S): rand **+0.49 (15/24)** / close **+1.97 (8/8)** / far −3.05
+(0/8) = **+0.08 avg, 23/40** at 60k steps (c1 −1.11, gain +1.19). Model 45.1/42.6/45.0 — the
+highest absolute PSNR of the campaign — vs bar 44.6/40.6/48.0. Second object over rec-GT within
+a day, and the first from the synthetic-studio pool (50k splat, 2.5× compression): the band is
+"moderate bar", not "wild scan". Far-range (bar 48) is again the only losing regime — now the
+consistent pattern on every near-crossing object (tent, molecule, octopus, slipper): the model
+wins close, ties rand, loses far. c3 submitted.
+Scoreboard: slipper +0.48 (c2) · molecule +0.08 (c2) · tent −0.05 (c3) · octopus −1.21 (c3) ·
+apple −2.14 · vase −5.49 · doll (c2 pending) · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-29: doll c2 −5.97 (gain +1.35, bar-limited); no c3
+scene_1223 c2: rand −6.28 / close −2.63 / far −8.38 = **−5.97, 0/40** (c1 −7.32). Same ~+1.3 gain
+as plate/figure; bar 48/42/51 keeps it out of reach. Not continued.
+
+## 2026-08-29: TENT c4 **+0.30, 27/40 — third object over rec-GT**; c5 queued as the last tent cycle
+scene_0223 c4 (31392272): rand **+0.45 (18/24)** / close **+2.05 (8/8)** / far −1.91 (1/8) =
+**+0.30 avg, 27/40** at 120k steps. Cycle gains 1.24 → 0.73 → 0.35 (halving each cycle), so c5
+is worth ~+0.15 more and is the last tent cycle. Three objects now over the bar (slipper +0.48,
+tent +0.30, molecule +0.08), all with the same signature: close +2…+3, rand slightly positive,
+far −2…−3. Far-range is the remaining frontier — its bar is the highest in every object.
+
+## 2026-08-29 (pm): MOLECULE c3 **+0.75, 26/40 — best scale-out result so far**; c4 queued
+scene_1423 c3 (31400001): rand **+1.20 (18/24)** / close **+2.55 (8/8)** / far −2.41 (0/8) =
+**+0.75 avg, 26/40** at 90k steps (c2 +0.08, gain +0.67; c1→c2 was +1.19 — decaying at the same
+~0.55× rate as tent). Model 46.5/43.2/45.6. Overtakes the slipper (+0.48 at 60k; c3 pending).
+c4 submitted (expected ~+0.35 more).
+Scoreboard: molecule +0.75 (c3) · slipper +0.48 (c2) · tent +0.30 (c4) · octopus −1.21 · apple −2.14
+· vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-30: SLIPPER c3 **+1.26, 30/40 — ALL THREE REGIMES POSITIVE, matches the tomato final at half the budget**
+gopro c3 (31395334, 90k steps): rand **+0.70 (17/24)** / close **+3.76 (8/8)** / far **+0.46 (5/8)**
+= **+1.26 avg, 30/40**. Gain +0.78 (c2 +1.03) — decaying slower than tent/molecule. First
+object where far-range crosses (bar 38.4 is low enough). Equals the tomato's final +1.30 (180k
+steps, 5 cycles) at 90k / 3 cycles with the frozen recipe. c4 submitted.
+Scoreboard: slipper +1.26 (c3) · molecule +0.75 (c3, c4 running) · tent +0.30 (c4, c5 running) ·
+octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure −7.0…−7.4 ·
+seahorse −9.11.
+
+## 2026-08-30: MOLECULE c4 **+1.18, 28/40**; c5 queued as the last molecule cycle
+scene_1423 c4 (31406462, 120k steps): rand **+1.62 (19/24)** / close **+3.06 (8/8)** / far −2.01
+(1/8) = **+1.18 avg, 28/40**. Gains 1.19 → 0.67 → 0.43; c5 (~+0.3) is the last. Far still loses
+(bar 48.0) — the only near-bar object whose far bar is that high.
+Scoreboard: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) · tent +0.30 (c4, c5
+running) · octopus −1.21 · apple −2.14 · vase −5.49 · doll −5.97 · plate/sandal/ring/figure
+−7.0…−7.4 · seahorse −9.11.
+
+## 2026-08-30 (noon): CAMPAIGN STANDING — 3/12 objects over rec-GT; all 12 through ≥2 cycles
+End-of-cycle verdicts only (view-weighted avg dB vs rec-GT rasterization of the same 20k splat,
+40 held-out views: 24 rand / 8 close / 8 far). Bars = rec-GT PSNR rand/close/far.
+
+| object | source | bar (r/c/f) | c1 | c2 | c3 | c4 | best (won/40) | status |
+|---|---|---|---|---|---|---|---|---|
+| slipper (gopro) | superspl.at, 60× | 35.8/28.2/38.4 | −0.55 | +0.48 | **+1.26** | running | +1.26 (30) | c4 running |
+| molecule (1423) | studio 50k | 44.6/40.6/48.0 | −1.11 | +0.08 | +0.75 | **+1.18** | +1.18 (28) | c5 running (last) |
+| tent (0223) | studio 50k | 43.8/38.9/46.5 | −2.02 | −0.78 | −0.05 | **+0.30** | +0.30 (27) | c5 running (last) |
+| octopus | superspl.at, 92× | 38.1/30.6/39.9 | −2.44 | −1.68 | −1.21 | — | −1.21 (11) | stopped (gain 0.47) |
+| apple (0959) | studio | 50.2/46.0/53.1 | −2.18 | −2.14 | — | — | −2.14 (7) | saturated |
+| vase (0874) | studio | 50.6/44.2/52.3 | −6.66 | −5.49 | — | — | −5.49 (0) | stopped |
+| doll (1223) | studio | 48.2/41.9/50.8 | −7.32 | −5.97 | — | — | −5.97 (0) | stopped |
+| plate (0262) | studio | 44.9/39.6/45.8 | −8.61 | −6.99 | — | — | −6.99 (0) | stopped |
+| sandal (0772) | studio | 43.6/36.6/48.2 | −8.21 | −7.13 | — | — | −7.13 (0) | stopped |
+| ring (1342) | studio | 46.0/38.0/49.0 | −8.13 | −7.18 | — | — | −7.18 (3) | stopped |
+| figure (1078) | studio | 48.2/43.0/50.9 | −8.80 | −7.37 | — | — | −7.37 (0) | stopped |
+| seahorse (0031) | studio 50k | 51.0/44.7/51.8 | −10.40 | −9.11 | — | — | −9.11 (0) | stopped |
+| *tomato (ref.)* | superspl.at | — | — | −1.38 | — | +0.36 | +1.30 @c5 (34) | closed |
+
+What the table says:
+1. **Crossing = model absolute vs bar, and BOTH vary by object.** Bars range 43.6–51 (rand);
+   model absolute ranges 36–48 (apple 48, molecule 46, tent 44, seahorse 41, plate 37, sandal 36).
+   Apple (bar 50) sits at −2 because the model is excellent on it; plate (bar 45) sits at −7
+   because the model is poor on it. So the earlier "model is flat, bar decides" reading was too
+   strong: bar height explains seahorse/vase/doll/figure, model content-difficulty explains
+   plate/sandal/ring (the fine-detail bandwidth limit from the V17 diagnosis). Objects cross
+   when the two are within ~2.5 dB at c1.
+2. **Cycle gains decay ~0.55×/cycle** (tent 1.24/0.73/0.35; molecule 1.19/0.67/0.43; slipper
+   1.03/0.78) — each object has a ceiling ≈ c1 + 2.5 dB. That predicts who can cross from c1
+   alone: c1 ≳ −2.5 → yes (slipper, molecule, tent, octopus-borderline); c1 ≲ −5 → never.
+3. **Regime signature on every near-bar object: close +2…+4, rand ±1, far −2…−3.** Far loses
+   because its bar is the highest (distant views hide splat artifacts); only the slipper, whose
+   far bar is 38, has crossed there. Far-range is the open frontier.
+4. The frozen recipe (v18-256 init, 9000 views, 30k steps/cycle, 4×bs1×accum2) reproduces the
+   tomato's tuned result on three new objects without per-object work; the slipper reaches the
+   tomato's final +1.3 at half the budget.
+5. Negatives on record: K-sweep (no free crossing from harder compression; codec is realization-
+   specific, −2…−4 dB on re-prune); more cycles cannot rescue bar-limited objects.
+Ops: killable-only since 2026-08-23; lab share at 32 GB free (user chose to keep all data);
+debian13 test nodes drained by the HC "fugitive" bug (reported); branch 26 commits ahead of origin.
+
+## 2026-08-31: TENT c5 **+0.71, 28/40** — tent CLOSED at 5 cycles (150k steps)
+scene_0223 c5 (31406005): rand **+0.87 (18/24)** / close **+2.41 (8/8)** / far −1.48 (2/8) =
+**+0.71 avg, 28/40**. Gain +0.41 (c4 was +0.35 — the decay flattened rather than halving, so
+the "ceiling ≈ c1 + 2.5" rule is conservative: tent is at c1 + 2.7). Trajectory −2.02 → −0.78 →
+−0.05 → +0.30 → +0.71. Declared final per plan; a c6 would likely add ~+0.3 if ever wanted.
+Final scale-out crossings: slipper +1.26 (c3, c4 running) · molecule +1.18 (c4, c5 running) ·
+tent +0.71 (c5, closed).
+
+## 2026-08-31: MOLECULE c5 **+1.47, 29/40 — best scale-out result; molecule CLOSED at 5 cycles**
+scene_1423 c5 (31410702, 150k steps): rand **+1.91 (20/24)** / close **+3.26 (8/8)** / far −1.67
+(1/8) = **+1.47 avg, 29/40**. Trajectory −1.11 → +0.08 → +0.75 → +1.18 → +1.47 (gains 1.19/0.67/
+0.43/0.29 — clean ~0.6× decay). Model 46.5/43.9/46.3. Exceeds the tomato's final +1.30.
+Ops: the lab share hit 0 GB during this eval (other members' writes) — eval + slipper c4 died with
+no log (stdout unwritable); checkpoints verified intact; freed 12 GB by deleting the rebuildable
+debian13 venv/uv-cache; both resubmitted (eval 31429211 → this verdict; slipper c4 31429212
+resumes from ep21). Free space 8.8 GB — unsafe; user notified.
+Final scale-out crossings: molecule +1.47 (c5, closed) · slipper +1.26 (c3; c4 running) · tent
++0.71 (c5, closed).
+
+## 2026-08-31: inference cost — codec model vs gsplat on the SAME 20k splat (A40, 512², molecule c5)
+`data_v10/bench_inference.{py,sh}` (job 31432276). Per view, 40 held-out poses, CUDA-synced:
+
+| | gsplat (packed) | codec (bf16, flash-attn) | ratio |
+|---|---|---|---|
+| latency / view | **0.98 ms** | **476 ms** | 485× |
+| views / s | 1017 | 2.1 | |
+| peak working VRAM | 10 MB | 926 MB | 89× |
+| resident | 1.1 MB (20k×14 floats) | 745 MB (194.9 M params) | |
+| batched: 8 views | 0.27 ms/view | 223 ms/view (4.4 GB) | 830× |
+
+Model split: scene encoder (view-independent, cacheable per scene) 277 ms; view decoder 199 ms/view.
+So amortised over many views of one scene: ~200 ms/view ≈ 5 fps at 512² on an A40 vs gsplat's
+~1000 fps. fp32 not measurable (flash-attn is bf16/fp16 only). Bottom line: ~2.5 orders of
+magnitude slower and ~2 orders more VRAM than the rasterizer — the codec buys quality at
+close range, not speed; any deployment story needs the scene-stage cache and a smaller/
+distilled view decoder. L40S would be ~2× faster than the A40 measured here.
+
+## 2026-08-31: PAUSED — all runs cancelled pending Sagie's input (lab share hit 0 GB twice)
+Nothing queued. Slipper c4 resume (from intact ep24, 3 epochs) is the only unfinished item; the
+truncated ep27 was deleted. Dithering diagnosed (molecule sphere): a 3.8-px stripe at ~1 %
+amplitude from the DPT ConvTranspose(4,4) stride, which becomes visible phase-random high-
+frequency texture on fur/skin under LPIPS 0.5 (MTF>1, coherence ~0.3). Noted; no action for now.
+
+## 2026-08-31: SLIPPER c4 **+1.82, 35/40 — best result of the campaign; slipper CLOSED**
+gopro c4 (31443864, resumed from ep24 after the disk-full truncation; 120k steps): rand **+1.25
+(21/24)** / close **+4.43 (8/8)** / far **+0.91 (6/8)** = **+1.82 avg, 35/40**. All three regimes
+positive for a second straight cycle. Trajectory −0.55 → +0.48 → +1.26 → +1.82 (gains 1.03/0.78/
+0.56); exceeds the tomato final (+1.30, 34/40) on every metric with the frozen recipe at 2/3 the
+budget. FINAL scale-out scoreboard: slipper +1.82 (c4) · molecule +1.47 (c5) · tent +0.71 (c5) —
+3/12 objects over rec-GT; campaign closed pending Sagie's input.
+
+## 2026-09-07: PIVOT — LoRA adapters, rate–distortion vs gsplat at equal bytes (branch `exp/lora-feasibility`)
+Shahaf's reframing: the target is to beat gsplat on quality **at equal bytes**, with the shared
+base model counted as the free decoder. Then an adapter is a fixed cost that displaces
+Gaussians (56 B each in our h5) and must earn back more PSNR than they would.
+
+**Budget rule** (`data_v10/lora_budget.py`, reads only the safetensors header of the V18 seed):
+adapter params = r·Σ(in+out) over targeted Linears; all 116 Linears are 768-wide, so
+attention-only (60 matrices: `in_proj`/`out_proj`/`q,k,v_proj`) costs **8,558 Gaussians per rank**,
+all Linears 23.5k/rank. Dropping 20k→5k frees 15k Gaussians = 840 KB, which pays for attn r=1
+(479 KB) only. The viable operating point is ≥1 MB budgets: LoRA r=1 + ~11.4k vs gsplat 20k.
+Cheaper adapters if LoRA is too fat: view-stage attention only (4.6k/rank), RMSNorm scales only
+(~2.9k), learned prefix tokens (55 Gaussians/token), input encoder only (770). The campaign's
+780 MB per-object checkpoints were never a fair RD point; LoRA makes the comparison honest.
+
+**Code**: `gaussianformer/layers/lora.py` (pure PyTorch, no `peft`; B=0 init reproduces the base
+bit-exactly, merge error 2e-7), `training/train_lora.py` (separate script per Shahaf: one phase,
+frozen base, adapter-only checkpoints with the seed path recorded, auto-resume; no generic val set
+because its loss rises monotonically in every per-object run — it measures forgetting, not object
+quality), `render_compare.load_model` merges adapter checkpoints on load so the verdict eval is
+unchanged, `data_v10/train_codec_lora.sh` (env knobs, 4-GPU killable, lr 2e-4). `train.py` untouched.
+`.gitignore` now covers `checkpoints_{codec,tomato,lora}_*` and downloaded splats.
+
+**HPO**: Optuna TPE controller lives OUTSIDE the repo at `/cs/labs/sagieb/shahaf_levy/lora_hpo/`
+(own uv venv: optuna 4.9 + wandb 0.29, so the training venv is never touched). Space: rank
+{1,2,4,8} × alpha/r {1,2,4} × targets {attn, attn+ffn, view-attn} × lr log[3e-5,3e-3] × dropout
+[0,0.1] × wd {0,0.01,0.1} × grad_accum {1,2,4} (= effective batch 4/8/16; per-GPU bs pinned at 1
+by VRAM). Objective = the object's view-weighted avg ΔPSNR vs rec-GT from the verdict eval;
+proxy budget 6 epochs (full cosine) + eval per trial, 3 trials in parallel, results mirrored to
+wandb project `gaussianformer-lora-hpo`. Caveat: whether 6-epoch rankings hold at 27 epochs is
+unverified; the anchors below are the calibration.
+
+**Running**: slipper (gopro, 20k) anchors r=1/4/16 at lr 2e-4, 27 epochs — jobs 31526729/30/31.
+Reference: full-FT c1 = −0.55 (c4 = +1.82).
+
+## 2026-09-07: weight-delta audit — where full fine-tuning moved the weights, and is it low-rank?
+`data_v10/weight_delta.py` (V18 seed vs slipper c1/c4, molecule c5, tent c5; results in
+`data_v10/weight_delta/crossing_models.json`). Relative change ‖ΔW‖/‖W₀‖ per family and the
+SVD spectrum of each ΔW. All three crossing objects agree:
+
+| family (params) | rel Δ slipper c1 → c4 | share of Δ energy (c4) | median r90 (c4) | top-8 energy |
+|---|---|---|---|---|
+| view FFN (42 M) | 0.13 → 0.25 | **39 %** | 175 | 0.21 |
+| scene FFN (85 M) | 0.08 → 0.17 | 26 % | 83 | 0.44 |
+| DPT decoder convs (10.6 M) | 0.17 → 0.32 | 13 % | – | – |
+| view self-attn (14 M) | 0.08 → 0.17 | 7 % | 114 | 0.29 |
+| scene attn in_proj (21 M) | 0.07 → 0.16 | 6 % | 61 | 0.54 |
+| view cross-attn q/k/v/out (14 M) | 0.08–0.11 → 0.15–0.22 | 5 % | 57–145 | 0.28–0.71 |
+| scene attn out_proj (7 M) | 0.07 → 0.17 | 3 % | 75 | 0.39 |
+| input head (11.5 K) | 0.04 → 0.12 | 0.1 % | 1 | 0.99 |
+| ray_map_encoder, norms | 0.02–0.06 | ≈0 | | |
+
+Three conclusions. (1) **The change is FFN- and decoder-dominated**: FFNs carry ~65 % of the
+delta energy and the DPT convs another 13 %; the attention projections that the default LoRA
+targets carry ~21 %. The hottest single matrices are the last two view-stage FFNs (layers 4–5,
+rel 0.30) and the first scene attention blocks (layers 0–1). (2) **The delta is NOT low-rank**:
+on 768-wide matrices the median number of components for 90 % of the delta energy is 60–175,
+and rank 8 captures 20–55 %; only the view cross-attn q_proj (and a few early scene in_proj)
+are genuinely low-rank (r90 ≈ 12–50, top-16 ≈ 0.86). Later cycles spread the change into MORE
+directions (slipper r90 roughly doubles c1 → c4). Energy is not function — 30k SGD steps also
+wander in directions that may not matter, and a LoRA trained directly can find a different,
+low-rank solution — but the natural solution the optimiser found is broad-spectrum. (3) The
+input head barely moves (0.1 % of energy) and its delta is rank-1: unfreezing it fully (10.7 K
+params) is nearly free but unlikely to be where the gain lives.
+
+Implication for the LoRA pivot: attention-only rank ≤ 8 addresses the minority of the change,
+so the anchors are the test of whether a low-rank re-solution exists at all. The sweep already
+includes `attn_ffn`; worth adding a cheap "view FFN layers 4–5" target (6 matrices, 1.6 K
+Gaussians-equiv per rank) where the energy actually is.
+
+## 2026-09-08: first LoRA verdict + the zero-shot floor (slipper)
+Sweep moved to Sagie's quota (12 GPUs: r=4 anchor + 2 parallel trials; 16 blocked a lab
+member, dropped to 2). Resume bug fixed (5c3da8c: `Path` objects in saved args broke
+`weights_only` loads on resume).
+
+| slipper, 40 held-out views | avg Δ vs rec-GT | rand / close / far | model PSNR |
+|---|---|---|---|
+| **V18 base, zero-shot** (`gopro_v18base`) | **−16.32** | −17.0 / −10.3 / −20.3 | 18.8 / 17.9 / 18.1 |
+| LoRA t001: r=4 view-stage attn only, lr 3.3e-4, 6 ep (258 K params, 1 MB) | **−3.90**, 0/40 | −4.46 / −1.81 / −4.28 | 31.3 / 26.4 / 34.1 |
+| full FT c1, 27 ep (195 M params) | −0.55, 14/40 | | |
+| full FT c4 | +1.82, 35/40 | | |
+
+Reading: the generalist renders the slipper at ~18 dB, so the per-object fine-tune's job is
+overwhelmingly *adaptation to this object* (15.8 dB from base to c1), not a subtle polish. A
+258 K-parameter adapter on the view stage alone, in 6 epochs, closed 12.4 of those 15.8 dB
+(79 %). Remaining gap to c1: 3.4 dB; to the crossing: 5.7 dB. Side effect: view-only targets
+train 2× faster per epoch (autograd never enters the 12-layer scene transformer).
+
+## 2026-09-08: V18 re-examined — what actually binds the generalist, and V19 proposals
+Two passes: the full experimental record (PROGRESS 1600–2440, memory notes) and a line-level read
+of the readout path (gaussianformer.py, view_transformer.py, attention.py, rope.py, dpt.py,
+transform.py, ray_generator.py, train.py). Findings first, then proposals ranked by expected value.
+
+### What V18 is
+V17 recipe on 2× data, stage A only (30 ep @256, val log-L1 0.000793 vs V17's 0.000765). Stage B
+(512 + LPIPS) was never run: the diagnosis arc retired its premise (train→test gap 0.55 dB; the
+model under-fits its own training set by 14 dB). It exists as the seed for everything since.
+
+### The record, compressed (N=100 harness, train-fit margin vs rec-GT, baseline 13.40)
+capacity (depth 18/9, FFN×8, width) FLAT · input-head MLP / log-scale FLAT · geometry-bias
+(cos-angle, scalar gate) FLAT, gates → 0 · aug/wd −0.27 · **fg-weighted loss −1.63** ·
+**cosine restarts 30k→90k: −1.9, decelerating to ~10** · fg + 2 cycles = **10.04 (best)** ·
+from-scratch untrainable (LPIPS 0.092 attractor) · dense per-object views reach the ceiling at
+N=1 (42–48 dB novel) but not at N=10 (30 dB) · rec-GT flat 44.7–45.6 across detail while V17
+falls 34→28.5 · MTF ≈ 1 with coherence 0.3 at 4 px: detail is *invented and misplaced*, not
+missing.
+
+### What the code pass adds (structural, not under-training)
+1. **The view stage never sees a projection.** Cross-attention logits are `q · R(p_cam) k`: the
+   query RoPE is the identity for every patch (ray_pos = camera origin = 0 in the camera frame,
+   view_transformer.py:109, transform.py:66) and the key RoPE is a phase of the *3-D camera-frame
+   mean*. The network must recover (x/−z, y/−z) by phase-matching an absolute-position rotation.
+   Nothing computes pixel/patch coordinates of a Gaussian anywhere.
+2. **The RoPE that carries geometry is coarse.** Frequencies {1.0…5.0} rad per world unit on
+   unit-sphere scenes, rotating 18 of 64 channel-pairs per head. Two Gaussians 0.02 apart (≈10 px
+   at 512) differ by ≤0.1 rad. This is a spatial-bandwidth limit in the *attention*, matching
+   the content-stratified gap (+2.9 dB per detail tercile) better than any capacity story.
+3. **Ray tokens have no 2-D position at all** (identity RoPE in self-attention, full attention,
+   no swin): adjacency exists only via the DPT convolutions. Consistent with "energy present,
+   spatially misplaced".
+4. **No depth, ordering, transmittance, or footprint.** The camera-frame quaternion and scale are
+   computed by transform_gaussians_to_cam_coord and then discarded (rendering_pipeline.py:91,
+   train.py:121); opacity reaches the view stage only inside the world-frame latent. Occlusion is
+   a softmax competition with no monotone depth feature.
+5. **The geometry-bias probe tested a low-contrast signal.** cos(angle between patch ray and
+   camera→Gaussian) spans only 0.93–1.0 across a 45° frustum; a scalar gate on that has almost
+   no dynamic range to exploit. The negative result closes "cos-angle bias", not "projection
+   awareness".
+6. Loss: targets are LDR PNGs but the loss lives in log10(x+1), so the whole target range is
+   [0, 0.301]; whole-image averaging dilutes the object 14–50× (fg-loss fixes the second, not the
+   first). LPIPS is whole-image and unmasked.
+
+### Proposals (all warm-compatible: zero-init or identity-preserving, since scratch is untrainable)
+**P1 — Rasterized-canvas conditioning (splat-then-refine).** Rasterize the input splat with
+gsplat (1 ms, already in the data pipeline), patchify, and add it to the ray tokens through a
+zero-init linear (identity at init). The model starts *at* rec-GT quality and learns to add:
+pruning-artifact repair and detail, which is exactly what the N=1 result showed it can do
+(scene_0387 beat rec-GT by 2.15 dB). Prediction: held-out margin collapses from 14.65 toward 0
+within a cycle, then goes negative. Honest caveat: the artifact becomes a learned refiner over
+rasterization, and the rasterizer's failure modes (floaters, holes) become its inputs. Cost: ~50
+lines + one N=100 run. Highest expected value by far.
+**P2 — Projection-aware cross-attention (replaces the cos-angle probe).** Compute per view, per
+Gaussian: projected patch coordinates (u,v), log-depth, and projected footprint (from the
+cam-frame covariance we already compute and drop). (a) 2-D RoPE on (u,v) for keys and on patch
+centres for queries, in currently-unrotated channel pairs; (b) a zero-init Gaussian proximity
+bias −γ‖u_q−u_k‖²/σ² in *patch units* (high contrast, unlike cos); (c) log-depth and footprint
+injected into the key via a zero-init linear. Prediction: N=100 fit ≤ 11 at 30k steps without
+fg/cycles; tomatoes 14-view novel probe 29.9 → >35. Cost: one probe chain (~1 day, 4 GPUs).
+**P3 — 2-D RoPE for ray-token self-attention + higher scene-RoPE bandwidth** (rotary dim 12→32,
+max freq ~5→~60 rad/unit), each with a 256 log-L1 recovery stage. Cheap, addresses points 2–3;
+expect coherence gains more than PSNR gains. Run after P2 or fold into it.
+**P4 — Recipe bundle (free, already validated at N=100).** fg-weighted loss + 2–3 cosine cycles
++ foreground-masked LPIPS + a tone map that uses the LDR range (plain L1 on linear or log_w
+rescaled). This is "finish V18": seed v18_256-ep30, 512 + LPIPS, 2× data. Expected: 10.04 at
+N=100 translates to maybe 2–4 dB on held-out at full N (the record flags the N=100 gain as
+memorization-flavoured). Worth running as the new baseline regardless.
+**P5 — Decoder stripe.** Replace DPT ConvTranspose(4,4)/(2,2) with bilinear + conv (the 3.8-px
+MTF>1 artifact, the dithering). Decoder-only, 256 ramp to re-settle. Cosmetic in PSNR, real in
+perceived quality.
+Not proposed: more data (retired), more capacity (flat ×5), input-head changes (flat),
+pruning-score fix for the generalist (rec-GT is flat across detail; the input is not the limit).
+
+### Decisive plan (N=100 harness, 30k steps, 4 GPUs each, killable; readouts: train-fit margin
+vs 13.40 / 10.04, heldout300 vs 17.93, tomatoes 14-view novel vs 29.9)
+1. P4 baseline (recipe bundle) — the new floor.  2. P2 on top of P4.  3. P1 on top of P4.
+Whichever of P1/P2 moves the tomatoes novel-view number is the V19 architecture; then scale to
+full N with 2× data.
+
+## 2026-09-08: V19 probes launched — P3 / P2 / P1 on the N=10 harness, separate branches
+Shahaf's priority P3 > P2 > P1, each on its own branch, evaluated as "10-object overfit"
+(N-sweep n10 harness: seed v18_256-ep30, 30k steps, 4×bs1@512, LPIPS 0.5, aug + wd; recorded
+baseline train-fit margin **7.57** / heldout300 **20.47**). Sagie quota capped at 12 GPUs.
+
+Branches (nested: infra ⊂ p3 ⊂ p2 ⊂ p1; all defaults are bit-exact to the baseline, verified on CPU):
+- `exp/probe-infra`: one generic `--model_cfg key=val` (train.py + ceiling_eval.py) instead of
+  per-feature flags; warm-safe `--init_from` (tensors absent from the seed must be zero; RoPE
+  frequency tables are config constants and are swapped); `data_v10/probe_n10.sh` (optional
+  256px log-L1 recovery stage R for changes that alter pretrained function) + `submit_probe.sh`.
+- `exp/p3-rope-bandwidth`: `rope_pos_scale` (positions ×k before RoPE, both stages),
+  `rope_dim` (rotary dim; 12 → 32 rotates 48 of 64 pairs), `ray_rope_2d` (2-D patch-grid RoPE
+  for ray-token self-attention in previously unrotated pairs).
+- `exp/p2-projection-attn`: explicit perspective projection of every Gaussian in the view stage
+  (fov now threaded through; cam-frame scale+quat passed instead of dropped): `proj_bias`
+  (zero-init-gated −d²/σ² in patch units, σ=2), `proj_feat` (zero-init linear of [log depth,
+  log projected radius px, cam-frame quat] into context tokens), `proj_rope_2d` (2-D RoPE on
+  projected coords for keys / patch centres for queries).
+- `exp/p1-canvas`: `canvas_cond` (gsplat render of the input splat, same camera, log10 space,
+  added to ray tokens through a zero-init linear); `gaussianformer/utils/canvas.py`;
+  `data_v10/check_canvas.py` verifies the rasterization convention on GPU.
+
+| arm | cfg | stage R | account | train → eval |
+|---|---|---|---|---|
+| baseline (rerun, same code) | — | 0 | killable | 31539628 → 31539629 |
+| p3_rope32 | rope_dim=32 rope_pos_scale=4 | 3000 | sagieb | 31539624 → 31539625 |
+| p3_ray2d | ray_rope_2d=true | 3000 | killable | 31539626 → 31539627 |
+| p2_bias_feat | proj_bias proj_feat | 0 | killable | 31539690 → 31539691 |
+| p2_rope2d | proj_rope_2d=true | 3000 | killable | 31539692 → 31539693 |
+| p1_canvas | canvas_cond=true | 0 | killable | 31539708 → 31539709 (check 31539707) |
+
+Readouts: `data_v10/ceiling/probe_<tag>_{train,heldout}.jsonl` (train-fit margin vs 7.57,
+heldout300 vs 20.47). Operational note: jobs import code from the WORKING TREE at start, so the
+tree stays on `exp/p1-canvas` (superset) while probes run. First observation: p3_rope32's
+stage R opens at 256px log-L1 0.011 (intact warm ≈ 0.0008) — the RoPE change is a large
+perturbation; the 300-epoch recovery decides whether it re-settles.
+
+### 2026-09-08 late: P3 finding — the pretrained RoPE band is load-bearing; only ADDITIVE changes survive a warm start
+Recovery-stage (256px log-L1, epoch 1) losses, intact warm init ≈ 0.0008, from-scratch ≈ 0.013:
+`rope_dim=32 + rope_pos_scale=4` **0.0110** (flat at 0.009 for 100 epochs, 0.0022 only after LR
+annealing; generic val100 stuck at 0.0082 → the 10 objects were re-memorised, the generalist was
+not restored) · `rope_pos_scale=2` alone **0.0115** (cancelled at epoch 1) · `ray_rope_2d=true`
+(new pairs only) **0.0015**. Doubling the frequency of the pairs the pretrained attention already
+uses scrambles it as badly as replacing them. P3-ii therefore reduces to `rope_hf_scale` (an
+extra 8× band in previously position-blind pairs, pretrained rotations untouched; a73b0b9),
+running as p3_hf8 (31540294, sagieb). Shahaf's "we might have to pretrain from scratch" is
+answered by the record: scratch is untrainable (LPIPS 0.092 attractor), so V19 changes must be
+additive to the pretrained function.
+
+## 2026-09-09: low-N codec inputs ready (5k / 2k) for slipper, molecule, tent, octopus, tomatoes
+`data_v10/codec_lowN_datagen.{py,sh}` (array 31531911, killable): each object re-pruned from its
+FULL splat with the fleet recipe and laid out as `codec_scaleout/<scene>_n{5k,2k}` (h5 with the
+20k object's training poses, per-file symlinks to its full-splat renders and eval views, so
+`SCENE=gopro_n5k` works in train_codec_lora.sh / codec_scaleout_eval.sh unchanged). Frame check
+= rec-GT vs the stored GT render on eval view 0 (single view, not the 40-view bar):
+
+| object | 5k | 2k |
+|---|---|---|
+| slipper (gopro, 1.17 M src) | 35.9 | 34.2 |
+| molecule (scene_1423) | 38.0 | 35.0 |
+| tent (scene_0223) | 31.0 | 29.2 |
+| octopus (1.84 M src) | 31.1 | 28.1 |
+| tomatoes (219 k src) | 39.2 | 36.8 |
+
+Splat bytes: 280 KB (5k) / 112 KB (2k) vs 1,120 KB (20k). These are the inputs for the
+equal-bytes RD grid (adapter or fine-tune at N ∈ {2k, 5k, 20k} vs gsplat at matched bytes),
+queued behind the V19 probes per Shahaf's priority.
+
+## 2026-09-09: LoRA anchor r=4 (27 epochs) = **−3.11 dB, 1/40** — attention-only LoRA saturates ~3 dB below rec-GT
+slipper 20k, attention-only rank 4 (479 K params, 1.9 MB), lr 2e-4, 27 ep (31527117; eval
+31542856): rand −3.70 (0/24, model 32.1) / close −1.17 (1/8, 27.0) / far −3.27 (0/8, 35.1).
+Final train loss 0.0177 = where the full fine-tune was at epoch 2 (c1 ended 0.0095). Context:
+zero-shot floor −16.32; 6-epoch sweep attention-only r=2 at lr 7.8e-4 −3.41; best 6-epoch
+attention+FFN r=4 −2.70; full FT c1 −0.55, c4 +1.82. So 4.5× more steps at the recipe lr bought
++0.3 dB over the 6-epoch attention-only point and did not reach the 6-epoch FFN trials: the
+6-epoch proxy ordering (targets ≫ rank ≫ epochs) holds at 27 epochs. Equal-bytes verdict for
+the storage-viable shape (≤0.5 MB, 20k+adapter vs 25k gsplat): NEGATIVE — the adapter is 3 dB
+below gsplat-20k before its bytes are even counted. r=1 / r=16 anchors still running on killable.
+
+## 2026-09-09: P2 arm 1 (proximity bias + depth/footprint features) = **FLAT** — 7.60 fit / 20.45 heldout (baseline 7.57 / 20.47)
+`probe_p2_bias_feat` (31542857 → eval 31542858; `--model_cfg proj_bias=true proj_feat=true`, no
+recovery stage, exact n10 schedule). Train-fit margin **7.60** (model 36.85 vs rec-GT 44.44),
+heldout300 **20.45**, LPIPS margins unchanged. Final train loss 0.001103 = baseline 0.001103.
+Unlike the cos-angle probe, the model DID take the signal (epoch-1000 gates 0.001/0.018/0.001/
+**0.079**/0.021/0.006 → ~1.3 nats of logit at 8 patches off-ray in layer 3; geom_feat weight
+norms 0.15 on the cam-frame quaternion, 0.07 on projected radius, 0.03 on log-depth) — and it
+bought nothing. Second clean negative for "the readout lacks projection information": at N=10
+the model can already route; giving it exact image-plane proximity, depth and footprint does not
+move fit. Remaining arms: p3_hf8, p3_ray2d (training loss on the baseline curve since epoch
+1500), p2_rope2d (recovery 0.0018, clean), p1_canvas (killable, pending), baseline rerun.
+
+## 2026-09-09: P3 arm (2-D ray-token RoPE) = **FLAT** — 7.54 fit / 20.73 heldout (baseline 7.57 / 20.47)
+`probe_p3_ray2d` (31540200 → eval 31540201; `ray_rope_2d=true`, 256px recovery to 0.00042 then
+the n10 schedule). Fit 7.54 (model 36.90), heldout 20.73 (−0.26 dB worse than baseline, within
+the LPIPS-margin noise seen across controls), final train loss 0.001088 vs 0.001103. Giving the
+ray-token self-attention a 2-D position does nothing for fit at N=10: adjacency via the DPT convs
+was already sufficient. Verdicts so far: p2_bias_feat 7.60/20.45, p3_ray2d 7.54/20.73 — both
+null. Pending: p3_hf8 (eval running), p2_rope2d (512 stage opened at 0.0223 vs ~0.029 for every
+other arm — first arm to start visibly differently), p1_canvas (512 stage running after the
+autocast fix), baseline rerun (killable).
+
+## 2026-09-09: P3 arm (additive 8× RoPE band) = **FLAT** — 7.53 fit / 20.69 heldout
+`probe_p3_hf8` (31540294 → eval 31540295; `rope_hf_scale=8`, recovery to 0.00042). Fit 7.53
+(model 36.92), heldout 20.69, LPIPS margins 0.0105 / 0.1015 — identical to p3_ray2d (7.54 /
+20.73) and p2_bias_feat (7.60 / 20.45). Three of the four geometry arms are now null within
+±0.1 dB on fit; the model does not use extra positional bandwidth to fit 10 objects better.
+Render strips (`data_v10/probe_strips.py`, tmp/probe_strips.png): the three probes are
+indistinguishable by eye; the residual is invented/misplaced fine texture on the dense objects
+(hut 31–32 dB vs rec-GT 42–44) and soft edges on smooth ones (girl 40–42 vs 47). Remaining:
+p2_rope2d (512 stage opened low at 0.0223), p1_canvas, baseline rerun (moving to sagieb).
+
+## 2026-09-09: **P2 arm 2 (2-D RoPE on projected coordinates in cross-attention) = FIRST POSITIVE** — 6.47 fit / 19.07 heldout
+`probe_p2_rope2d` (31545380 → eval 31545381; `proj_rope_2d=true`: keys carry a 2-D RoPE of the
+Gaussian's PROJECTED patch coordinates (u,v), queries carry their patch centre, in the channel
+pairs after the pretrained 3-D band; 256px recovery to 0.00043, then the exact n10 schedule).
+
+| | fit margin | model PSNR (train) | heldout300 margin | LPIPS m (train / heldout) |
+|---|---|---|---|---|
+| baseline (record) | 7.57 | 36.87 | 20.47 | 0.0105 / 0.0997 |
+| p2_bias_feat, p3_ray2d, p3_hf8 | 7.53–7.60 | 36.85–36.92 | 20.45–20.73 | 0.0105 / 0.099–0.102 |
+| **p2_rope2d** | **6.47 (−1.10)** | **37.98** | **19.07 (−1.40)** | **0.0080 / 0.0868** |
+
+Training loss led the pack from epoch 1 (0.0223 vs ~0.030) and finished at 0.000893 vs the
+same-day baseline rerun's trajectory (0.00110 at 2500; final pending), ~19 % lower throughout.
+This is the first architectural change in the entire record (capacity ×5, input head, log-scale,
+cos-angle bias, proximity bias + depth/footprint, 2-D ray RoPE, HF band — all flat) that moves
+BOTH fit and held-out, and held-out moves MORE than fit (−1.40 vs −1.10), i.e. not memorisation.
+Why this and not the proximity bias: the bias only tells attention "how far" a Gaussian is from
+the patch (a scalar penalty); the 2-D RoPE makes the query–key dot product itself a function of
+the image-plane offset in every head and channel pair, so the model can learn oriented,
+anisotropic, content-dependent projection kernels rather than one isotropic falloff. It gives
+the readout the coordinate system rasterization uses. Next: (1) strips; (2) stack with the
+proximity bias / depth features (cheap, zero-init) and with the fg-weighted loss; (3) the
+tomatoes 14-view novel-view probe (29.9 baseline) to test the "reading" claim directly; (4) the
+decisive scale test — full-N (2× data, V18 seed) with proj_rope_2d, since N=10 gains have
+under-delivered at scale before (fg-loss −1.63 at N=100 was the previous best mover).
+
+## 2026-09-10: baseline rerun reproduces the record — 7.62 fit / 20.44 heldout (record 7.57 / 20.47)
+`probe_baseline` (31546002 → 31546003; no overrides, same code as all arms, same day, L40S).
+Final train loss 0.001109 vs 0.001103 recorded. So the arm deltas are clean: p2_rope2d −1.15 fit /
+−1.37 heldout vs the same-code control; p2_bias_feat, p3_ray2d, p3_hf8 within ±0.1 / ±0.3.
+
+## 2026-09-10: P2 (proj_rope_2d) becomes THE candidate — cycle 2 + variant sweep launched
+Shahaf: "our sole improvement should be that nice P2; if we match at N=10 and improve a specific
+model with the adapter over fit, we win." Plan = push the N=10 fit margin toward 0 with
+proj_rope_2d, then per-object adapters on top. Launched (N=10 harness, `submit_probe.sh` now
+takes SEED and EXTRA_TRAIN):
+
+| arm | change vs p2_rope2d (6.47 / 19.07) | account |
+|---|---|---|
+| p2_rope2d_c2 | 2nd cosine cycle, seeded from p2_rope2d ep3000 (record: cycles gave −1.14, −0.78 at N=100) | sagieb 31560327 |
+| p2_full | + proximity bias + depth/footprint (zero-init) | sagieb 31560101 (running) |
+| p2r_fg | + fg-weighted loss 0.05 (record: −1.63 at N=100) | killable 31560329 |
+| p2r_dim32 | 2-D band 16 → 32 rotary dims (more freqs per axis) | killable 31560331 |
+| p2r_scale1 | 2-D band scale 0.25 → 1.0 (1..7 rad/patch: sharper kernels) | killable 31560333 |
+| p2r_both | + 2-D RoPE in ray self-attention too | killable 31560335 |
+Still pending from the first wave: p1_canvas (12–13 % under baseline in train loss).
+
+## 2026-09-10: p2_rope2d cycle 2 COLLAPSED at epoch 2230 (lr 8e-6) — salvaged from the epoch-2200 checkpoint
+Cycle 2 (31560327, seeded from p2_rope2d ep3000) was on track — 0.00080 at ep1500, 0.00063 at
+ep2000, 0.00058 at ep2224 (cycle-1 final 0.00089) — then within epoch 2230 the loss jumped to
+~0.007 and stayed there (LPIPS 0.001 → 0.014, log-L1 0.00024 → 0.0006) for 300+ epochs at
+lr ≤ 8e-6: a basin jump the annealed LR cannot undo, not a transient. No NaN/resume in the log.
+Cycle 1 of the same config and all other arms showed no such event. Actions: pre-collapse
+`phase2_epoch_2200.pt` copied to tmp/ and evaluated directly (31566134; LR at ep2200 was already
+8e-6, so it is a near-annealed cycle-2 model); post-collapse ep2400 deleted; job resubmitted
+(31566135) → auto-resumes from ep2200 to test reproducibility. Monitor now flags any late-epoch
+avg loss > 0.003. Open question: numerical (bf16 attention with the added 2-D band?) vs
+optimizer-state event; if the resume collapses at the same epoch it is data-order/optimizer.
+
+## 2026-09-10: p2_rope2d CYCLE 2 (ep2200, pre-collapse) = **fit 4.56 / heldout 19.42** — the ladder is 7.57 → 6.47 → 4.56
+`probe_p2_rope2d_c2ep2200` (31566134): train-fit margin **4.56** (model 39.88 vs rec-GT 44.44;
+LPIPS margin 0.0046), heldout300 **19.42** (+0.35 vs cycle 1's 19.07 — cycles buy fit, not
+generalisation, as at N=100). Cycle gain −1.91 dB, larger than the N=100 record's −1.14. The
+resume from ep2200 collapsed again at the SAME epoch (2231) → the collapse is deterministic in
+(checkpoint, data order); cancelled. ep2200 stands as the cycle-2 result (LR was 8e-6 = 97 %
+annealed). Cycle 3 launched from that checkpoint (p2_rope2d_c3). fg-loss variant moved to
+sagieb (31566158). Path to "match at N=10": 4.56 left; if the 0.55× decay holds, c3 ≈ 3.5,
+c4 ≈ 2.9; fg-loss and the other variants have to supply the rest.
+
+## 2026-09-10: P1 (rasterized-canvas conditioning) = fit 6.78 / **heldout 17.47** — the best HELD-OUT mover, weakest on fit
+`probe_p1_canvas` (31545822 → 31545823; `canvas_cond=true`, zero-init canvas linear, no recovery
+stage). Fit **6.78** (−0.84 vs 7.62 same-day baseline; model 37.66), heldout300 **17.47 (−2.97)**,
+LPIPS margins 0.0091 / 0.0805 (best heldout LPIPS of any arm). Final train loss 0.000953. So the
+two positive arms are complementary: P2 (2-D projected RoPE) is the fit mover (−1.15, −3.0 with a
+2nd cycle) and P1 (canvas) is the generalisation mover (−3.0 heldout with fit barely changed) —
+the canvas acts as a prior the model can lean on for objects it has not memorised, exactly the
+"refine rather than render" mechanism. It did NOT collapse onto rec-GT (heldout 24.5 → 27.5 dB
+model PSNR, rec-GT 45): the zero-init pass-through was only partially learned in 30k steps.
+Stack arm p1p2 (`canvas_cond=true proj_rope_2d=true`) queued on killable as a variant of the P2
+candidate; Shahaf's stated preference is P2 as the single improvement.
+
+## 2026-09-10: p2_full (rope2d + proximity bias + depth/footprint) = 6.46 / 19.04 — identical to rope2d alone (6.47 / 19.07)
+`probe_p2_full` (31560101 → 31560102). Final train loss 0.000882 vs 0.000893. The zero-init bias
+and feature paths add nothing once the 2-D RoPE is present; P2 = proj_rope_2d alone. Also
+launched: shuffle-order collapse diagnostic (`p2_rope2d_c2diag`, 31571612: resume from the
+ep2200 checkpoint with `--data_seed 1`, new reproducibility knob in train.py/dataset.py; if no
+collapse by ep2231 the event is sample-order specific). p2r_scale1 bumped back to killable to
+stay within 12 sagieb GPUs.
+
+## 2026-09-10: collapse diagnostic — NOT sample-order specific; the ep2200 state itself is on a ridge
+Resume from ep2200 with `--data_seed 1` (different sampler shuffle AND different per-epoch view
+draw): loss flat at 0.00059–0.00066 for 24 epochs, then 0.0035 at ep2225 and 0.007–0.008 from
+ep2226 on — the same event, 5 epochs EARLIER than the original (2230) and the same-order resume
+(2231). So it is a property of (weights, Adam moments) at ep2200, not of a particular batch: any
+~250 further optimizer steps at lr ≈ 8e-6 tip it over. Best current explanation: late in cycle 2
+the loss (0.0006) and hence gradients are ~2× smaller than at the same point of cycle 1; Adam's
+normalised update keeps a fixed per-element size (~lr) as the gradient shrinks, so the update
+direction becomes noise-dominated and the model random-walks across a sharp ridge it sits next
+to; once across, the tiny LR cannot bring it back. Cycle 1 (higher loss, same schedule) never
+did this. Mitigations to try when it matters: Adam eps 1e-8 → 1e-6, EMA of weights for eval,
+or a loss-spike rollback (reload last checkpoint + skip the epoch). For now: cycle 2's model =
+ep2200 (4.56 fit); cycle 3 is running from it with the collapse detector armed.
+
+## 2026-09-10: cycle 3 collapsed too — at ep830, lr 4.2e-5 → the low-loss STATE is unstable, not the schedule
+`p2_rope2d_c3` (31566233, fresh cosine + fresh Adam from the c2 ep2200 model): 0.00090 flat
+through ep700, 0.0034 at ep830, 0.0080 at ep1000 and rising → cancelled. So the "Adam noise
+floor at tiny LR" story is wrong: from the ep2200 state, training tips over within a few hundred
+steps at ANY lr (8e-6 tail of c2; 8e-6 shuffled; 4e-5 head of c3). Cycle 1 from the V18 seed
+never collapsed (final 0.00089); the instability appears once the train loss sits ≲0.0006–0.0009.
+Suspects, in testing order: (1) LPIPS term computed under bf16 autocast at very small
+perceptual distances (the jump is 90 % LPIPS: 0.001 → 0.014); (2) Adam eps 1e-8 with tiny
+second moments; (3) grad clip 1.0 too loose for a sharp basin. Consequence for the "match at
+N=10 with cycles" plan: cycles past 2 are blocked until this is fixed. Cycle-2 ep2200 (4.56)
+stands as the best P2 model. dim32 variant moved into the freed sagieb slot.
+
+## 2026-09-10: fix applied — LPIPS evaluated in fp32 (668f6d6); cycle 3 relaunched as p2_rope2d_c3b
+`compute_loss` now wraps the LPIPS-VGG call in `autocast(enabled=False)` with fp32 inputs; the L1
+term and the model forward stay under bf16 autocast. Numerics of every run started after this
+differ slightly from the arms above (all of which used bf16 LPIPS); the baseline rerun's 7.62 /
+20.44 remains the reference. c3b (31571879, sagieb, from the c2 ep2200 model) is the test: if it
+trains through without the jump, the bf16-LPIPS story holds; if it collapses again, next
+suspects are Adam eps and the clip. dim32 back on killable to stay within 12 sagieb GPUs.
+
+## 2026-09-10 eve: fp32 LPIPS holds — c3b passed the old collapse window clean
+`p2_rope2d_c3b` (same seed, schedule and data order as the collapsed c3, only LPIPS in fp32):
+epochs 830–978 all below 0.0015, latest 0.00077 at ep978 — lower than any epoch c3 reached
+before it jumped (0.0034 at ep830, 0.008 at ep1000). Single-run evidence so far, but it is the
+same trajectory that collapsed deterministically three times under bf16 LPIPS. Verdict ~05:30.
+p2r_fg finished (train LPIPS 0.00136 vs 0.00148 plain P2; eval queued); dim32 promoted to sagieb.
+
+## 2026-09-10: **P2 + fg-weighted loss = fit 3.35 / heldout 19.39** — one cycle beats P2's cycle 2
+`probe_p2r_fg` (31566158 → 31566159; `proj_rope_2d=true --fg_bg_weight 0.05`, single 30k-step
+cycle, bf16 LPIPS era). Fit margin **3.35** (model 41.10 vs rec-GT 44.44; LPIPS margin 0.0051),
+heldout300 19.39 (+0.32 vs P2's 19.07, same as P2-c2's 19.42). Ladder on fit: baseline 7.62 →
+P2 6.47 → P2 c2 4.56 → **P2+fg 3.35**. The fg loss stacks on P2 far more than it did alone at
+N=100 in August (−1.63): −3.12 dB here. Reading: the 2-D projected RoPE lets the model resolve
+where object detail goes, and the fg loss stops the 95 % background from diluting the gradient
+that places it; each fixes a different half of "fine detail is invented and misplaced".
+Next rung launched: p2r_fg_c2 (cycle 2 from p2r_fg ep3000, fg loss, fp32 LPIPS).
+
+## 2026-09-10 eve: THE WIN TEST — LoRA "adapter over fit" on the P2+fg base
+Shahaf: take the best arm (P2+fg, or its cycle 2) and LoRA-overfit a single object; beat rec-GT
+on novel views = win. The base's own 10 objects have only 14 orbit views (no full splats stored
+for the train split), so the clean protocol is the codec one on scale-out objects: 9000
+randomised training views of the full splat, 40 held-out novel views, verdict vs rec-GT.
+Launched (train_lora.py now takes `--model_cfg`, recorded in the adapter; eval rebuilds the base):
+- slipper: `checkpoints_lora_p2fg_gopro_r4` (31577096 → eval 31577097, sagieb)
+- molecule: `checkpoints_lora_p2fg_scene_1423_r4` (31577093 → 31577094, killable)
+Recipe = the sweep's best (rank 4 attn+FFN, alpha 4, lr 2.75e-3, eff. batch 4, wd 0.1, dropout
+0.07) + fg loss 0.05, 27 epochs, base = p2r_fg ep3000 (proj_rope_2d). Bars: V18-base LoRA on
+slipper −3.11 (27 ep) / −2.70 (best 6 ep); full fine-tune c1 −0.55, c4 +1.82; molecule full FT
+c5 +1.47. Caveat: the base is a 10-object fit that never saw either object, so the adapter must
+do the whole object adaptation — a harder test than "adapter over the object's own fit".
+
+## 2026-09-10 late: p2r_scale1 (2-D band 4× sharper) = 6.51 / 19.25 — same as the default band (6.47 / 19.07)
+`probe_p2r_scale1` (31571637 → 31571638). Final train loss 0.000888 vs 0.000893. The 2-D RoPE's
+frequency scale is not a lever between 0.25 and 1.0 rad/patch; default kept. Remaining P2
+variants (dim32, both, p1p2) are still starved on killable.
+
+## 2026-09-11: **P2 cycle 3 (fp32 LPIPS) = fit 2.88 / heldout 19.81** — no collapse, ladder 7.62→6.47→4.56→2.88
+`probe_p2_rope2d_c3b` (31571879 → 31571880, sagieb): 3000 epochs clean under fp32 LPIPS, final
+train loss 0.000410 (the bf16 run collapsed at ep830 from the same state). Fit margin **2.88**
+(model 41.56 vs rec-GT 44.44; LPIPS margin 0.0023 = best on record); heldout300 19.81
+(19.07 → 19.42 → 19.81 across cycles: memorisation drift, expected on a 10-object fit). Each
+cycle still buys ~1.7 dB of fit; not saturated. Cycle 4 queued on killable
+(`p2_rope2d_c4`, 31583494 → 31583495, seed c3b ep3000). fp32-LPIPS fix confirmed as the
+collapse cure (3 for 3 bf16 collapses, 0 for 1 fp32).
+Ops: c3b's 4 sagieb GPUs handed to the molecule win-test (resubmitted from killable as
+31583492 → 31583493, same recipe as slipper). Sagieb = p2r_fg_c2 + slipper LoRA + molecule LoRA
+= 12. Old LoRA anchors r=1/r=16 (31579937/38) still pending on killable.
+
+## 2026-09-11 mid-day: molecule win-test DIVERGED at lr 2.75e-3 (ep2, step ~3000: loss 0.004 → 0.10–0.21, no recovery)
+The slipper twin at the identical recipe is fine (ep18 LPIPS 0.0253). Molecule opens much lower
+(ep1 total 0.0082 vs slipper 0.0233) so the sweep's near-max lr (chosen on slipper, V18 base) is
+too hot here. Resubmitted at lr 1e-3, all else equal: 31583677 → 31583678 (sagieb). Diverged run dir kept
+as checkpoints_lora_p2fg_scene_1423_r4_diverged_lr2.75e-3.
+
+## 2026-09-11 16:40: session migrated to claude_node 31588298 (wadi-02); lab share hit 6 GB free
+Freed ~32 GB (→38 GB): deleted p2r_scale1 (+_r; null arm, eval done), p2r_fg_r / p2r_both_r
+(stage-R dirs whose ep300 seeds were consumed), the ep244 + final copies in dim32_r / p1p2_r
+(ep300 kept for requeue), and the ep2800 pre-final ckpts of c3b / p2r_both / p2r_fg. Kept:
+p2r_fg ep3000 (win-test base + c2 seed), c3b ep3000 (c4 seed), p2r_both ep3000 (eval pending).
+Status: slipper LoRA ep23/27 (LPIPS 0.0236), molecule lr1e-3 ep5 (0.0060, healthy), p2r_fg_c2
+ep2146/3000 (0.00122), c4 ep1001 (0.000615), p1p2 ep1373, dim32 ep776; anchors r=1 ep17, r=16 ep11.
+
+## 2026-09-11 eve: p2r_both (proj_rope_2d + ray_rope_2d) = 6.41 / 19.09 — null vs P2 alone (6.47 / 19.07)
+`probe_p2r_both` (31560335 → 31560336, killable). Adding the P3 ray self-attention 2-D RoPE on
+top of P2 changes nothing (within 0.06 dB on fit, 0.02 on heldout). Consistent with p3_ray2d
+alone being flat: ray-ray positional structure is not the bottleneck; the gain is entirely in
+the ray→Gaussian cross-attention. P2 variants closed so far: scale1 null, both null. Remaining:
+dim32, p1p2. Freed its ckpts (ep3000 kept).
+
+## 2026-09-11 13:43: **WIN TEST, slipper: LoRA r4 over P2+fg = −0.33 dB vs rec-GT, 18/40** (close +1.48 8/8, rand −0.88 7/24, far −0.48 3/8)
+`checkpoints_lora_p2fg_gopro_r4/lora_final.pt` (31577096 → eval 31588665; 27 epochs, rank 4
+attn+FFN, 5.3 MB, base = p2r_fg ep3000 which never saw the slipper). Ladder for the same
+object and budget (27 epochs): V18-base adapter −3.11 → **P2+fg-base adapter −0.33**; the full
+fine-tune's cycle 1 was −0.55 (14/40) and needed 4 cycles to reach +1.82. So a 5 MB adapter on
+the improved base already beats one full fine-tune cycle on every range, and wins close-range
+outright. Not over the bar yet (rand/far short by <1 dB). The base does the heavy lifting:
+2.8 dB of the 2.8 dB gain over the V18-base adapter comes from P2+fg with the adapter recipe
+held fixed. Next: adapter cycle 2 (warm restart of the adapter, fresh cosine) — the full FT
+gained +1.0 dB from c1→c2 on this object.
+Ops: torchrun exited 7 after a clean finish (13 previous LoRA jobs exited 0; disk was at 6 GB
+at the time) and the afterok eval got cancelled; eval resubmitted, script now exits 0 when
+lora_final.pt exists (9dccf6a). Molecule eval switched to afterany.
+
+## 2026-09-11 18:00: **P2+fg cycle 2 = fit 1.05 / heldout 19.96** — one dB from matching rec-GT at N=10
+`probe_p2r_fg_c2` (31576935 → 31588802, sagieb): model 43.40 vs rec-GT 44.44 on the 10 train
+objects (LPIPS margin 0.0016). Fit ladder: baseline 7.62 → P2 6.47 → P2 c2 4.56 → P2+fg 3.35 →
+P2 c3 2.88 → **P2+fg c2 1.05**. Heldout300 19.96 (drift, as with every cycle). Shahaf's N=10
+target ("match rec-GT") is one more cycle away at this rate: fg_c3 launched on sagieb
+(31588838 → 31588839, fp32 LPIPS, fg loss, seed fg_c2 ep3000).
+Side probe on killable: slipper adapter over the fg_c2 base (31588840 → 31588841, same recipe as the
+−0.33 run) — does a tighter 10-object fit make a better base for an unseen object?
+
+## 2026-09-11 15:10: Debian 13 reservation re-checked — g4 nodes taken, A5000 nodes usable for LoRA
+firefoot-01 / khan-01 (the reservation's L40S / RTX Pro 6000) are fully held by another user for
+2–4 days. Idle reserved nodes are 24 GB class (drape-01, binky-01 A5000; incitatus-01 L4;
+arion-01 A10). Live VRAM: probes ~25 GB/GPU (won't fit), LoRA ~21 GB. Rebuilt the deb13 venv
+(31588948, drape-01, `uv sync --frozen`, import OK) and ran a LoRA smoke on 4×A5000 (31588949):
+fits, ~2.8 s/step vs 1.0 on L40S → 27 epochs ≈ 47 h (needs --time=60:00:00, killable cap 21 d).
+Moved there (--reservation=5787 -w drape-01 --gres=gg:g0:4): slipper adapter over the fg_c2
+base (31588992 → eval 31588993 on killable) and the r=16 anchor (31588994 → 31588995, resumes
+ep15). r=1 anchor eval queued afterany (31588996). Killable g4 pressure is now only the probes.
+
+## 2026-09-11 eve: V18-base anchor r=1 (attention-only, 523 KB, 27 ep) = −3.65 dB, 0/40
+`checkpoints_lora_gopro_r1` (31579937 → eval 31588996). Old-recipe anchor (lr 2e-4, wd 0,
+attn-only, V18 base): rand −4.26, close −1.62, far −3.86. Ladder on the V18 base at 27 epochs:
+r=1 attn −3.65 (0.5 MB) · r=4 attn −3.11 (2.1 MB) — rank buys little there; the base is what
+matters (P2+fg base, r=4 attn+FFN: −0.33). r=16 anchor still running (drape-01, resumes ep15).
+
+## 2026-09-11 night: P2 cycle 4 = fit 1.88 / heldout 20.11; dim32 = 6.39 / 19.29 (null)
+`probe_p2_rope2d_c4` (31583494 → 31583495, killable, fp32 LPIPS): 2.88 → 1.88, gain per cycle
+~1.0 dB and shrinking (7.62→6.47→4.56→2.88→1.88); heldout 20.11 (drift continues). Compared
+with the fg chain at equal cycles the fg loss is worth ~2 cycles: fg c2 = 1.05 vs P2 c4 = 1.88.
+Plain-P2 chain stopped here (c5 optional as a no-fg control). `probe_p2r_dim32`
+(ray_rope_2d_dim=32; 31576933 → 31576934): 6.39 / 19.29 = P2 default within noise; the third
+null P2 variant (scale1, both, dim32). Only p1p2 remains. Ckpts freed: dim32 (+_r), c3b, c4 ep2800.
+
+## 2026-09-11 late: slipper adapter cycle 2 DIVERGED at lr 2.75e-3 (ep6, step ~12.5k: 0.0099 → 0.22)
+Same signature as the molecule c1 divergence at this lr. Two of three runs at 2.75e-3 on the
+P2+fg base blew up (only slipper c1 survived); the molecule run at 1e-3 is clean through ep15.
+Rule from here: 1e-3 for adapters on the P2+fg base. Resubmitted c2 at lr 1e-3 (31590354 → 31590355,
+sagieb, init from the c1 adapter). Diverged dir kept as *_diverged_lr2.75e-3.
+Also restarted the slipper-over-fg_c2 adapter at 1e-3 (31590359 → 31590360, drape-01; was at ep3 @2.75e-3).
+Caveat: it now differs from the −0.33 run in both base (fg_c2 vs fg) and lr (1e-3 vs 2.75e-3).
+
+## 2026-09-12 00:30: **p1p2 (canvas + projected 2-D RoPE) = fit 6.07 / heldout 16.95** — best heldout on record, the two are additive
+`probe_p1p2` (31567039 → 31567041, killable, single cycle, stage R 3000). Heldout300 margin
+16.95 vs P2 19.07 / P1 17.47 / baseline 20.44 (LPIPS margin 0.0727, also best); fit 6.07 vs
+P2 6.47 / P1 6.78. Reading: P2 is the fit lever (where detail goes on the seen objects), P1 is
+the generalisation lever (the rasterised canvas hands the decoder a view-consistent prior it
+cannot invent for unseen objects), and they stack on both axes. P1 belongs in the story.
+Next rung: the full stack + fg loss, `p1p2_fg` (31590443 → 31590444, killable, same protocol), then cycles.
+Ckpts freed: p1p2_r, p1p2 ep2800.
+
+## 2026-09-12 03:30: WIN TEST, molecule: LoRA r4 over P2+fg (lr 1e-3) = −2.70 dB, 3/40 (close −0.36 3/8, rand −2.53 0/24, far −5.56 0/8)
+`checkpoints_lora_p2fg_scene_1423_r4` (31583677 → 31583678). Full-FT bars on this object:
+c1 −1.11 (rand −0.69, close +0.75, far −4.26), c2 +0.08, c5 +1.47. So on the molecule the
+adapter trails one full-FT cycle by 1.6 dB (on the slipper it led by 0.2). Two differences
+from the slipper run: lr 1e-3 (2.75e-3 diverged here) and a higher rec-GT bar, esp. far (48 dB
+— even the full FT never closed far on this object). Far is the whole deficit: rand/close are
+within ~2 dB of the full-FT c1. Next: adapter cycle 2 at 1e-3 (31590780 → 31590781, sagieb), same protocol
+as slipper c2.
+
+## 2026-09-12 08:00: V18-base anchor r=16 (attention-only, 7.7 MB, 27 ep) = −2.68 dB, 2/40 — the V18-base ladder is closed
+`checkpoints_lora_gopro_r16` (31588994 → 31588995). rand −3.27, close −0.73, far −2.84.
+V18 base, attention-only, old recipe, 27 epochs: r=1 −3.65 (0.5 MB) · r=4 −3.11 (2.1 MB) ·
+r=16 −2.68 (7.7 MB): +1 dB for 16× the bytes. The P2+fg base with r=4 attn+FFN (5.3 MB) gave
+−0.33. Base quality is worth ~2.5 dB; rank is worth ~0.3 dB per doubling. Anchors done.
+
+## 2026-09-12 10:00: **p1p2 + fg (full stack, cycle 1) = fit 2.91 / heldout 17.27** — best single-cycle fit, second-best heldout
+`probe_p1p2_fg` (31590443 → 31590444, killable). Single-cycle grid is now complete:
+  plain: P2 6.47/19.07 · P1 6.78/17.47 · P1+P2 6.07/16.95
+  +fg:   P2 3.35/19.39 · —            · P1+P2 2.91/17.27
+The canvas is worth −0.4 fit / −2.1 heldout on either loss; the fg loss is worth −3.1 fit and
+costs +0.3 heldout. Effects are additive to within 0.1 dB. The full stack is the base to carry
+forward. Cycle 2 launched (`p1p2_fg_c2`, 31591122 → 31591123, killable, seed p1p2_fg ep3000); P2+fg
+cycle 3 (sagieb) lands in ~1 h and tells whether the fg chain is still paying ~2 dB/cycle.
+
+## 2026-09-12 11:30: **P2+fg cycle 3 = fit −0.35 dB — THE MODEL BEATS rec-GT ON ITS 10 TRAIN OBJECTS** (44.80 vs 44.44 FG-PSNR, LPIPS margin 0.0000)
+`probe_p2r_fg_c3` (31588838 → 31588839, sagieb). Fit ladder closed: baseline 7.62 → P2 6.47
+→ P2+fg 3.35 → c2 1.05 → **c3 −0.35**. Heldout300 20.34 (drift, as every cycle). The N=10
+capacity floor recorded on 2026-09-0x ("cannot fit even 10 objects to ceiling, 7.6 dB short")
+is gone: projected 2-D RoPE in the cross-attention + fg-weighted loss + fp32 LPIPS + 3 warm-
+restart cycles (90k steps) put the same 196 M-param model over the rasteriser on the objects it
+has seen. Shahaf's win condition, half 1 ("match at N=10"): MET.
+Half 2 (adapter over the fit beats rec-GT on an unseen object): slipper r4 adapter launched on
+the fg_c3 base (31591154 → 31591155, sagieb, lr 1e-3); the fg-base adapter scored −0.33, its cycle 2 and
+the fg_c2-base adapter are in flight. Sagieb = slipper c2 + molecule c2 + this = 12.
+
+## 2026-09-12: WEIGHT-DELTA AUDIT — why does P1+P2 generalise better? (data_v10/weight_delta/{probes_vs_v18.txt,pair_*.txt}, tool data_v10/weight_delta_pair.py)
+Seven 1-cycle probes + fg_c3 vs the common V18 seed, and pairwise comparisons of fine-tunes
+that share seed/schedule/loss and differ only in architecture (control pair = p2_rope2d vs
+p2_full, whose extras are zero-gated → run-to-run noise floor).
+1. **Nothing moves more.** Every 1-cycle probe moves each family by the same amount (view ffn
+   rel 0.10–0.12, scene ffn 0.08–0.09, DPT 0.18–0.19) with the same energy split (view ffn
+   ~35 %, scene ffn ~31 %, DPT ~14 %, all attention ~15 %) — canvas or not. The 2 dB heldout
+   gain is not "trained harder". (Cycles are: fg_c3 moves 1.6× more in every family and its
+   deltas are higher-rank — r90 view ffn 124→147, scene in_proj 46→62 — the memorisation
+   signature behind the heldout drift.)
+2. **The scene transformer learns the same thing either way.** cos(dA,dB) for the canvas pair
+   equals the control within 0.05 in scene attn/ffn (0.63–0.81 vs 0.69–0.85). The canvas does
+   not touch the RenderFormer-borrowed scene stack.
+3. **The view stack learns a different function, starting at layer 0.** View L0 FFN: the canvas
+   model moves it 2× (rel 0.103 vs 0.053) and in a different direction (cos 0.24 vs 0.76 for
+   the control); L0 self/cross-attn cos 0.50 vs 0.77. The effect decays with depth (ffn cos
+   gap to control: L0 0.52, L1 0.21, L2 0.18, L3 0.12, L4 0.09, L5 0.07) and reaches the DPT
+   (0.38 vs 0.46). The canvas is added to the ray tokens at the input; layer 0 becomes a
+   canvas reader and the rest of the decoder re-learns as a refiner of a rendered image
+   rather than a synthesiser from attention alone — a function that transfers to unseen
+   objects. canvas_encoder ||W||_F = 2.9 vs ray_map_encoder 9.3 (seed): ~30 % of the ray
+   direction path's magnitude, i.e. genuinely used (P2's bias/feat gates stayed ~0).
+4. **P2's fingerprint is separate and low-rank:** P2 models move view cross-attn q_proj 1.5×
+   more than non-P2 (0.122 vs 0.083) with a LOW-rank delta (r90 14–16 vs 27–30) — a compact
+   re-keying of the query to the projected coordinates. The canvas leaves q_proj untouched
+   (p1_canvas 0.088 ≈ baseline). Two orthogonal mechanisms → additive gains.
+5. The fg loss changes almost nothing in where/how weights move (p2r_fg ≈ p2_rope2d in every
+   family, ±0.005); its 3 dB fit gain is a gradient re-weighting, not a re-programming.
+
+## 2026-09-12 16:00: STATE OF PLAY — V19 probe campaign, week 1
+**Harness.** N=10 overfit (10 train objects, 30k steps/cycle, seed V18 ep30); readouts are
+FG-crop PSNR margins to rec-GT: train-fit (the 10 objects) and heldout300. Baseline 7.62 / 20.44.
+
+**Single-cycle grid (fit / heldout).** P3 arms flat (rope32 & scale2 broke the pretrained band;
+hf8 7.53/20.69; ray2d 7.54/20.73). P2: bias/feat gates ≈ 0 (7.60/20.45); **proj_rope_2d
+6.47/19.07** — the one P2 sub-change that works; variants scale1 / both / dim32 all null.
+P1 canvas 6.78/17.47. P1+P2 6.07/16.95. +fg loss: P2 3.35/19.39; P1+P2 **2.91/17.27**.
+Effects are additive (canvas −0.4 fit / −2.1 heldout; fg −3.1 fit / +0.3 heldout).
+
+**Cycles (fit).** P2: 6.47 → 4.56 → 2.88 → 1.88. P2+fg: 3.35 → 1.05 → **−0.35 (beats rec-GT
+on the train objects; N=10 target MET 2026-09-12)**. Heldout drifts +0.3–0.5 per cycle.
+bf16-LPIPS collapse (3/3 at loss ≈ 0.0006) fixed by fp32 LPIPS (0/3 since). P1+P2+fg c2 running.
+
+**Win test (adapter over the fit, unseen object, 27 ep, r4 attn+FFN, 5.3 MB).**
+slipper: V18 base −3.11 → **P2+fg base −0.33 (18/40, close +1.48 8/8)**; full-FT c1 was
+−0.55, c4 +1.82. molecule: −2.70 (far −5.56; full-FT c1 −1.11). lr rule: 1e-3 on the P2+fg
+base (2.75e-3 diverged 2/3). Running: slipper c2, molecule c2, slipper over fg_c2 base,
+slipper over fg_c3 base. V18-base anchors closed: r=1 −3.65, r=4 −3.11, r=16 −2.68.
+
+**Weight audit (2026-09-12).** Canvas = view-transformer L0 re-programmed (2× movement, new
+direction), decoder becomes a refiner; scene transformer untouched. P2 = low-rank q_proj
+re-keying. fg = no re-programming. Cycles = 1.6× high-rank movement (memorisation).
+
+**Ops.** claude_node 31588298 (wadi-02, to 2026-10-02). Disk ~50 GB (freed 45 GB of finished
+ckpts this week). deb13 venv rebuilt; A5000 reservation nodes fit LoRA only (2.8 s/step).
+Branches pushed to origin (exp/lora-feasibility ⊂ probe-infra ⊂ p3 ⊂ p2 ⊂ p1-canvas; tree on
+p1-canvas). Renders: docs/figures/v19_strips_{train,heldout}.png (job 31593436).
+
+**Open decisions.** (1) V19 full-data pretraining with the full stack (~3 days, full L40S node).
+(2) Whether the full-stack base or the fg_c3 base is the adapter base going forward (fg_c3
+adapter running). (3) Report section.
+
+## 2026-09-12 eve: P1b — residual over the canvas (branch exp/p1-residual, NOT on the main line until proven)
+Motivation (heldout strips): the runes/ridges are in the input and even in the canvas, yet the
+decoder outputs invented strokes (axe 27.5 vs rec-GT 46.9). A pass-through solution exists but
+one cycle on 10 objects never finds it because memorising beats copying on the train objects.
+Change: `canvas_residual=true` → output = canvas + residual_head(DPT out), residual_head a
+zero-init 1×1 conv; at init the model IS the rasterizer (CPU test: output == canvas to 1e-7 after
+seed load). Arms on killable, same N=10 protocol: `p1res_p2_fg` (31593854 → 31593855, full stack + fg)
+and `p1res_p2` (31593856 → 31593858, plain loss) vs p1p2_fg 2.91/17.27 and p1p2 6.07/16.95. Expectation:
+heldout moves by several dB (starts at 0 margin); fit unaffected or better. Shahaf: separate
+branch, does not become the standard unless it proves the ideal approach.
+
+## 2026-09-12 22:30: molecule adapter cycle 2 = −2.45 dB, 6/40 (c1 −2.70) — +0.25 per cycle, far stuck at −5.4
+`checkpoints_lora_p2fg_scene_1423_r4_c2` (31590780 → 31590781, lr 1e-3, init from c1 adapter).
+rand −2.27 (2/24), close −0.08 (4/8), far −5.36 (0/8). The full FT gained +1.2 dB from c1→c2
+on this object; the r=4 adapter gains +0.25. Close is at parity; far (bar 48 dB) does not move
+at all (−5.56 → −5.36). No c3 queued: the adapter's ceiling on the molecule is set by far-range
+capacity, not by epochs. Slipper c2 (tomorrow ~04:00) decides whether cycles pay on the easier object.
+
+## 2026-09-13 01:00: **full stack cycle 2 = fit 0.47 / heldout 17.26 — NO heldout drift**
+`probe_p1p2_fg_c2` (31591122 → moved to sagieb 31595484 → 31595485). Fit 2.91 → 0.47 (better
+than P2+fg's c2 at 1.05); heldout 17.27 → **17.26**, flat. Every earlier chain drifted +0.3–0.5
+per cycle (P2: 19.07 → 19.42 → 19.81 → 20.11; P2+fg: 19.39 → 19.96 → 20.34). With the canvas
+the fit improves without the memorisation cost — consistent with the weight audit (the decoder
+learns a refiner, cycles refine the refiner). Cycle 3 launched on sagieb (31595828 → 31595829).
+
+## 2026-09-13 02:00: disk 24 GB → 38 GB
+Deleted the deb13 uv cache (11 GB; the venv hardlinks its files, verified link count 2, venv
+intact) and the ep3000 ckpts of six finished null arms (p2_bias_feat, p2_full, p3_hf8, p3_ray2d,
+p2r_both, p2_rope2d_c4) — their audit deltas are saved in data_v10/weight_delta/probes_vs_v18.json.
+Kept: baseline, p2_rope2d, p1_canvas, p1p2, p2r_fg{,_c2,_c3}, p1p2_fg{,_c2} (bases / audit refs).
+
+## 2026-09-13 03:30: **P1b RESIDUAL-OVER-CANVAS: heldout 2.62 (from 17.27), fit −3.97 — in ONE cycle**
+`probe_p1res_p2_fg` (31593854 → 31593855): train 48.41 vs rec-GT 44.44 (margin −3.97; the
+non-residual full stack needed 3 cycles to reach −0.35); heldout300 42.35 vs 44.97 = **2.62**,
+LPIPS margin 0.0027 (was 0.0725). Plain-loss twin `p1res_p2` (full eval): −2.56 / **2.38** (heldout LPIPS margin 0.0019, the
+best on record; the fg loss buys 1.4 dB of fit and costs 0.24 dB of heldout, as before). The 15 dB heldout jump is the pass-through the decoder could not learn on its
+own: output = canvas + residual, so the model starts as the rasterizer and unseen objects keep
+that quality minus 2.6 dB of learned-on-10-objects correction. The caveat I set for this
+branch: heldout is +2.6 relative to the rasterizer, i.e. the residual still HURTS unseen
+objects slightly; whether cycles widen that gap is the test.
+Launched (killable): residual fg cycle 2 ( → ); zero-shot codec evals of the residual
+base on slipper (31599883) and molecule (31599884) — no adapter, the base as-is on an unseen real scan —
+with the P2+fg c3 base as control (31599885); slipper r4 adapter over the residual base
+(31599860 → 31599861, lr 1e-3). Strips of the residual models: job 31597799 (after evals).
+Infra: codec eval now takes MODEL_CFG for base checkpoints (was adapter-only).
+
+## 2026-09-13 04:30: **residual base, ZERO-SHOT on real scans (no adapter): slipper −0.18 dB (12/40, close +0.15 8/8), molecule −0.97**
+`p1res_fg_zeroshot` (31599883 / 31599884; base = p1res_p2_fg ep3000, trained on 10 studio
+objects, never saw either scan). Control: the P2+fg c3 base zero-shot on the slipper = −8.71
+(31599885). Ladder on the slipper, all vs rec-GT: V18 zero-shot −16.3 → P2+fg c3 zero-shot −8.7
+→ P2+fg-base adapter (27 ep, 5 MB) −0.33 → **residual base, zero-shot −0.18** → full FT c4
++1.82. Molecule: residual zero-shot −0.97 vs P2+fg-base adapter c2 −2.45 and full-FT c1 −1.11.
+Reading: with the rasterizer in the loop the network is a correction on top of the splat, and
+a correction learned on 10 objects already transfers to real scans at ~parity. The adapter
+over the residual base (31599860 → 31599861, slipper) is now the win test proper: it starts
+from −0.18 instead of −8.7.
+
+## 2026-09-13 06:00: slipper adapter cycle 2 (P2+fg base, lr 1e-3) = −0.14 dB, 18/40 (c1 −0.33) — +0.19 per cycle
+`checkpoints_lora_p2fg_gopro_r4_c2` (31590354 → 31590355). rand −0.68 (7/24), close +1.68 (8/8),
+far −0.34 (3/8). Cycles pay the adapter +0.2 (molecule +0.25) vs +1.0 for the full FT: the
+r=4 adapter on the P2+fg base saturates just under the bar. Superseded as a route by the
+residual base (zero-shot −0.18 with no adapter at all); no c3.
+
+## 2026-09-13 09:00: HANDOFF (Fable 5.1 → next session). Insights, state, and what to do next.
+
+### The five insights of this campaign (read these first)
+1. **The N=10 "capacity floor" was an architecture problem, not a capacity problem.** V18 could
+   not fit 10 objects to the rasteriser's quality (7.6 dB short). Three changes, each additive,
+   close it: projected 2-D RoPE in the ray→Gaussian cross-attention (P2, −1.2 dB fit),
+   fg-weighted loss (−3.1 fit), and warm-restart cycles under fp32 LPIPS (−1.5 to −2 per
+   cycle). P2+fg cycle 3 = −0.35 (beats rec-GT on the train objects).
+2. **The canvas (P1) is the generalisation lever and it is orthogonal to P2.** Rasterise the
+   input splat from the target camera, add it (zero-init linear) to the ray tokens. Heldout
+   19.1 → 17.0 (P1+P2), and cycles on the canvas model do NOT drift heldout (0.47/17.26 at c2
+   vs P2+fg's 19.4→20.3). Weight audit: canvas re-programs view-transformer layer 0 (2×
+   movement, new direction) and turns the decoder into a refiner; scene transformer untouched;
+   P2 = low-rank q_proj re-keying; fg = no re-programming; cycles = high-rank memorisation.
+3. **The decoder cannot copy fine detail through on its own** (axe runes: input has them, canvas
+   has them, output invents them — 27 dB vs rec-GT 47). Making the copy trivial fixes it:
+   **residual over the canvas** (`canvas_residual`, branch exp/p1-residual): output = canvas +
+   zero-init 1×1 head(DPT out). One cycle: heldout 17.3 → **2.6**, fit −4.0, and **zero-shot on
+   real scans never seen: slipper −0.18 (close +0.15 8/8), molecule −0.97** (P2+fg c3 base
+   zero-shot: −8.7). Shahaf's rule: this stays a side branch until proven the ideal approach.
+4. **Adapters: base quality ≫ rank.** V18-base LoRA on the slipper: r1 −3.65, r4 −3.11, r16
+   −2.68 (+0.3/doubling). Same r4 adapter on the P2+fg base: −0.33; cycle 2: −0.14 (saturating).
+   lr rule on the P2+fg base: 1e-3 (2.75e-3 diverged 2/3). Adapter over the RESIDUAL base is
+   the open win test (31604958 → 31604959, sagieb, slipper, ~Sun 22:00).
+5. **The remaining heldout gap is fine-detail bandwidth, not geometry** (stratification, strips):
+   the canvas fixes the "where", the residual fixes the "copy"; what is left (2.6 dB on heldout,
+   slightly WORSE than the rasteriser alone) is what a 10-object fit teaches the corrector.
+   Only more objects (full-data run) can turn that into a gain on unseen objects.
+
+### Live jobs at handoff (train → eval; logs runs/probe_<id>.out, runs/nsweval_<id>.out,
+### runs/codec_lora_<id>.out, runs/csoeval_<id>.out; verdicts: `uv run --no-sync python -m
+### data_v10.probe_report`, experiments/overfit/data/codec_scaleout/<scene>/*_verdict.json)
+- sagieb (12): p1p2_fg_c3 31595828→31595829 (full stack cycle 3, ~Sun 14:00; is no-drift
+  still true at c3?); slipper adapter over fg_c3 base 31591154→31591155 (~Sun 22:00);
+  **slipper adapter over RESIDUAL base 31604958→31604959** (the win test; ~Sun 22:00).
+- killable: residual fg cycle 2 31599856→31599857 (~Sun 12:00; does heldout stay ≤2.6 or
+  drift?); slipper adapter over fg_c2 base on drape-01 (A5000, reservation) 31590359→31590360.
+- Done, no follow-up queued: molecule adapter c2 −2.45 (far stuck), slipper adapter c2 −0.14,
+  V18 anchors, all P2 variants (scale1/both/dim32 null), P3 arms (null), P2 chain (c4 = 1.88).
+- Ops: tree on `exp/p1-residual` (superset of exp/p1-canvas ⊃ p2 ⊃ p3 ⊃ probe-infra ⊃
+  lora-feasibility; all pushed). Jobs import the tree at start → keep it on the superset.
+  claude_node 31588298 (wadi-02) until 2026-10-02. Disk ~38 GB (lab share fills at ~10 GB/3 h
+  from other users; delete finished-arm ckpts first, hold list: v10_9869, tomato_codec4*,
+  data_v10/renders+h5s_20k_rec, v14auglp10). deb13 venv rebuilt (hardlinked; uv cache deleted).
+  A5000 reservation nodes fit LoRA only. Spurious torchrun exit 7/135 after clean finishes:
+  scripts now exit 0 on a written final ckpt; use afterany for evals.
+
+### What I would do next (in order)
+1. Read the three pending verdicts (residual c2, full-stack c3, residual-base adapter). If the
+   residual-base adapter beats rec-GT on the slipper → Shahaf's win condition is met end to end
+   (N=10 matched AND unseen object beaten with an adapter).
+2. Residual branch validation before it can become standard: (a) does heldout drift with
+   cycles (c2 verdict); (b) failure modes where the rasteriser is bad — low-N splats (the
+   codec_scaleout/<scene>_n5k, _n2k data exist) — does the residual model still correct, or
+   does it inherit raster artefacts? (c) an object with strong view-dependent effects.
+3. Full-data V19 pretraining with the full stack (+ residual if 2 passes): ~3 days on a full
+   L40S node, warm from V18; that is where "2.6 dB worse than the rasteriser on unseen" should
+   become "better than the rasteriser on unseen". Needs Shahaf's go.
+4. Report section (docs/figures/v19_strips_*.png, PROGRESS 2026-09-08 … 09-13, weight audit in
+   data_v10/weight_delta/).
+
+## 2026-09-13 11:00: **residual cycle 2 = fit −5.02 / heldout 2.46 — cycles improve BOTH; the drift is gone**
+`probe_p1res_p2_fg_c2` (31599856 → 31599857). Fit −3.97 → **−5.02** (model 49.47 vs rec-GT
+44.44), heldout 2.62 → **2.46** (it went DOWN). Every non-canvas chain paid +0.3–0.5 heldout per
+cycle; the canvas chain held flat (17.27 → 17.26); the residual chain now *gains* on heldout
+while gaining 1 dB of fit. Gate condition #1 for the branch (does drift return with cycles?)
+PASSES. Launched: cycle 3 (31608707 → 31608708) and zero-shot codec evals of the c2 base on the slipper
+(31608709) and molecule (31608710) — does the real-scan zero-shot (c1: −0.18 / −0.97) also improve per cycle?
+Remaining gates before the residual could become standard: low-N splats (codec_scaleout/<scene>_n{5k,2k}
+data exist — does the corrector still help when the rasterizer is bad?) and a view-dependent object.
+
+## 2026-09-13 12:00: zero-shot of the residual c2 base: slipper −0.14, molecule −0.72 (c1: −0.18 / −0.97)
+`p1res_fg_c2_zeroshot` (31608709 / 31608710). Cycles on the 10 studio objects also improve the
+real-scan zero-shot, by ~0.05 (slipper) and ~0.25 (molecule) per cycle — the corrector is
+getting better at correcting in general, not at these 10 objects. Framing worth keeping: the
+residual base with **zero per-object training** (−0.14 slipper) now equals the best P2+fg-base
+adapter after TWO 17-hour cycles (−0.14, 5.3 MB of per-object weights). Molecule: −0.72
+zero-shot vs −2.45 for that object's own 2-cycle adapter.
+
+## 2026-09-13 13:30: **LOW-N TEST — the residual model does NOT correct a bad rasterizer; it converges to it**
+Zero-shot evals of the residual c2 base on pruned splats (`p1res_fg_c2_zeroshot`, 31608936-41).
+Codec-verdict convention: delta = model − rec-GT, so NEGATIVE = below the rasterizer.
+
+  object        N     rec-GT bar   model    delta
+  slipper       20k   34.8         34.6     −0.14
+  slipper        5k   32.0         31.9     −0.09
+  slipper        2k   31.1         31.1     −0.06
+  molecule      20k   44.5         43.8     −0.72
+  molecule       5k   35.6         35.5     −0.09
+  molecule       2k   33.1         33.1     −0.04
+  tomatoes       5k   —            —        −0.19
+  tomatoes       2k   —            —        −0.10
+
+Two readings, both damning for the "compression tool" claim as it stands:
+1. **On every unseen object, in every regime, the residual model is at or BELOW the rasterizer.**
+   It never adds value zero-shot. (The N=10 train margin of −5.02 in probe_report convention —
+   model 49.5 vs rec-GT 44.4 — is real, but it is on the ten memorised objects.)
+2. **The deficit SHRINKS as the rasterizer gets worse** (slipper −0.14 → −0.09 → −0.06; molecule
+   −0.72 → −0.09 → −0.04). That is the signature of the network falling back on copying the
+   canvas: the worse the input raster, the less it departs from it. A corrector worth its
+   inference cost would do the opposite — low-N is where a splat has the most fixable error.
+Correction to an earlier claim in this log (2026-09-13 04:30, "transfers to real scans at
+~parity"): parity is the CEILING of what the residual arm achieves zero-shot, never a win.
+Gate #2 for the branch: FAILED. Pending: the canvas-share diagnostic (31608934) quantifies how
+much of the output is literally the canvas.
+
+## 2026-09-13 15:00: **CANVAS-SHARE DIAGNOSTIC — it is NOT a pass-through; it is a constant-size edit that only generalises to the objects it was fit on**
+`data_v10/canvas_share.py` (31609053) on the residual c2 model, FG crop, PSNR against GT and
+against the canvas (= rec-GT, the rasterization of the same input Gaussians):
+
+  split            n    model-GT   rec-GT   model-rec   ||m-r||/||r||   margin
+  train (10 obj)   40   49.47      44.44    45.12       2.9 %          +5.02
+  heldout (60)    240   42.69      45.23    45.96       2.1 %          −2.54
+
+The edit is REAL and roughly the same size everywhere (2–3 % of canvas magnitude, ~45 dB away
+from the canvas on both splits). So "it's just a rasterizer" is wrong as a description of the
+mechanism: the network always departs from the canvas by a similar amount. What differs is the
+DIRECTION: on the ten memorised objects the departure is worth +5.0 dB, on unseen objects the
+same-sized departure costs −2.5 dB. It is a memorised correction, not a copy.
+
+This also revises the low-N reading (2026-09-13 13:30, "signature of falling back on copying").
+The likelier mechanism is scale: the raster's own rms error is 0.55 % at rec-GT 45 dB (studio
+20k), 1.8 % at 34.8 (slipper 20k), 2.5 % at 32.0 (5k), 2.8 % at 31.1 (2k). A ~2.5 % edit is 5x
+the raster's error on studio 20k (so a wrong edit is catastrophic: −2.54 dB) and roughly equal
+to it at 2k (so a wrong edit barely moves the dB: −0.06). The deficit shrinks at low N because
+the denominator grows, not because the model copies more. Confirming this would need
+PSNR(model, canvas) on the low-N splits — not yet measured.
+
+Bottom line for the branch, unchanged: on unseen objects the residual arm never beats the
+rasterizer, and its 10-object correction does not transfer. What the diagnostic adds is WHY:
+not a degenerate copy, but an overfit corrector. That is a much better argument for the
+full-data run (a corrector trained on thousands of objects is exactly what this predicts
+should work) than for shipping the branch.
+
+## 2026-09-13 15:40: canvas-share, CONTROL arm — the residual's advantage on unseen objects is a SAFETY RAIL, not better learning
+Same diagnostic on the non-residual canvas model (p1p2_fg_c2), alongside the residual c2:
+
+  model                  split      edit size   model-vs-canvas   margin vs rec-GT
+  residual  (p1res_fg)   train        2.9 %       45.1 dB           +5.02
+  residual  (p1res_fg)   heldout      2.1 %       46.0 dB           −2.54
+  canvas    (p1p2_fg)    train        4.2 %       41.7 dB           −0.47
+  canvas    (p1p2_fg)    heldout     18.0 %       27.5 dB          −17.82
+
+(Train margins reproduce probe_report's +5.02 / −0.47 exactly; the heldout −17.82 vs the
+reported 17.26 is the 60-scene subsample.)
+
+Read the bottom two rows: on an unseen object the ordinary canvas model wanders 18 % away from
+the canvas — a different image, 27.5 dB from it — and pays 17.8 dB. The residual model stays
+within 2.1 % and pays 2.5 dB. **The residual architecture's entire generalisation advantage is
+that it is structurally unable to be very wrong.** It is a safety rail bolted to the
+rasterizer, not a better-learned renderer; on an unseen object the optimal setting of its
+residual head would be zero, and it does not know that.
+So Shahaf's "isn't it effectively cheating" is right about the SOURCE of the heldout number
+(the rasterizer supplies it) and wrong about the mechanism (the network is not copying — it
+makes a real, constant-size, overfit edit). Both facts belong in any write-up of P1b.
+Gates: #1 (drift with cycles) PASSED, #2 (low-N) FAILED, #3 (is it a pass-through) answered —
+not a pass-through, but the win is the constraint. Branch stays a diagnostic; it does NOT
+become the standard. The transferable lesson for the main line: constrain the decoder's output
+to a neighbourhood of the rasterization WITHOUT handing it the raster as the answer, e.g. bound
+the residual or supervise the departure, and get the corrector's training signal from thousands
+of objects rather than ten.
+
+## 2026-09-13 16:10: adapter over the fg_c2 base = −0.44 (fg base: −0.33) — a tighter 10-object fit is not a better adapter base
+`lora_p2fgc2_gopro_r4` (31590359 → 31590360, drape-01). rand −0.99, close +1.40 (8/8), far −0.63.
+The fg_c2 base fits its 10 objects far better than the fg base (probe fit 1.05 vs 3.35) yet its
+adapter lands slightly WORSE on the unseen slipper. CAVEAT: lr differs (this run 1e-3, the −0.33
+run 2.75e-3), so the comparison is confounded; the clean one is the fg_c3-base adapter
+(31591154 → 31591155, also 1e-3), landing tonight. Working hypothesis, consistent with the
+heldout drift of the P2+fg chain: cycles buy train fit by memorising, and a more memorised base
+transfers no better — the same reason p1p2's no-drift property mattered.
+
+## 2026-09-13 17:00: **FULL STACK cycle 3 = fit −1.12 / heldout 17.17 — beats rec-GT on the train objects with NO heldout cost**
+`probe_p1p2_fg_c3` (31595828 → 31595829). Model 45.57 vs rec-GT 44.44 on its 10 objects
+(LPIPS margin also negative, −0.0006). Heldout across the chain: 17.27 → 17.26 → **17.17** —
+flat to slightly improving over three cycles. The P2-only chain over the same three cycles:
+19.39 → 19.96 → 20.34 (+0.95 drift) to reach a weaker fit (−0.35).
+
+  chain                 fit c1 → c2 → c3        heldout c1 → c2 → c3
+  P2 + fg               3.35 → 1.05 → −0.35     19.39 → 19.96 → 20.34
+  P1 + P2 + fg          2.91 → 0.47 → −1.12     17.27 → 17.26 → 17.17
+
+This is the headline for the MAIN line (no residual trick, the decoder still synthesises the
+image): the canvas makes cycles free. Everything the residual branch was invented to fix is a
+separate, additive question. Cycle 4 launched on sagieb (31610166 → 31610167) to find where the fit
+saturates and whether heldout finally moves.
+
+## 2026-09-13 19:00: **base heldout margin PREDICTS adapter transfer — tighter fit makes a WORSE adapter base**
+`lora_p2fgc3_gopro_r4` (31591154 → 31591155) = −0.50 on the slipper. With the fg_c2-base run
+(−0.44, same lr 1e-3) the trend across the P2+fg chain is monotone, and it tracks the BASE's
+heldout margin, not its fit:
+
+  base            base fit   base heldout   slipper adapter (r4, 27 ep)
+  p2r_fg          3.35       19.39          −0.33   (lr 2.75e-3)
+  p2r_fg_c2       1.05       19.96          −0.44   (lr 1e-3)
+  p2r_fg_c3      −0.35       20.34          −0.50   (lr 1e-3)
+
+Cycling the base improves its fit by 3.7 dB and makes the adapter 0.17 dB worse; the base's
+heldout margin moves the same way. So "memorise the 10 objects harder" is actively harmful as
+adapter preparation — the adapter inherits the base's generalisation, not its fit. Prediction:
+the CANVAS base (p1p2_fg_c3: fit −1.12, heldout **17.17**, the best heldout on record for a
+synthesising model) should give the best adapter yet. Launched: 31611528 → 31611529 (slipper, r4, lr 1e-3).
+Also running: the same adapter over the residual base (31604958 → 31604959).
+
+## 2026-09-13 21:00: residual cycle 3 = fit −5.71 / heldout 2.33 — improving but asymptoting ABOVE parity
+`probe_p1res_p2_fg_c3` (31608707 → 31608708). Chain: fit −3.97 → −5.02 → −5.71; heldout
+2.62 → 2.46 → **2.33**. Both still improve, but the heldout gains are decaying (−0.16, −0.13,
+ratio ≈ 0.85), which extrapolates to a plateau near **1.5–1.6 dB BELOW the rasterizer** — the
+residual arm would not reach parity on unseen studio objects with any number of cycles on ten
+objects. Combined with the canvas-share finding (the edit is constant-size and simply mis-aimed
+off-distribution), the limit is the ten-object training signal, not the schedule.
+Chain STOPPED at c3: the branch is a diagnostic and the question it was raised to answer is
+answered. Kept: p1res_p2_fg_c3 ep3000 (best residual model, for figures/comparison).
+
+## 2026-09-14 01:00: **FULL STACK cycle 4 = fit −2.15 / heldout 17.06 — four cycles, BOTH axes improve every time**
+`probe_p1p2_fg_c4` (31610166 → 31610167). The complete chain:
+
+  cycle   fit                       heldout300
+  c1       2.91                     17.27
+  c2       0.47                     17.26
+  c3      −1.12                     17.17
+  c4      −2.15                     17.06
+
+Fit is not saturating (~1 dB/cycle) and heldout improves monotonically — the opposite of every
+pre-canvas chain (P2+fg over the same four cycles would be ~19.4 → 20.6). At c4 the model is
+2.15 dB ABOVE the rasterizer on its ten objects with an LPIPS margin of −0.0014, while getting
+better on 300 objects it has never seen. This is the main line: no residual, the decoder still
+synthesises the image from Gaussian tokens.
+Cycle 5 launched (31631020 → 31631021). The case for the full-data V19 run is now much stronger than
+when it was first proposed: the canvas removes the memorisation tax that made "more cycles" and
+"more data" trade against each other.
+
+## 2026-09-14 03:00: **adapter over the RESIDUAL base = −0.33, WORSE than the same base zero-shot (−0.18)**
+`lora_p1resfg_gopro_r4` (31604958 → 31604959; r4 attn+FFN, 27 ep, lr 1e-3, base = p1res_p2_fg
+ep3000). rand −0.67 (3/24), close **+1.02** (8/8), far −0.65 (0/8).
+Per-object training makes this base WORSE overall: −0.18 → −0.33. Close range improves (+0.15 →
++1.02) but rand and far degrade more than close gains. Mechanism, straight from the canvas-share
+result: the base's value is that it is pinned near the rasterization; 27 epochs of per-object
+fitting teach the adapter to depart from it, and off the training views those departures cost
+more than they buy. The safety rail is exactly what the adapter removes.
+Consequence: on the residual branch the best slipper number is the base with NO adapter
+(c2 base zero-shot −0.14). The win test on that branch fails twice over — never beats rec-GT,
+and per-object adaptation is counterproductive. The live question is now the adapter over the
+CANVAS base (31611528 → 31611529, ep 9+ and training lower than any previous adapter).
+
+## 2026-09-14 05:00: **THE HEAD-TO-HEAD — what the rasterizer is worth, as input vs as output**
+Zero-shot on unseen objects, no per-object training, same 10-object training set for all three,
+same P2 + fg recipe; they differ only in how (and whether) the rasterization is used.
+
+  SLIPPER (real scan, rec-GT bar 34.8 dB)
+    no rasterizer      probe_p2r_fg_c3        model 26.1   delta −8.71
+    canvas as INPUT    probe_p1p2_fg_c4       model 30.7   delta −4.14
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 34.6   delta −0.14
+
+  MOLECULE (studio, rec-GT bar 44.5 dB)
+    canvas as INPUT    probe_p1p2_fg_c4       model 29.0   delta −15.51
+    residual OUTPUT    probe_p1res_p2_fg_c2   model 43.8   delta −0.72
+
+Reading:
+* **Canvas conditioning is worth +4.6 dB zero-shot on an unseen real scan** (26.1 → 30.7) with
+  the decoder still synthesising every pixel. That is a genuine architectural gain and the
+  single most valuable thing the V19 campaign has produced for the main line.
+* The residual adds another +3.9 dB on the slipper and +14.8 on the molecule, but by copying:
+  its output is within 2.1 % of the rasterization, and its score tracks the rec-GT bar (34.6 vs
+  bar 34.8; 43.8 vs bar 44.5). It is the rasterizer wearing a 196M-parameter coat.
+* The canvas model's absolute quality on unseen objects is ~29–31 dB regardless of the object's
+  bar — it is a fixed-capability renderer, not a bar-tracker. That is why it loses badly on the
+  molecule (bar 44.5) and only moderately on the slipper (bar 34.8): the crossover band again.
+Conclusion for the write-up: report the canvas as INPUT (P1) as the contribution; report the
+residual (P1b) as the control that shows how much of a canvas-conditioned score can be obtained
+by copying — it is the right baseline to defend P1 against, not a method to ship.
+
+## 2026-09-14 06:00: canvas base on a 2k slipper = −2.33 (20k: −4.14) — where the crossover would be
+`p1p2fgc4_zeroshot` on gopro_n2k (31631773). The canvas model's own quality falls slowly with
+the input splat (30.7 dB at 20k → 28.8 at 2k) while the rec-GT bar falls faster (34.8 → 31.1),
+so the deficit narrows from −4.14 to −2.33. Linear in the bar, parity would arrive at a bar of
+roughly **29 dB**, i.e. compression well below 2k Gaussians — or, equivalently, the model needs
+about +2.5 dB of absolute quality on unseen objects to win at 2k. That is the number the
+full-data run has to deliver, and it is a far more concrete target than "beat rec-GT".
+
+## 2026-09-14 07:00: disk 24 GB → 44 GB
+Freed: the two residual stage-R dirs (seeds long consumed), the ep2800 pre-finals of the two
+residual c1 runs, and the duplicate `gaussianformer_final` HF exports of seven superseded
+chain links (the .pt is what every eval loads). Untouched: every checkpoint referenced by a
+reported number — p1p2_fg{,_c2,_c3,_c4}, p1res_p2{,_fg,_fg_c2,_fg_c3}, p2r_fg{,_c2,_c3},
+p2_rope2d, p1_canvas, baseline — and the running c5.
+
+## 2026-09-14 09:00: **CONFIDENCE INTERVALS (cluster bootstrap over scenes) — one headline claim does NOT survive**
+New tool `data_v10/probe_ci.py`: the 4 views of a scene are not independent, so it resamples
+SCENES, and compares arms with the SAME resampling (paired), which is far tighter than two
+independent CIs. 10 000 replicates on the rows we already have; no GPU.
+
+Heldout300 (n = 300 scenes):
+  baseline            20.44  [20.22, 20.67]
+  P2                  19.07  [18.84, 19.29]     vs baseline  −1.38 [−1.47, −1.28] *
+  P1 canvas           17.47  [17.24, 17.70]     vs P2        −1.60 [−1.69, −1.51] *
+  P1+P2               16.95  [16.73, 17.18]     vs P1        −0.52 [−0.56, −0.47] *
+  P1+P2+fg            17.27  [17.04, 17.49]     vs P1+P2     +0.32 [+0.25, +0.38] *
+  P1+P2+fg c4         17.06  [16.78, 17.34]     vs c1        −0.21 [−0.34, −0.07] * (p=0.002)
+Every architectural step is significant, and the canvas chain's cycles significantly IMPROVE
+heldout (the earlier "flat" reading was conservative). Contrast, same test on the P2+fg chain:
+c3 − c1 = **+0.95 [+0.89, +1.02]** — the drift is real and highly significant.
+
+Train (n = 10 scenes — the small-sample caveat bites):
+  baseline             7.62  [ 5.86,  9.48]
+  P2+fg c3            −0.35  [−1.73, +0.93]   ← **CROSSES ZERO**
+  P1+P2+fg c4         −2.15  [−3.25, −1.08]   ← below zero at 95 %
+  c4 vs P2+fg c3      −1.80 [−2.10, −1.46] *
+
+**Correction to the 2026-09-12 headline.** "P2+fg cycle 3 beats rec-GT on its train objects
+(−0.35)" is NOT supported at 95 % on ten scenes; the interval includes zero. The claim that
+survives is the canvas model's: P1+P2+fg c4 at −2.15 [−3.25, −1.08]. Use that one with Sagie,
+and quote intervals for every N=10 number — ten objects is a small sample and the per-object
+spread is ±1.5 dB.
+
+## 2026-09-14 10:00: **N=100 arms launched — does the canvas advantage survive 10x more objects?**
+`probe_n10.sh` now takes `N` from the environment (default 10); everything else identical, and
+TARGET_STEPS stays 30 000 so the arms are compared at EQUAL COMPUTE (N=100 → 100 steps/epoch,
+300 epochs, stage R 30 epochs). Launched on sagieb, 4 GPUs each:
+  n100_p1p2_fg  (canvas + proj_rope_2d + fg)  31641386 → 31641387
+  n100_p2r_fg   (proj_rope_2d + fg)           31641388 → 31641389
+The baseline at this N already exists from the old sweep — `nsweep_n100` = train 13.40 /
+heldout 17.93 (and nsweep_n1000 = 15.79 / 16.70, nsweep_n10 = 7.57 / 20.47), same seed and
+step budget, so the three-point comparison at N=100 needs no new baseline run.
+What the result means either way: at N=10 the canvas bought −3.0 dB heldout against the
+baseline. If that margin holds at N=100 the mechanism scales and the full-data run is justified;
+if it collapses toward the baseline's 17.93, the canvas was buying a small-sample effect and the
+full-data run would be a poor bet. Note the baseline's own heldout already improves with N
+(20.47 → 17.93 → 16.70), so the honest metric is the GAP, not the absolute.
+
+## 2026-09-15 03:00: **WIN — adapter over the CANVAS base beats rec-GT on an unseen real scan: +0.60 dB, 30/40**
+`lora_p1p2fgc3_gopro_r4` (31611528 → 31611529). Base = `probe_p1p2_fg_c3` (canvas + proj_rope_2d
++ fg, 3 cycles, heldout 17.17), r=4 attn+FFN, 5.3 MB, 27 epochs, lr 1e-3, slipper — an object
+the base has never seen. ALL THREE ranges positive:
+
+  novel_rand   model 35.95  rec-GT 35.79  +0.16  (16/24)
+  novel_close  model 30.20  rec-GT 28.20  +2.00  ( 8/8)
+  novel_far    model 38.92  rec-GT 38.39  +0.53  ( 6/8)
+
+**Shahaf's win condition is met, on the main line, with no residual trick**: shared base plus
+5.3 MB of per-object weights renders the compressed splat better than rasterizing it. For scale,
+the full fine-tune (786 MB of per-object weights) needed three cycles to pass this: c1 −0.55,
+c2 +0.48, c3 +1.26, c4 +1.82. The adapter reaches +0.60 in one 17-hour cycle at 0.7 % of the
+weights.
+
+And it confirms the 2026-09-13 prediction exactly — **adapter transfer tracks the BASE's heldout
+margin, not its fit**:
+
+  base                    base fit   base heldout   slipper adapter
+  p2r_fg                   3.35       19.39         −0.33
+  p2r_fg_c2                1.05       19.96         −0.44
+  p2r_fg_c3               −0.35       20.34         −0.50
+  p1p2_fg_c3              −1.12       17.17         **+0.60**
+  p1res_p2_fg (residual)  −3.97        2.46*        −0.33   (*different scale, see 09-13)
+
+Launched: the same adapter on a SECOND object (molecule, 31649133 → 31649137) — the result has
+to reproduce before it goes in front of Sagie.
+
+## 2026-09-15 07:00: **N=100 — THE CANVAS ADVANTAGE MORE THAN DOUBLES WITH 10x THE OBJECTS**
+Equal compute (30 000 steps), same seed, same heldout300 set as every other number in this log.
+
+  arm                          train(N)   heldout300
+  nsweep_n100 (baseline)        13.40      17.93
+  probe_n100_p2r_fg             10.51      16.38
+  probe_n100_p1p2_fg (canvas)  **7.77**   **11.25**  [11.01, 11.49]
+  paired canvas − P2+fg:        −2.74      **−5.13**  [−5.32, −4.95], p<1e-4
+
+Canvas advantage over the same recipe without it: **2.12 dB at N=10 → 5.13 dB at N=100.** For
+reference the whole N-sweep only moved heldout 20.47 → 17.93 → 16.70 going 10 → 100 → 1000
+objects; the canvas at N=100 (11.25) is **5.5 dB better than the 1000-object baseline**, at a
+tenth of the data.
+This is the scaling answer the full-data run was meant to provide, and it is emphatic: the
+mechanism does not merely survive more objects, it feeds on them. Reading it with the weight
+audit: the canvas turns the decoder into a refiner, refinement is an object-independent skill,
+and more objects teach it better — whereas the pre-canvas model spent extra objects on
+memorisation (its heldout barely moved).
+Combined with the 2026-09-15 adapter win (+0.60 on an unseen real scan from the N=10 canvas
+base), the two halves of Shahaf's win condition are met AND the mechanism scales. The full-data
+V19 run is now the obvious next step rather than a speculative one.
+## 2026-09-15 11:00: **P4 — the 8-px pattern is the PATCH GRID, not a ConvTranspose checkerboard** (branch exp/p4-deblock)
+Measured the spatial spectrum of each column's error vs GT on the winning slipper close-up
+(object bbox only, label strip excluded):
+
+  rec-GT error   top periods  x 38.2 / 30.5 / 24.1 px    y 31.2 / 39.0 / 22.3 px   (broadband = the fleece it cannot resolve)
+  model  error   top periods  x  8.0 /  7.9 / 14.3 px    y  8.0 /  8.2 /  7.8 px   (a spike at exactly patch_size)
+
+8 px IS `patch_size`. The token grid imprints on the output during DPT reassembly — the head
+fuses a 64x64 token grid and finishes with a single bilinear jump to 512, so nothing in the
+decoder ever looks across a patch boundary at full resolution. This CORRECTS the 2026-08-31
+note ("3.8-px ConvTranspose stripe"): the resize layers are kernel==stride (no overlap, so no
+Odena checkerboard), and the measured period is 8, not 3.8.
+Fix (`deblock_kernel`, default 0): `img = img + conv_kxk(img)` at full resolution with the conv
+ZERO-INIT, so it is an exact no-op at load and warm-starts from any checkpoint — 732 params at
+k=9. k must exceed patch_size to span a boundary (asserted). CPU test: new tensors are exactly
+the two zero ones, every pre-existing weight byte-identical, `x + deblock(x) == x`.
+Probe launched warm from the canvas c3 base: `p4_deblock9` 31652044 → 31652045. Readout is the
+usual fit/heldout margins PLUS a re-run of the spectrum on its renders — the margins may barely
+move (the artefact is ~1 % of energy) while the images look materially better, so the spectrum
+is the primary metric here, not the dB.
+
+## 2026-09-15 12:00: **CANVAS ABLATION — what happens if you prune the rasterizer arm after training**
+`ceiling_eval.py --canvas_ablate {zero,rollviews}` (eval-only; it patches
+`gaussianformer.utils.canvas.render_canvas`, which the pipeline imports at call time, so no
+model change and no retraining). Two ablations of the canvas c3 model (`probe_p1p2_fg_c3`,
+normal: fit −1.12 / heldout 17.17):
+  zero       all-black canvas = literally pruning the rasterizer at test time. The encoder is
+             `ray_tokens += canvas_encoder(canvas_patches)`, so with a zero canvas only the
+             encoder's BIAS survives — a constant offset the model has never seen alone.
+  rollviews  the right object from the WRONG camera (views cyclically shifted by one). Separates
+             "uses the canvas as a view-aligned reference" from "uses it as a generic prior".
+Jobs 31652334 (zero) / 31652335 (rollviews). Prediction: zero collapses toward or below the
+no-canvas baseline (20.44 heldout) — the model has no path to the input geometry other than the
+scene tokens it has learned to under-use; rollviews should land in between, and how far tells us
+how much of the gain is view alignment rather than object statistics.
+
+## 2026-09-15 13:00: **CANVAS ABLATION RESULT — the rasterizer arm CANNOT be pruned; the canvas is used pixel-aligned**
+Same checkpoint (`probe_p1p2_fg_c3`), eval-only ablations of the canvas input:
+
+  canvas fed                     fit(10)   heldout300   model PSNR (heldout)
+  normal                         −1.12     17.17        27.80
+  right object, WRONG camera     27.80     29.42        15.54
+  all black (arm pruned)         30.15     32.49        12.48
+
+The model collapses to worse than the V18 seed. Two conclusions, both important and both
+uncomfortable:
+1. **You cannot drop the rasterizer after training.** It is not a hint the model could do
+   without — it is load-bearing at inference, every view, forever. The deliverable is
+   "splat + base + adapter + gsplat in the loop", not "splat + weights".
+2. **The canvas is consumed as a VIEW-ALIGNED reference, not as a generic object prior.**
+   A canvas of the same object from an adjacent camera is worth only ~3 dB more than a black
+   one (29.42 vs 32.49); both are catastrophic. The decoder reads it pixel-by-pixel.
+Combined with the weight audit (the canvas re-programs view-transformer L0 and turns the
+decoder into a refiner) and canvas-share (the output departs 18 % from the canvas on unseen
+objects, i.e. it is NOT copying), the honest characterisation of the winning model is:
+**a learned, view-aligned refiner of a rasterization that synthesises every pixel it emits.**
+It genuinely beats the rasterizer (+0.60 dB on an unseen real scan with a 5.3 MB adapter) and
+it genuinely is not copying — but it is not a standalone neural renderer, and the scene-token
+path has atrophied to the point of uselessness without the canvas. Say this plainly to Sagie;
+it is the first thing a reviewer will probe.
+Open question worth one probe later: canvas DROPOUT during training (feed a black canvas on a
+fraction of steps) would force the scene-token path to stay alive and might buy robustness —
+and would tell us whether the two paths can coexist.
+
+## 2026-09-16 13:00: **P4 deblock = NULL, and the reason corrects the P4 diagnosis: the grid is not where the base trains**
+`probe_p4_deblock9` finished: fit −2.23 / heldout 17.09 vs plain c4 −2.15 / 17.06 — identical.
+Zoomed native-resolution renders (`data_v10/deblock_zoom.py`, docs/report/fig_deblock_zoom_*.png):
+c4 and deblock are visually indistinguishable, crop PSNR within 0.1 dB on all 16 views.
+The trained layer did essentially nothing: ||W||_F = 0.017, gain on an 8-px grid pattern 1.2 %
+(1.0 would cancel it). Why — measured with the new `data_v10/patch_artifact.py` (error power at
+the patch frequency / its spectral neighbours; 1.0 = no grid, rasterizer ≈ 1.0 everywhere):
+
+  model                                     where               x      y
+  c4 base                                   10 train objects    0.99   1.01    no grid
+  c4 base                                   40 heldout objects  1.08   1.07    faint
+  slipper adapter (canvas base), rand       real scan           1.12–1.28        weak
+  slipper adapter, far                      real scan           1.24–1.27        weak
+  slipper adapter, CLOSE                    real scan           1.59–1.93        strong
+
+The grid lives where the model is most stretched — close-range views of an unseen real scan,
+where one 8-px patch covers the most object detail — and is absent on the base's own training
+views. The deblock layer was trained on exactly the views that have no grid, so its gradient
+was ~0 and it stayed at its zero init. The 2026-09-15 claim "the token grid imprints on the
+output" was right in mechanism but over-general in scope: it is an off-distribution / close-range
+effect, not a property of the base.
+Consequence: the fix has to be trained where the artefact is — in the ADAPTER stage, on the
+object's close-range views — not in the base. That needs train_lora.py to also train the
+732-param deblock layer and to save it with the adapter (3 KB). Not launched: code change to the
+adapter script, and a ~17 h run that cannot finish before the meeting. Proposed instead.
+
+## 2026-09-16 15:40: **Molecule (scene_1423) canvas-base adapter: −1.41 dB overall (12/40) — base ordering reproduces, overall win does not**
+`checkpoints_lora_p1p2fgc3_scene_1423_r4` (canvas c3 base, r4 attn+FFN, lr 1e-3, 27 ep), codec
+delta = model − rec-GT (POSITIVE = model wins):
+
+  base for the adapter        rand (24)       close (8)        far (8)         all 40
+  P2+fg                       −2.53  0/24     −0.36  3/8       −5.56  0/8      −2.70   3/40
+  P2+fg c2                    −2.27  2/24     −0.08  4/8       −5.36  0/8      −2.45   6/40
+  canvas c3                   −1.31  5/24     +1.22  7/8       −4.35  0/8      −1.41  12/40
+  (slipper, canvas c3)        +0.16 16/24     +2.00  8/8       +0.53  6/8      +0.60  30/40
+
+The canvas base is +1.3 dB better than the best non-canvas base on the molecule, and wins the
+close range (7/8), same shape as the slipper. But the molecule's rasterizer bar is 44.6 dB (vs
+35.8 on the slipper — rec-GT bar inverts on simple objects), and the far views lose by 4.4 dB.
+The full fine-tune on this object needed five cycles to reach +1.47. Verdict: the "adapter over
+fit" win is OBJECT-DEPENDENT — it exists where the rasterizer is weak (fine texture, close
+range) and not where the rasterizer is already near-perfect. Report §3 updated with this table.
+
+## 2026-09-17 morning: **render-heavy report for the meeting — `docs/report/v19_renders_report.pdf` (19 pp, 27 figures)**
+New `data_v10/report_renders.py` (+ `.sh`, killable/sagieb 1-GPU, ~25 min): `ladder` mode = GT | rasterizer |
+V18 seed | P2+fg c3 | canvas c4 on 18 heldout objects x views {0,7} (FG-cropped strips + 96-px native zoom
+rows with error maps) + a 40-object contact sheet (rasterizer vs canvas c4); `codec` mode = GT | rasterizer |
+canvas-c3 base (no adapter) | adapter on the slipper / molecule codec views, full frame + zoom. Outputs in
+docs/report/renders/ (ladder.json, codec_*.json carry every number). Picks: axe s7, diver s23, seahorse s31,
+creature s16; biggest canvas gains s395 (+8.9 over P2+fg c3), s359, s831 (33.6 dB, best heldout), s940;
+failures s646/s533 (rasterizer 47-53 dB, canvas no better than P2+fg), s185 (banded sphere).
+Slipper close views: adapter beats the rasterizer on all 8 by +1.7..+2.2 dB; base alone loses 3-4 dB; the
+8-px grid is plainly visible in the adapter zoom column (view 1 clearest). Molecule far views: -3.4..-5.1 dB
+vs a 47-49 dB rasterizer -> the object-dependence in one figure. No deblock render of the slipper exists
+(the layer was only trained in the base, where it stayed at zero); that needs the adapter-stage deblock run.

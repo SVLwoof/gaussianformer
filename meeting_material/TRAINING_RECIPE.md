@@ -1,5 +1,17 @@
 # GaussianFormer — training recipe (technical rundown)
 
+> ## ⚠ CORRECTIONS as of 2026-08-07
+> - The "object-space mean PSNR" row was measured on TRAINING objects; V17's true held-out mean
+>   is **30.29 dB** (split: `h5s_20k_rec_val`). V18's stage B was never run (premise retired by
+>   the N-sweep — the floor is capacity, not data).
+> - Soft-spot status after the control campaign: #3 (no grad accum) unchanged; #8 (uniform wd) and
+>   #9 (rotation-only aug) EXONERATED at scale (−0.27 dB combined at N=100); #10 (pruning score)
+>   deprioritised; NEW validated fix: **fg-weighted log-L1** (`--fg_bg_weight 0.05`) improves both
+>   fit (−1.63 dB) and held-out (+0.27 dB). New architectural facts: view-transformer depth ≥ 4
+>   (DPT taps the last 4 layers); from-scratch training parks at an LPIPS ≈ 0.092 attractor at any
+>   width — only intact pretrained inits escape.
+
+
 All values read from the code, not from notes. **V18** is the run in progress; **V17** is the
 current best model and used the identical recipe with a longer schedule and a different GPU layout.
 

@@ -118,6 +118,15 @@ def main() -> None:
                     help="stamped into every row and the output filename, so a later V18 sweep "
                     "lands alongside V17's rows instead of colliding with them")
     ap.add_argument("--pe_type", default="rope")
+    ap.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
+                    help="GaussianFormerConfig overrides; must match the ones used in training")
+    ap.add_argument("--canvas_ablate", choices=("none", "zero", "rollviews"), default="none",
+                    help="EVAL-ONLY ablation of a canvas_cond model: 'zero' feeds an all-black "
+                         "canvas (what pruning the rasterizer arm at test time would do); "
+                         "'rollviews' feeds the RIGHT object from the WRONG camera (tests whether "
+                         "the canvas is used as a view-aligned reference or a generic prior). "
+                         "Patches gaussianformer.utils.canvas.render_canvas, which the pipeline "
+                         "imports at call time, so no model change is needed.")
     ap.add_argument("--views", default="all", help="'all' (0..13) or comma-separated indices")
     args = ap.parse_args()
 
@@ -140,9 +149,18 @@ def main() -> None:
                 done.add((r["scene"], r["view"]))
         print(f"resume: {len(done)} rows already in {args.out}", flush=True)
 
+    if args.canvas_ablate != "none":
+        import gaussianformer.utils.canvas as _cv
+        _real = _cv.render_canvas
+        if args.canvas_ablate == "zero":
+            _cv.render_canvas = lambda *a, **k: torch.zeros_like(_real(*a, **k))
+        else:  # rollviews: same object, cameras cyclically shifted by one
+            _cv.render_canvas = lambda *a, **k: _real(*a, **k).roll(1, dims=0)
+        print(f"CANVAS ABLATION: {args.canvas_ablate}", flush=True)
+
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
-    pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type), device)
+    pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type, model_cfg=args.model_cfg), device)
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device).eval()
 
     def lp_many(pairs: list[tuple[np.ndarray, np.ndarray]]) -> list[float]:

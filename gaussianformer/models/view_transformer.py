@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
@@ -18,7 +19,7 @@ class ViewTransformer(nn.Module):
         # The ray decoder is pure RoPE for both pe_types ('nerf' differs from 'rope' only
         # in the scene encoder; its ray decoder is identical).
         if config.pe_type in ('rope', 'nerf'):
-            self.rope_dim = config.pos_pe_num_freqs
+            self.rope_dim = config.rope_dim or config.pos_pe_num_freqs
         else:
             raise ValueError(f"Unsupported positional encoding type: {config.pe_type}")
 
@@ -61,7 +62,15 @@ class ViewTransformer(nn.Module):
             bias=self.config.bias,
             include_self_attn=self.config.view_transformer_include_self_attn,
             use_swin_attn=self.config.view_transformer_use_swin_attn,
+            ray_rope_2d_dim=self.config.ray_rope_2d_dim,
+            ray_rope_2d_scale=self.config.ray_rope_2d_scale,
+            proj_rope_2d=self.config.proj_rope_2d,
         )
+        if self.config.canvas_cond:
+            # P1: rasterized canvas patches -> ray tokens, zero-init (exactly the baseline at init)
+            self.canvas_encoder = nn.Linear(3 * self.config.patch_size ** 2, self.config.view_transformer_latent_dim)
+            nn.init.zeros_(self.canvas_encoder.weight)
+            nn.init.zeros_(self.canvas_encoder.bias)
 
         # --- Output Head ---
         if not config.use_dpt_decoder:
@@ -77,7 +86,19 @@ class ViewTransformer(nn.Module):
                                          self.config.view_transformer_n_layers)) if self.config.dpt_out_layers is None else self.config.dpt_out_layers
         self.out_proj_act = nn.ELU(alpha=1e-3)
 
-    def forward(self, camera_o, ray_map, ctx_tokens, spatial_pos, valid_mask, tf32_mode=False):
+    def project(self, spatial_pos, fov, H, W):
+        """Camera-frame means -> (u, v) in PATCH units, positive depth, behind-camera flag.
+        Matches RayGenerator: dirs = [(x-cx)/fx, -(y-cy)/fy, -1], camera at the origin looking down -Z."""
+        ps = self.config.patch_size
+        focal = 0.5 * W / torch.tan(0.5 * fov.to(spatial_pos.dtype)).view(-1, 1)  # [B, 1]
+        X, Y, Z = spatial_pos.unbind(-1)
+        depth = (-Z).clamp_min(1e-3)
+        u = (W / 2 + focal * X / depth) / ps
+        v = (H / 2 - focal * Y / depth) / ps
+        return torch.stack([u, v], -1), depth, (Z > -1e-3), focal
+
+    def forward(self, camera_o, ray_map, ctx_tokens, spatial_pos, valid_mask, tf32_mode=False,
+                fov=None, canvas=None):
         """
         Cross attention between ray map and context tokens (gaussians).
 
@@ -103,8 +124,22 @@ class ViewTransformer(nn.Module):
         patch_h = ray_map.size(1) // self.config.patch_size
         patch_w = ray_map.size(2) // self.config.patch_size
         ray_tokens = self.ray_map_patch_token + self.ray_map_encoder_norm(self.ray_map_encoder(ray_tokens))  # [B, N_PATCHES, D]
+        if self.config.canvas_cond:
+            assert canvas is not None, "canvas_cond needs the rasterized canvas [B, H, W, 3]"
+            canvas_tokens = rearrange(canvas.to(ray_tokens.dtype), 'b (h1 p1) (w1 p2) c -> b (h1 w1) (c p1 p2)',
+                                      p1=self.config.patch_size, p2=self.config.patch_size)
+            ray_tokens = ray_tokens + self.canvas_encoder(canvas_tokens)
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
+
+        # --- P2: explicit perspective projection of every Gaussian (what rasterization uses) ---
+        uv_q = uv_k = None
+        if self.config.proj_rope_2d:
+            assert fov is not None, "proj_rope_2d needs fov (radians) per view"
+            uv_k, _, _, _ = self.project(spatial_pos, fov, ray_map.size(1), ray_map.size(2))
+            ii, jj = torch.meshgrid(torch.arange(patch_h, device=ray_map.device),
+                                    torch.arange(patch_w, device=ray_map.device), indexing="ij")
+            uv_q = (torch.stack([jj, ii], -1).reshape(1, -1, 2).float() + 0.5).expand(ray_map.size(0), -1, -1)
 
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.
@@ -119,7 +154,8 @@ class ViewTransformer(nn.Module):
                     out_layers=self.out_layers,
                     tf32_mode=tf32_mode,
                     patch_h=patch_h,
-                    patch_w=patch_w
+                    patch_w=patch_w,
+                    uv_q=uv_q, uv_k=uv_k,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
             return self.out_proj_act(decoded_img)
@@ -132,7 +168,8 @@ class ViewTransformer(nn.Module):
                 ray_pos=ray_pos,  # For query RoPE
                 tf32_mode=tf32_mode,
                 patch_h=patch_h,
-                patch_w=patch_w
+                patch_w=patch_w,
+                uv_q=uv_q, uv_k=uv_k,
             )  # [B, N_PATCHES, D]
             decoded_patches = self.out_proj_act(self.out_proj(seq))  # [B, N_PATCHES, P*P*3]
             decoded_img = rearrange(
