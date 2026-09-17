@@ -38,6 +38,42 @@ Fixed harness: 10 training objects, 30k steps, warm start from V18. Readout = FG
 below the rasterizer on the 10 training objects (*fit*) and on 300 unseen objects
 (*held-out*). Lower is better; negative beats the rasterizer.
 
+**What each change is.** In the baseline, position enters the network only through a 3-D
+rotary embedding (RoPE) on Gaussian centres, 12 frequencies spanning 1 to 5 radians per
+world unit, in both the scene stage and the cross-attention of the view stage; ray tokens
+carry the camera origin as their position, so the view stage has no notion of where a patch
+sits in the image and has to infer every projection from 3-D position plus camera.
+
+- **P3, RoPE bandwidth.** Hypothesis: fine detail is lost because attention cannot resolve
+  positions finely enough. Three variants: (a) rotary dim 12 to 32 with positions scaled 4x
+  (band 4 to 20 rad/unit, rotates 48 of 64 channel pairs); (b) a second 3-D band at 8x
+  scale (8 to 40 rad/unit) added in previously unrotated pairs, pretrained pairs untouched;
+  (c) a 2-D RoPE on the patch-grid position for ray-token self-attention. All three are
+  within 0.1 dB of the baseline: positional resolution of attention is not the bottleneck.
+- **P2, projected 2-D RoPE in cross-attention.** Every Gaussian is explicitly
+  perspective-projected into the current view. Its projected patch coordinate (u, v) gets a
+  2-D RoPE on the cross-attention *keys*; each ray token gets its own patch centre on the
+  *queries*. The attention logit between a patch and a Gaussian then carries a term that
+  depends only on their 2-D offset in the image, so attention can prefer Gaussians that land
+  near the patch without learning projection implicitly. The only geometry change that moved
+  both axes.
+- **P2 variants.** A 4x sharper 2-D band, 32 rotary dims instead of 16, the same 2-D RoPE
+  also in ray self-attention, and a zero-initialised proximity bias plus depth and footprint
+  features. All flat: the projected coordinate itself is the effect, its resolution is not.
+- **P1, rasterized canvas.** The input splat is rasterized with gsplat from the same camera
+  (in log10(x+1) space) and added to the ray tokens through a zero-initialised linear layer.
+  At load the network is exactly V18; it learns to read the canvas, and the decoder becomes
+  a refiner of it. The largest held-out mover by far, the weakest on fit.
+- **Foreground-weighted loss.** Pixels whose target luminance is at most 0.02 (the black
+  background) get weight 0.05 in the loss. Objects cover a minority of each frame, so the
+  loss had been dominated by background that every model already gets right. It moves fit,
+  not generalisation.
+- **Cycles.** Warm restarts of the same run with a fresh learning-rate schedule.
+
+The recurring rule: only changes that are *additive and zero-initialised* survive the warm
+start; anything that alters pretrained function (P3a, the P2 RoPE itself) needs a
+low-resolution recovery stage first.
+
 | change | fit | held-out | verdict |
 |---|---:|---:|---|
 | V18 baseline | 7.62 | 20.44 | reference |
@@ -171,7 +207,17 @@ camera is barely better. The canvas is consumed pixel-aligned, not as a generic 
 | right object, wrong camera | 27.80 | 29.42 | 15.54 |
 | all black (arm removed) | 30.15 | 32.49 | 12.48 |
 
-**It is not copying the canvas.** On unseen objects the output sits 18% away from the
+**It is not copying the canvas.** The control that *does* is shown below: the
+residual-over-canvas model (output = canvas + a zero-initialised 1x1 head on the decoder), which
+starts as the rasterizer and can only edit it. On the axe it scores 44.6 dB against the
+rasterizer's 46.9 with the etchings intact, where our main-line model scores 28. But it never
+beats the rasterizer on any unseen object in any regime (2 to 5 dB below), and per-object
+adapter training makes it worse. Its number is the rasterizer's minus a constant edit learned
+on the ten training objects, not a render.
+
+![The residual-over-canvas control (two rightmost columns) next to the main-line canvas arm, on the same four unseen objects. It reproduces the rasterizer's fine detail because it starts from it, and it never exceeds it.](../figures/v19_strips_heldout_residual.png){width=100%}
+
+On the main line, on unseen objects the output sits 18% away from the
 canvas it was given (27.5 dB from it); every pixel is synthesised. A control that adds its
 output to the canvas as a residual never beat the rasterizer on any unseen object and got
 worse with per-object training. Accurate description: **a learned, view-aligned refiner of
