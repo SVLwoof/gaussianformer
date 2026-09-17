@@ -3954,3 +3954,34 @@ Slipper close views: adapter beats the rasterizer on all 8 by +1.7..+2.2 dB; bas
 8-px grid is plainly visible in the adapter zoom column (view 1 clearest). Molecule far views: -3.4..-5.1 dB
 vs a 47-49 dB rasterizer -> the object-dependence in one figure. No deblock render of the slipper exists
 (the layer was only trained in the base, where it stayed at zero); that needs the adapter-stage deblock run.
+
+## 2026-09-17 afternoon: **post-meeting pivot — canvas line dropped; the PLACEMENT bottleneck; cleanup PR #14; three arms launched**
+Decision (Shahaf + Sagie): drop P1/canvas/residual, stay a pure transformer renderer. Diagnosis written
+up in docs/plans/2026-09-17_placement.md: the view stage has no channel for WHERE inside a patch a
+Gaussian lands (context tokens are view-independent; only the attention weight is view-dependent), so
+a patch learns membership, never placement. Consistent with every V19 result (8-px error peak, 14 dB
+under-fit on train with a 0.55 dB train/test gap, capacity + RoPE-bandwidth flat, P2 +1.4, canvas +3).
+Repo: tag `v19-campaign` (6fabd7f) = the reports' state. Branch `v19/cleanup` removes the null arms
+(canvas_residual, deblock_kernel, proj_bias/feat, rope_hf_scale, rope_pos_scale, ray_rope_2d, deblock_zoom.py);
+keeps proj_rope_2d, canvas_cond (checkpoint loading only), geom_bias, fg_bg_weight. CPU-verified: V18,
+P2+fg c3, canvas c4, slipper LoRA load with zero missing/unexpected keys; P2 forward runs (ATTN_IMPL=sdpa).
+PR #14 -> main supersedes #6-#13 (closed; all were ancestors). `/codereview` on #14, then merge.
+Branch `v20/placement` (ac66be6) off it:
+- `value_rope_2d` (+dim 32, scale 1.0): cross-attention VALUES rotated by the Gaussian's projected (u,v),
+  output un-rotated by the patch centre -> aggregate = sum_k w_k R(uv_k - uv_q) v_k. Per-head zero-init
+  gate; CPU-verified max|diff| = 0.0 at gate 0, 0.68 at gate 1.
+- `ray_embed_patch`: patch_size=4 on the pretrained 8x8 ray embedding (nearest-upsampled rays); verified.
+- ceiling_eval --res/--radius/--renders_dir (radius != 1.7 re-aims the model's cameras via orbit_c2w);
+  probe_n10.sh RES_MAIN/H5/RENDERS; multi_radius_datagen.py; aug_radius_pipeline.sh; run_radius_eval.sh;
+  process_full.py --scenes.
+Launched (all on the P2+fg recipe: proj_rope_2d + fg 0.05, V18 seed, stage R 3000, 30k steps):
+  arm            cfg                                          train -> eval            readout
+  p2r_fg_vrope   + value_rope_2d                              31682587 -> 31682588     fit/heldout vs p2r_fg 3.35/19.39
+  p2r_fg_r256p8  RES_MAIN=256 (control, 1024 tokens)          31682589 -> 31682590     fit/heldout at 256
+  p2r_fg_r256p4  RES_MAIN=256 patch 4 + ray_embed_patch 8     31682591 -> 31682592     vs r256p8: per-token load halved/axis
+  aug data       rebuild 10 full splats + n10_r3 + heldout r1.15   31682593 (killable)
+  p2r_fg ctrl    heldout300 @ r1.15                           31682594 (after data)
+  p2r_fg_aug     H5/RENDERS = n10_r3 (42 views/object)        31682595 -> 31682596 (std), 31682597 (r1.15)
+Sagieb budget: 3 x 4 GPUs; the aug training waits for r256p8 to finish (afterany) to stay <= 12.
+Pass criteria: vrope fit moves by dB (not tenths); r256p4 >> r256p8 on fit; aug wins at r1.15 without
+losing at r1.7. ETA: 256 pair ~3 h after start, vrope ~10 h, aug data ~2 h then ~10 h.
