@@ -4003,7 +4003,7 @@ Review (Shahaf ran `/code-review 14`; branch v20/placement vs main). Acted on, n
 - FINDING TO REMEMBER: with proj_rope_2d the QUERY table (3-D + patch-centre 2-D band) is also what the
   ray-token self-attention uses, so every P2 run since 09-09 also had relative 2-D RoPE among patches.
   P3 ray2d (that alone) was null, so the projected keys are the likely driver, but it is confounded.
-  New knob `ray_self_rope_2d` (default True = current behaviour); pure-P2 ablation arm queued after
+  New knob `ray_self_rope_2d` (default True = current behaviour); pure-P2 arm p2r_fg_pure 31686729 -> 31686730 queued after
   r256p4 frees its GPUs (same seed + schedule as p2r_fg, per the reviewer's note).
 - Documented, not changed: RoPE frequency tables are nn.Parameters trained in phase 2 (V18's differ from
   the config table; all arms share this). Deferred until verdicts: value-RoPE band-slice efficiency,
