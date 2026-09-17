@@ -29,7 +29,7 @@ from simple_ocio import ToneMapper
 
 from data_external.orbit import make_orbit_views
 from gaussianformer.models.config import GaussianFormerConfig
-from gaussianformer.models.gaussianformer import GaussianFormer
+from gaussianformer.utils.checkpoint import load_checkpoint
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
 from infer_gaussian import load_single_gaussian_h5_data
 
@@ -84,24 +84,15 @@ def parse_model(s: str) -> ModelSpec:
 
 
 def load_model(spec: ModelSpec, device: torch.device) -> GaussianFormerRenderingPipeline:
-    config = GaussianFormerConfig(pe_type=spec.pe_type)
     ckpt = torch.load(spec.ckpt, map_location="cpu", weights_only=True)
     if "lora" in ckpt:
-        # Adapter-only checkpoint: base (with its recorded config overrides) from the recorded
-        # seed, re-wrap, load A/B, fold in.
+        # Adapter-only checkpoint: the recorded base (its stored config + the adapter's recorded
+        # overrides), re-wrapped, A/B loaded and folded in.
         from gaussianformer.layers.lora import load_lora
-        config = config.with_overrides(ckpt["lora"].get("model_cfg") or None)
-        model = GaussianFormer(config)
-        base = torch.load(ckpt["lora"]["base_ckpt"], map_location="cpu", weights_only=True)
-        own = model.state_dict()
-        base_sd = {k: v for k, v in base["model_state_dict"].items()
-                   if not (k.endswith(".freqs") and (k not in own or own[k].shape != v.shape))}
-        missing, unexpected = model.load_state_dict(base_sd, strict=False)
-        assert not unexpected and all(k.endswith(".freqs") for k in missing), (missing, unexpected)
+        model, _ = load_checkpoint(Path(ckpt["lora"]["base_ckpt"]), spec.pe_type, ckpt["lora"].get("model_cfg") or None)
         load_lora(model, ckpt, merge=True)
     else:
-        model = GaussianFormer(config.with_overrides(spec.model_cfg))
-        model.load_state_dict(ckpt["model_state_dict"])
+        model, _ = load_checkpoint(spec.ckpt, spec.pe_type, spec.model_cfg)
     model.eval()
     pipe = GaussianFormerRenderingPipeline(model)
     pipe.to(device)

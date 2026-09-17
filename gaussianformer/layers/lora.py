@@ -36,19 +36,10 @@ class LoRALinear(nn.Module):
         return self.base(x) + (self.dropout(x) @ self.lora_A.t() @ self.lora_B.t()) * self.scaling
 
     def merged(self) -> nn.Linear:
-        lin = nn.Linear(self.base.in_features, self.base.out_features,
-                        bias=self.base.bias is not None)
+        """Fold the adapter into the base Linear in place and return it."""
         with torch.no_grad():
-            lin.weight.copy_(self.base.weight + self.scaling * (self.lora_B @ self.lora_A))
-            if self.base.bias is not None:
-                lin.bias.copy_(self.base.bias)
-        return lin.to(self.base.weight.device)
-
-
-def _set_submodule(root: nn.Module, name: str, new: nn.Module) -> None:
-    parent_name, _, child = name.rpartition(".")
-    parent = root.get_submodule(parent_name) if parent_name else root
-    setattr(parent, child, new)
+            self.base.weight.add_(self.scaling * (self.lora_B @ self.lora_A))
+        return self.base
 
 
 def apply_lora(model: nn.Module, rank: int, alpha: float, targets: str = DEFAULT_TARGETS,
@@ -65,7 +56,7 @@ def apply_lora(model: nn.Module, rank: int, alpha: float, targets: str = DEFAULT
     for p in model.parameters():
         p.requires_grad = False
     for n in names:
-        _set_submodule(model, n, LoRALinear(model.get_submodule(n), rank, alpha, dropout))
+        model.set_submodule(n, LoRALinear(model.get_submodule(n), rank, alpha, dropout))
     return names
 
 
@@ -73,15 +64,11 @@ def lora_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
     return {k: v for k, v in model.state_dict().items() if ".lora_A" in k or ".lora_B" in k}
 
 
-def lora_param_count(model: nn.Module) -> int:
-    return sum(v.numel() for v in lora_state_dict(model).values())
-
-
 def merge_lora(model: nn.Module) -> nn.Module:
     """Fold every LoRALinear back into a plain nn.Linear (in place); returns `model`."""
     for n, m in list(model.named_modules()):
         if isinstance(m, LoRALinear):
-            _set_submodule(model, n, m.merged())
+            model.set_submodule(n, m.merged())
     return model
 
 

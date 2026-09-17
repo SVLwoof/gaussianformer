@@ -118,12 +118,6 @@ def main() -> None:
                     help="stamped into every row and the output filename, so a later V18 sweep "
                     "lands alongside V17's rows instead of colliding with them")
     ap.add_argument("--pe_type", default="rope")
-    ap.add_argument("--encoder_layers", type=int, default=12)
-    ap.add_argument("--view_layers", type=int, default=6)
-    ap.add_argument("--ffn_mult", type=int, default=4)
-    ap.add_argument("--input_mlp_hidden", type=int, default=0)
-    ap.add_argument("--geom_bias", action="store_true",
-                    help="checkpoint was trained with the geometric cross-attention bias")
     ap.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
                     help="GaussianFormerConfig overrides; must match the ones used in training")
     ap.add_argument("--canvas_ablate", choices=("none", "zero", "rollviews"), default="none",
@@ -133,8 +127,6 @@ def main() -> None:
                          "the canvas is used as a view-aligned reference or a generic prior). "
                          "Patches gaussianformer.utils.canvas.render_canvas, which the pipeline "
                          "imports at call time, so no model change is needed.")
-    ap.add_argument("--log_scale_input", action="store_true",
-                    help="must match the checkpoint's training-time input transform")
     ap.add_argument("--views", default="all", help="'all' (0..13) or comma-separated indices")
     args = ap.parse_args()
 
@@ -168,27 +160,7 @@ def main() -> None:
 
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
-    if (args.encoder_layers != 12 or args.view_layers != 6
-            or args.ffn_mult != 4 or args.input_mlp_hidden or args.geom_bias or args.model_cfg):
-        # depth-pruned checkpoints need a matching config; render_compare.load_model hardcodes
-        # the default depth, so build the pipeline inline for this case
-        from gaussianformer.models.config import GaussianFormerConfig
-        from gaussianformer.models.gaussianformer import GaussianFormer
-        from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
-        cfg = GaussianFormerConfig(pe_type=args.pe_type, num_layers=args.encoder_layers,
-                                   view_transformer_n_layers=args.view_layers,
-                                   dim_feedforward=768 * args.ffn_mult,
-                                   view_transformer_ffn_hidden_dim=768 * args.ffn_mult,
-                                   input_mlp_hidden=args.input_mlp_hidden,
-                                   geom_bias=args.geom_bias).with_overrides(args.model_cfg)
-        model = GaussianFormer(cfg)
-        ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
-        model.load_state_dict(ckpt["model_state_dict"])
-        model.eval()
-        pipe = GaussianFormerRenderingPipeline(model)
-        pipe.to(device)
-    else:
-        pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type), device)
+    pipe = load_model(ModelSpec(ckpt=args.ckpt, label=args.label, pe_type=args.pe_type, model_cfg=args.model_cfg), device)
     lpips_fn = lpips_lib.LPIPS(net="alex").to(device).eval()
 
     def lp_many(pairs: list[tuple[np.ndarray, np.ndarray]]) -> list[float]:
@@ -213,8 +185,6 @@ def main() -> None:
                 continue
 
             data = load_single_gaussian_h5_data(h5)
-            if args.log_scale_input:
-                data["gaussians"][:, 3:6] = torch.log10(data["gaussians"][:, 3:6].clamp(min=1e-8)) + 3.0
             for k in ("gaussians", "mask", "c2w", "fov"):
                 data[k] = data[k].to(device)
 

@@ -15,7 +15,7 @@
 #   HELDOUT -- a common 300-object val set, disjoint from the val100 used for in-training
 #             validation, so generalisation is not read off objects the run was monitored on.
 #
-#   N=10 sbatch --export=N=10 data_v10/run_nsweep_eval.sh
+#   sbatch --killable --account=killable-cs --export=N=10,TAG=probe_x,CKPT=...,EXTRA="--model_cfg;proj_rope_2d=true" data_v10/run_nsweep_eval.sh
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia

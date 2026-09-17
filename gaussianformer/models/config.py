@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field, fields, replace
-from typing import Literal, List, Optional
+import types
+import typing
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -45,7 +47,7 @@ class GaussianFormerConfig:
     fields -> single Linear, RoPE still on."""
     rope_double_max_freq: bool = False
     """Whether to double the max frequency for RoPE."""
-    rope_dim: Optional[int] = None
+    rope_dim: int | None = None
     """Rotary dim per stage (channel pairs rotated = pos_dim * rope_dim/2). None = pos_pe_num_freqs
     (12: 18 of 64 pairs rotated, 1..5 rad/unit). Raising it rotates previously position-blind
     pairs, so a warm init needs a 256px recovery stage."""
@@ -91,15 +93,11 @@ class GaussianFormerConfig:
     """Whether to include the alpha channel in the output."""
     use_dpt_decoder: bool = True
     """Whether to use DPT decoder for rendering."""
-    geom_bias: bool = False
-    """Add a zero-init-gated ray/Gaussian alignment bias to the view transformer's
-    cross-attention logits. RoPE gives every patch token the same position (the camera
-    origin), so without this the logits carry no per-patch geometry."""
     dpt_features: int = 128
     """The dim of internal features in the DPT decoder."""
-    dpt_out_channels: List[int] = field(default_factory=lambda: [96, 192, 384, 768])
+    dpt_out_channels: list[int] = field(default_factory=lambda: [96, 192, 384, 768])
     """The number of output channels per layer in the DPT decoder."""
-    dpt_out_layers: Optional[List[int]] = None
+    dpt_out_layers: list[int] | None = None
     """The layers to use for the DPT decoder."""
     turn_to_cam_coord: bool = True
     """Whether to transform the scene to camera coordinates before rendering."""
@@ -110,35 +108,34 @@ class GaussianFormerConfig:
         return getattr(self, key, default)
 
     def with_overrides(self, pairs: list[str] | None) -> "GaussianFormerConfig":
-        """Apply `key=value` overrides (CLI `--model_cfg`), coercing to the field's type.
+        """Apply `key=value` overrides (CLI `--model_cfg`), coerced by the field's annotation.
 
-        One generic knob for architecture probes instead of a flag per feature. Unknown keys
-        raise; bools accept true/false/1/0; None-defaulted fields try int, then float, then str.
+        One generic knob for architecture changes instead of a flag per feature. Unknown keys
+        raise; bools accept true/false/1/0; `X | None` coerces to X; list[int] is comma-separated.
         """
         if not pairs:
             return self
-        types = {f.name: f for f in fields(self)}
+        hints = typing.get_type_hints(type(self))
         out = {}
         for p in pairs:
             key, _, raw = p.partition("=")
-            if key not in types:
+            if key not in hints:
                 raise KeyError(f"unknown GaussianFormerConfig field {key!r}")
-            cur = getattr(self, key)
-            if isinstance(cur, bool):
-                val = raw.lower() in ("1", "true", "yes")
-            elif isinstance(cur, int):
-                val = int(raw)
-            elif isinstance(cur, float):
-                val = float(raw)
-            elif cur is None:
-                val = raw
-                for cast in (int, float):
-                    try:
-                        val = cast(raw)
-                        break
-                    except ValueError:
-                        pass
-            else:
-                val = raw
-            out[key] = val
+            out[key] = _coerce(hints[key], raw)
         return replace(self, **out)
+
+
+def _coerce(tp, raw: str):
+    if isinstance(tp, types.UnionType):  # X | None
+        inner = [a for a in typing.get_args(tp) if a is not type(None)]
+        return None if raw.lower() in ("none", "null") else _coerce(inner[0], raw)
+    origin = typing.get_origin(tp)
+    if origin is list:
+        (item,) = typing.get_args(tp)
+        return [_coerce(item, x) for x in raw.split(",") if x]
+    if origin is Literal:
+        assert raw in typing.get_args(tp), f"{raw!r} not in {typing.get_args(tp)}"
+        return raw
+    if tp is bool:
+        return raw.lower() in ("1", "true", "yes")
+    return tp(raw)

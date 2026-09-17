@@ -14,7 +14,7 @@
 # STAGE_R (steps) prepends a 256px log-L1 recovery stage for changes that alter pretrained
 # function (RoPE dim/frequency); zero-init additions (gates, canvas) run without it.
 #   sbatch -A sagieb --export=TAG=p2_rope2d,MODEL_CFG="proj_rope_2d=true",STAGE_R=3000 data_v10/probe_n10.sh
-#   eval: sbatch --dependency=afterok:<id> --export=N=10,TAG=probe_<TAG>,CKPT=...,EXTRA="--model_cfg ..." data_v10/run_nsweep_eval.sh
+#   eval: sbatch --killable --account=killable-cs --dependency=afterany:<id> --export=N=10,TAG=probe_<TAG>,CKPT=...,EXTRA="--model_cfg;..." data_v10/run_nsweep_eval.sh
 
 source /etc/profile.d/huji-lmod.sh
 module load nvidia

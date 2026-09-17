@@ -1,5 +1,5 @@
 import os
-from typing import Literal, Optional
+from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -394,7 +394,7 @@ class AttentionLayer(nn.Module):
             query_dim: int,
             num_heads: int,
             ffn_hidden_dim: int,
-            kv_dim: Optional[int] = None,
+            kv_dim: int | None = None,
             dropout: float = 0.1,
             bias: bool = True,
             bias_kv: bool = False,
@@ -407,7 +407,6 @@ class AttentionLayer(nn.Module):
             use_swin_attn: bool = False,
             window_size: int = 8,
             shift_size: int = 0,
-            geom_bias: bool = False,
     ):
         """
         Attention layer with feed forward and pre-norm.
@@ -440,9 +439,6 @@ class AttentionLayer(nn.Module):
             qk_norm=qk_norm,
             norm_type=norm_type
         )
-        if geom_bias:
-            # zero-init: the layer is exactly the unbiased baseline until training moves it
-            self.geom_gate = nn.Parameter(torch.zeros(1))
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
         if bias_kv:
@@ -504,7 +500,7 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = norm_module(query_dim, eps=EPS)
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, geom_align=None):
+                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -531,13 +527,9 @@ class AttentionLayer(nn.Module):
             kv = self.kv_norm(kv)
             ctx_len = kv.shape[1]
 
-        # multihead attention (geom bias applies to the cross-attention only)
-        attn_bias = None
-        if geom_align is not None and hasattr(self, 'geom_gate'):
-            attn_bias = (self.geom_gate * geom_align).unsqueeze(1)
         attn_output = self.dropout(
             self.multihead_attn(q, kv, kv, src_key_padding_mask, rope_cos, rope_sin, rope_ctx_cos, rope_ctx_sin,
-                                force_sdpa=force_sdpa, attn_bias=attn_bias))
+                                force_sdpa=force_sdpa))
         query = query + attn_output
 
         if self.add_self_attn:
@@ -569,7 +561,7 @@ class TransformerEncoder(nn.Module):
             activation: str = 'gelu',
             norm_type: Literal['layer_norm', 'rms_norm'] = 'layer_norm',
             norm_first: bool = True,
-            rope_dim: Optional[int] = None,
+            rope_dim: int | None = None,
             pos_dim: int = 3,
             rope_double_max_freq: bool = False,
             qk_norm: bool = False,
@@ -622,7 +614,7 @@ class TransformerDecoder(nn.Module):
             num_heads: int,
             hidden_dim: int,
             ffn_hidden_dim: int,
-            ctx_dim: Optional[int] = None,
+            ctx_dim: int | None = None,
             dropout: float = 0.1,
             include_self_attn: bool = True,
             use_swin_attn: bool = False,
@@ -634,10 +626,9 @@ class TransformerDecoder(nn.Module):
             bias_kv: bool = False,
             norm_type: Literal['layer_norm', 'rms_norm'] = 'layer_norm',
             qk_norm: bool = False,
-            rope_dim: Optional[int] = None,
+            rope_dim: int | None = None,
             pos_dim: int = 3,
             rope_double_max_freq: bool = False,
-            geom_bias: bool = False,
             ray_rope_2d_dim: int = 16,
             ray_rope_2d_scale: float = 0.25,
             proj_rope_2d: bool = False,
@@ -683,7 +674,6 @@ class TransformerDecoder(nn.Module):
                 use_swin_attn=use_swin_attn,
                 window_size=window_size,
                 shift_size=0 if i % 2 == 0 else shift_size,  # w-attn and swin-attn are on alternate layers
-                geom_bias=geom_bias,
             ) for i in range(num_layers)
         ])
 
@@ -721,7 +711,7 @@ class TransformerDecoder(nn.Module):
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
 
     def forward(self, x, ctx, src_key_padding_mask=None, spatial_pos=None, ray_pos=None, out_layers=[], tf32_mode=False,
-                patch_h=None, patch_w=None, geom_align=None, uv_q=None, uv_k=None):
+                patch_h=None, patch_w=None, uv_q=None, uv_k=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
             if self.proj_rope_2d and uv_k is not None:
@@ -738,7 +728,7 @@ class TransformerDecoder(nn.Module):
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w, geom_align=geom_align)
+                      patch_w=patch_w)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list

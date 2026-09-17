@@ -439,3 +439,7 @@ data_external/*_sog/
 data_external/*/codec_eval_*_c2w.npy
 data_external/*/license.txt
 data_external/flowers/flowers_*/
+
+# per-scene metric rows of retired diagnostics (canvas share, patch-grid score)
+data_v10/canvas_share/
+data_v10/patch_artifact/

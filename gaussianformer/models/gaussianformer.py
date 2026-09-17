@@ -150,16 +150,10 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         rays_o = rays_o.view(-1, *rays_o.shape[2:])
         rays_d = rays_d.view(-1, *rays_d.shape[2:])
 
-        view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])
-        pos_view_tf = view_tf[..., :self.config.pos_dim]
-        # Optional camera-frame extras (scale 3 + quaternion 4) for the projection features.
-        view_extra = view_tf[..., self.config.pos_dim:] if view_tf.size(-1) > self.config.pos_dim else None
+        pos_view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])[..., :self.config.pos_dim]
         valid_mask_repeated = valid_mask.repeat_interleave(num_views, dim=0)
 
         pos_seq_view, valid_mask_padded_view = self._prepare_padded_positions(pos_view_tf, valid_mask_repeated)
-        if view_extra is not None:
-            view_extra = torch.cat([view_extra.new_zeros(view_extra.size(0), self.skip_token_num, view_extra.size(-1)),
-                                    view_extra], dim=1)
 
         res = self.view_transformer(
             rays_o,
@@ -169,7 +163,6 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             valid_mask_padded_view,
             tf32_mode=tf32_view_tf,
             fov=None if fov is None else fov.reshape(-1),
-            view_extra=view_extra,
             canvas=canvas,  # [B*V, H, W, 3] or None
         )
 

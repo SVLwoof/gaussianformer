@@ -12,6 +12,7 @@ import argparse
 import os
 import time
 from contextlib import nullcontext
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
@@ -22,6 +23,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+from gaussianformer.utils.checkpoint import config_from_checkpoint, load_seed
 from gaussianformer.utils.ray_generator import RayGenerator
 from gaussianformer.utils.transform import transform_gaussians_to_cam_coord
 
@@ -124,7 +126,7 @@ def training_forward(
         valid_mask=mask,
         rays_o=rays_o,
         rays_d=rays_d,
-        gaussians_view_tf=gaussians_for_view_tf[..., :10],  # pos(3) + cam-frame scale(3) + quat(4)
+        gaussians_view_tf=gaussians_for_view_tf[..., :model_config.pos_dim],  # camera-frame position
         tf32_view_tf=True,
         fov=(fov / 180.0 * torch.pi).reshape(bs, nv),
         canvas=canvas,
@@ -254,7 +256,7 @@ def run_phase(
             # Gradient accumulation: `grad_accum` micro-batches per optimizer step, so
             # world_size x grad_accum x batch_size is the effective batch (e.g. 4 GPUs x 2 == 8 GPUs x 1).
             # DDP all-reduce is skipped on non-final micro-steps via no_sync().
-            is_last_micro = (micro + 1) % grad_accum == 0
+            is_last_micro = (micro + 1) % grad_accum == 0 or micro + 1 == len(dataloader)
             sync_ctx = (model.no_sync() if (grad_accum > 1 and not is_last_micro
                                             and hasattr(model, "no_sync")) else nullcontext())
             with sync_ctx:
@@ -345,6 +347,7 @@ def run_phase(
                 "phase": phase_name,
                 "epoch": epoch + 1,
                 "global_step": global_step,
+                "config": asdict(unwrap_model(model).config),
                 "model_state_dict": unwrap_model(model).state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
@@ -400,25 +403,9 @@ def main():
                         help="Weight on the log-HDR L1 term (v6 baseline loss).")
     parser.add_argument("--lpips_loss_weight", type=float, default=0.0,
                         help="Weight on LPIPS-VGG (display-space). 0 = disabled (v6 behavior).")
-    parser.add_argument("--encoder_layers", type=int, default=12,
-                        help="View-independent encoder depth. Non-default depths need an init "
-                        "made by data_v10/make_pruned_ckpt.py (or --from_scratch).")
-    parser.add_argument("--view_layers", type=int, default=6,
-                        help="View-transformer depth. See --encoder_layers.")
-    parser.add_argument("--latent_dim", type=int, default=768,
-                        help="Transformer width (encoder + view transformer; FFNs scale 4x). "
-                        "Non-default widths cannot load RenderFormer weights -> use --from_scratch.")
     parser.add_argument("--from_scratch", action="store_true",
                         help="Random init (no RenderFormer transfer, no phase 1). Required for "
-                        "non-default --latent_dim; use with a matched from-scratch baseline.")
-    parser.add_argument("--input_mlp_hidden", type=int, default=0)
-    parser.add_argument("--ffn_mult", type=int, default=4)
-    parser.add_argument("--log_scale_input", action="store_true",
-                        help="Feed log10(scale)+3 instead of raw scales (train AND eval must match).")
-    parser.add_argument("--geom_bias", action="store_true",
-                        help="Zero-init-gated ray/Gaussian alignment bias on the view transformer's "
-                        "cross-attention logits. Loads unbiased checkpoints via --init_from (the "
-                        "missing gates init to zero = exact baseline); eval must pass --geom_bias too.")
+                        "widths/depths that cannot load RenderFormer weights (--model_cfg latent_dim=...).")
     parser.add_argument("--fg_bg_weight", type=float, default=1.0,
                         help="Down-weight background pixels (GT luminance <= 0.02) in the log-L1 "
                         "term. 1.0 = whole-image baseline; 0.05 gives the foreground ~60%% of the "
@@ -441,9 +428,10 @@ def main():
                         help="Retain only the N most recent same-phase checkpoints "
                         "(prune older ones after each save). None = keep all (default).")
     parser.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
-                        help="GaussianFormerConfig overrides for architecture probes, e.g. "
-                             "--model_cfg proj_rope_2d=true. With --init_from, "
-                             "parameters absent from the seed must be zero-init (warm-safe).")
+                        help="GaussianFormerConfig overrides (every architecture knob), e.g. "
+                             "--model_cfg proj_rope_2d=true latent_dim=512. With --init_from/--resume "
+                             "they apply on top of the checkpoint's stored config; parameters absent "
+                             "from the seed must be zero-init (warm-safe).")
     parser.add_argument("--data_seed", type=int, default=0,
                         help="Offsets the per-epoch data order (sampler shuffle + view draw). 0 = the "
                              "default epoch-keyed order; use e.g. 1 to test order-dependence on resume.")
@@ -481,7 +469,6 @@ def main():
         max_samples=args.max_samples,
         augment_rotation=args.augment_rotation,
         views_per_epoch=args.views_per_epoch,
-        log_scale_input=args.log_scale_input,
         data_seed=args.data_seed,
     )
     train_sampler: DistributedSampler | None = None
@@ -508,7 +495,6 @@ def main():
     if args.val_h5_dir and args.val_renders_dir:
         val_dataset = GaussianRenderDataset(
             args.val_h5_dir, args.val_renders_dir, config.resolution,
-            log_scale_input=args.log_scale_input,
         )
         val_sampler: DistributedSampler | None = None
         if world_size > 1:
@@ -532,17 +518,12 @@ def main():
     # --- Model ---
     from gaussianformer.models.config import GaussianFormerConfig
     from gaussianformer.models.gaussianformer import GaussianFormer
-    gf_config = GaussianFormerConfig(
-        pe_type=args.pe_type,
-        latent_dim=args.latent_dim,
-        num_layers=args.encoder_layers,
-        view_transformer_n_layers=args.view_layers,
-        dim_feedforward=args.latent_dim * args.ffn_mult,
-        view_transformer_latent_dim=args.latent_dim,
-        view_transformer_ffn_hidden_dim=args.latent_dim * args.ffn_mult,
-        input_mlp_hidden=args.input_mlp_hidden,
-        geom_bias=args.geom_bias,
-    ).with_overrides(args.model_cfg)
+    seed_path = args.resume or args.init_from
+    if seed_path:
+        seed_ckpt = torch.load(seed_path, map_location="cpu", weights_only=True)
+        gf_config = config_from_checkpoint(seed_ckpt, args.pe_type, args.model_cfg)
+    else:
+        gf_config = GaussianFormerConfig(pe_type=args.pe_type).with_overrides(args.model_cfg)
     if args.model_cfg and is_main_process():
         print(f"model_cfg overrides: {args.model_cfg}", flush=True)
 
@@ -553,7 +534,7 @@ def main():
     resume_phase = None
     resume_epoch = 0
     if args.resume:
-        resume_ckpt = torch.load(args.resume, map_location="cpu", weights_only=True)
+        resume_ckpt = seed_ckpt
         resume_phase = resume_ckpt["phase"]
         resume_epoch = resume_ckpt["epoch"]
         module = GaussianFormer(gf_config)
@@ -565,33 +546,16 @@ def main():
         # so nothing about the prior optimizer/scheduler/epoch is carried over -- the
         # Phase-2 restore block below is not taken (fresh optimizer + fresh cosine from
         # phase2_lr, global_step/start_epoch = 0). Phase 1 is skipped via the gate below.
-        init_ckpt = torch.load(args.init_from, map_location="cpu", weights_only=True)
         module = GaussianFormer(gf_config)
-        if args.geom_bias or args.model_cfg:
-            # Architecture probes add modules the seed lacks. Warm-safe rule: every missing
-            # tensor must be zero at init (gates, zero-init linears), so the wrapped model is
-            # exactly the seed until training moves it. RoPE-only changes add no tensors.
-            sd = module.state_dict()
-            # RoPE frequency tables (*.freqs) are config-determined constants stored as
-            # non-trainable Parameters: drop the seed's copies so a changed rotary dim loads.
-            seed_sd = {k: v for k, v in init_ckpt["model_state_dict"].items()
-                       if not (k.endswith(".freqs") and (k not in sd or sd[k].shape != v.shape))}
-            missing, unexpected = module.load_state_dict(seed_sd, strict=False)
-            assert not unexpected, f"seed has keys the model lacks: {list(unexpected)[:5]}"
-            nonzero = [k for k in missing if not k.endswith(".freqs") and sd[k].abs().sum() > 0]
-            assert not nonzero, f"missing seed keys are NOT zero-init (would damage the warm init): {nonzero[:5]}"
-            if is_main_process() and missing:
-                print(f"init_from: {len(missing)} zero-init tensors absent from seed "
-                      f"(e.g. {missing[0]})", flush=True)
-        else:
-            module.load_state_dict(init_ckpt["model_state_dict"])
+        missing = load_seed(module, seed_ckpt["model_state_dict"])
         if is_main_process():
-            print(f"Warm-start (weights only) from {args.init_from} "
-                  f"-> fresh Phase 2 fine-tune", flush=True)
+            if missing:
+                print(f"init_from: {len(missing)} zero-init tensors absent from seed (e.g. {missing[0]})", flush=True)
+            print(f"Warm-start (weights only) from {args.init_from} -> fresh Phase 2 fine-tune", flush=True)
     elif args.from_scratch:
         module = GaussianFormer(gf_config)
         if is_main_process():
-            print(f"FROM SCRATCH: random init, latent_dim={args.latent_dim}", flush=True)
+            print(f"FROM SCRATCH: random init, latent_dim={gf_config.latent_dim}", flush=True)
     else:
         module = transfer_weights(config.renderformer_model_id, gf_config)
 

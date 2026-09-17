@@ -62,7 +62,6 @@ class ViewTransformer(nn.Module):
             bias=self.config.bias,
             include_self_attn=self.config.view_transformer_include_self_attn,
             use_swin_attn=self.config.view_transformer_use_swin_attn,
-            geom_bias=self.config.geom_bias,
             ray_rope_2d_dim=self.config.ray_rope_2d_dim,
             ray_rope_2d_scale=self.config.ray_rope_2d_scale,
             proj_rope_2d=self.config.proj_rope_2d,
@@ -99,7 +98,7 @@ class ViewTransformer(nn.Module):
         return torch.stack([u, v], -1), depth, (Z > -1e-3), focal
 
     def forward(self, camera_o, ray_map, ctx_tokens, spatial_pos, valid_mask, tf32_mode=False,
-                fov=None, view_extra=None, canvas=None):
+                fov=None, canvas=None):
         """
         Cross attention between ray map and context tokens (gaussians).
 
@@ -133,22 +132,6 @@ class ViewTransformer(nn.Module):
         n_patches = ray_tokens.size(1)
         ray_pos = camera_o[:, None].repeat(1, n_patches, 1)  # [B, N_PATCHES, 3]
 
-        # --- Geometric cross-attention bias ---
-        # ray_pos above is the SAME camera origin for every patch, so RoPE contributes no
-        # per-patch geometry to the cross-attention logits. This alignment map does:
-        # cos(angle) between each patch's mean ray direction and the direction from the
-        # camera to each context item. Register tokens (first num_register_tokens slots
-        # of spatial_pos) sit at the scene center; their bias is zeroed.
-        geom_align = None
-        n_reg = self.config.num_register_tokens
-        if self.config.geom_bias:
-            ps = self.config.patch_size
-            patch_dirs = ray_map.view(ray_map.size(0), patch_h, ps, patch_w, ps, 3).mean(dim=(2, 4))
-            patch_dirs = F.normalize(patch_dirs, dim=-1).view(ray_map.size(0), -1, 3)
-            ctx_dirs = F.normalize(spatial_pos - camera_o[:, None], dim=-1)  # [B, N_CTX, 3]
-            geom_align = patch_dirs @ ctx_dirs.transpose(1, 2)  # [B, N_PATCHES, N_CTX]
-            geom_align[:, :, :n_reg] = 0.0
-
         # --- P2: explicit perspective projection of every Gaussian (what rasterization uses) ---
         uv_q = uv_k = None
         if self.config.proj_rope_2d:
@@ -172,7 +155,6 @@ class ViewTransformer(nn.Module):
                     tf32_mode=tf32_mode,
                     patch_h=patch_h,
                     patch_w=patch_w,
-                    geom_align=geom_align,
                     uv_q=uv_q, uv_k=uv_k,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
@@ -187,7 +169,6 @@ class ViewTransformer(nn.Module):
                 tf32_mode=tf32_mode,
                 patch_h=patch_h,
                 patch_w=patch_w,
-                geom_align=geom_align,
                 uv_q=uv_q, uv_k=uv_k,
             )  # [B, N_PATCHES, D]
             decoded_patches = self.out_proj_act(self.out_proj(seq))  # [B, N_PATCHES, P*P*3]

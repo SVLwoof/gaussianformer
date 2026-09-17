@@ -26,8 +26,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, DistributedSampler
 
 from gaussianformer.layers.lora import DEFAULT_TARGETS, apply_lora, load_lora, lora_state_dict
-from gaussianformer.models.config import GaussianFormerConfig
-from gaussianformer.models.gaussianformer import GaussianFormer
+from gaussianformer.utils.checkpoint import load_checkpoint
 from gaussianformer.utils.ray_generator import RayGenerator
 from training.dataset import GaussianRenderDataset, collate_fn
 from training.train import (
@@ -83,7 +82,7 @@ def main() -> None:
     rank, local_rank, world_size, device = setup_ddp()
     alpha = args.alpha if args.alpha is not None else 2.0 * args.rank
     meta = {"rank": args.rank, "alpha": alpha, "targets": args.targets, "model_cfg": args.model_cfg or [],
-            "dropout": args.dropout, "base_ckpt": str(args.init_from)}
+            "dropout": args.dropout, "base_ckpt": str(Path(args.init_from).resolve())}
     if args.init_adapter is not None:
         meta["init_adapter"] = str(args.init_adapter)
 
@@ -98,30 +97,17 @@ def main() -> None:
                             pin_memory=device.type == "cuda", collate_fn=collate_fn)
 
     # --- Frozen base + adapter ---
-    module = GaussianFormer(GaussianFormerConfig(pe_type=args.pe_type).with_overrides(args.model_cfg))
-    base = torch.load(args.init_from, map_location="cpu", weights_only=True)
-    own = module.state_dict()
-    # RoPE frequency tables are config constants: drop the seed's copies where shapes differ.
-    base_sd = {k: v for k, v in base["model_state_dict"].items()
-               if not (k.endswith(".freqs") and (k not in own or own[k].shape != v.shape))}
-    missing, unexpected = module.load_state_dict(base_sd, strict=False)
-    assert not unexpected, unexpected
-    assert all(k.endswith(".freqs") for k in missing), f"seed lacks non-RoPE tensors: {missing[:5]}"
-    del base
+    module, _ = load_checkpoint(args.init_from, args.pe_type, args.model_cfg)
     resume = newest_checkpoint(args.save_dir)
     start_epoch, global_step = 0, 0
     if resume is not None:
-        # Early adapter checkpoints stored Path objects in "args"; allowlist them (our own file).
-        with torch.serialization.safe_globals([Path, type(Path())]):
-            ckpt = torch.load(resume, map_location="cpu", weights_only=True)
-        old_meta = {**{"model_cfg": []}, **ckpt["lora"]}  # adapters saved before model_cfg existed
-        assert old_meta == meta, f"resume meta mismatch: {old_meta} vs {meta}"
+        ckpt = torch.load(resume, map_location="cpu", weights_only=True)
+        assert ckpt["lora"] == meta, f"resume meta mismatch: {ckpt['lora']} vs {meta}"
         load_lora(module, ckpt, merge=False)
         start_epoch, global_step = ckpt["epoch"], ckpt["global_step"]
     elif args.init_adapter is not None:
         ckpt = None
-        with torch.serialization.safe_globals([Path, type(Path())]):
-            prev = torch.load(args.init_adapter, map_location="cpu", weights_only=True)
+        prev = torch.load(args.init_adapter, map_location="cpu", weights_only=True)
         same = {k: prev["lora"][k] for k in ("rank", "alpha", "targets")}
         assert same == {"rank": args.rank, "alpha": alpha, "targets": args.targets}, \
             f"init_adapter shape mismatch: {same}"
@@ -170,7 +156,7 @@ def main() -> None:
         for micro, batch in enumerate(dataloader):
             b = {k: batch[k].to(device, non_blocking=True)
                  for k in ("gaussians", "mask", "c2w", "fov", "target")}
-            last_micro = (micro + 1) % args.grad_accum == 0
+            last_micro = (micro + 1) % args.grad_accum == 0 or micro + 1 == len(dataloader)
             sync = (model.no_sync() if (args.grad_accum > 1 and not last_micro
                                         and hasattr(model, "no_sync")) else nullcontext())
             with sync:
@@ -211,9 +197,7 @@ def main() -> None:
             torch.save({"lora": meta, "lora_state_dict": lora_state_dict(unwrap_model(model)),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scheduler_state_dict": scheduler.state_dict(),
-                        "epoch": epoch + 1, "global_step": global_step, "loss": avg_loss,
-                        "args": {k: str(v) if isinstance(v, Path) else v
-                                 for k, v in vars(args).items()}}, tmp)
+                        "epoch": epoch + 1, "global_step": global_step, "loss": avg_loss}, tmp)
             os.replace(tmp, path)
             print(f"  Saved checkpoint: {path}", flush=True)
             if args.keep_last_n > 0:
