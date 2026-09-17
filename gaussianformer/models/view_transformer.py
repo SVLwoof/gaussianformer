@@ -32,7 +32,7 @@ class ViewTransformer(nn.Module):
                 include_input=True
             )
             self.ray_map_encoder = nn.Linear(
-                self.vdir_pe.get_out_dim() * config.patch_size * config.patch_size,
+                self.vdir_pe.get_out_dim() * (config.ray_embed_patch or config.patch_size) ** 2,
                 config.view_transformer_latent_dim
             )
             if config.norm_type == 'layer_norm':
@@ -65,7 +65,12 @@ class ViewTransformer(nn.Module):
             ray_rope_2d_dim=self.config.ray_rope_2d_dim,
             ray_rope_2d_scale=self.config.ray_rope_2d_scale,
             proj_rope_2d=self.config.proj_rope_2d,
+            value_rope_2d=self.config.value_rope_2d,
+            value_rope_2d_dim=self.config.value_rope_2d_dim,
+            value_rope_2d_scale=self.config.value_rope_2d_scale,
         )
+        assert not self.config.ray_embed_patch or self.config.ray_embed_patch > self.config.patch_size, \
+            "ray_embed_patch must exceed patch_size (it is the pretrained embedding's patch)"
         if self.config.canvas_cond:
             # P1: rasterized canvas patches -> ray tokens, zero-init (exactly the baseline at init)
             self.canvas_encoder = nn.Linear(3 * self.config.patch_size ** 2, self.config.view_transformer_latent_dim)
@@ -115,12 +120,13 @@ class ViewTransformer(nn.Module):
 
         # --- Prepare Query Sequence (Ray Tokens) ---
         ray_map_pe = self.vdir_pe(ray_map)
-        ray_tokens = rearrange(
-            ray_map_pe,
-            'b (h1 p1) (w1 p2) c -> b (h1 w1) (c p1 p2)',
-            p1=self.config.patch_size,
-            p2=self.config.patch_size,
-        )
+        pe = self.config.ray_embed_patch or self.config.patch_size
+        if pe != self.config.patch_size:
+            # finer grid on the pretrained embedding: each patch_size x patch_size ray patch is
+            # upsampled (nearest) to pe x pe, so the Linear sees its native patch layout
+            r = pe // self.config.patch_size
+            ray_map_pe = ray_map_pe.permute(0, 3, 1, 2).repeat_interleave(r, 2).repeat_interleave(r, 3).permute(0, 2, 3, 1)
+        ray_tokens = rearrange(ray_map_pe, 'b (h1 p1) (w1 p2) c -> b (h1 w1) (c p1 p2)', p1=pe, p2=pe)
         patch_h = ray_map.size(1) // self.config.patch_size
         patch_w = ray_map.size(2) // self.config.patch_size
         ray_tokens = self.ray_map_patch_token + self.ray_map_encoder_norm(self.ray_map_encoder(ray_tokens))  # [B, N_PATCHES, D]
@@ -134,8 +140,8 @@ class ViewTransformer(nn.Module):
 
         # --- P2: explicit perspective projection of every Gaussian (what rasterization uses) ---
         uv_q = uv_k = None
-        if self.config.proj_rope_2d:
-            assert fov is not None, "proj_rope_2d needs fov (radians) per view"
+        if self.config.proj_rope_2d or self.config.value_rope_2d:
+            assert fov is not None, "projected 2-D RoPE needs fov (radians) per view"
             uv_k, _, _, _ = self.project(spatial_pos, fov, ray_map.size(1), ray_map.size(2))
             ii, jj = torch.meshgrid(torch.arange(patch_h, device=ray_map.device),
                                     torch.arange(patch_w, device=ray_map.device), indexing="ij")

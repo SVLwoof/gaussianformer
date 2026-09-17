@@ -61,6 +61,20 @@ class GaussianFormerConfig:
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE: 0.25 -> 0.25..1.75 rad/patch
     (wavelengths 3.6..25 patches on the 64x64 grid at 512px)."""
+    value_rope_2d: bool = False
+    """Offset-aware values (2026-09-17): in the view stage's cross-attention, rotate each Gaussian's
+    VALUE by its projected (u, v) and un-rotate the attention output by the patch centre, so the
+    aggregate carries sum_k w_k R(uv_k - uv_q) v_k -- each Gaussian's offset from the patch as
+    phase, which plain attention cannot transmit (values are view-independent). Per-head
+    zero-init mixing gate: bit-exact at load, warm-safe. Uses the P2 projection."""
+    value_rope_2d_dim: int = 32
+    """Rotary dim of the value RoPE (16 log-spaced freqs per axis), from channel 0 of each head."""
+    value_rope_2d_scale: float = 1.0
+    """Patch coordinates x this before the value RoPE: 1.0 -> 1..7 rad/patch (wavelengths 0.9..6 patches)."""
+    ray_embed_patch: int = 0
+    """Finer ray grid with a warm start: if > patch_size, each patch's ray directions are
+    nearest-upsampled to this size before the pretrained ray-map Linear (e.g. patch_size=4,
+    ray_embed_patch=8 reuses the 8x8 embedding on a 4x4 grid). 0 = patch_size."""
     canvas_cond: bool = False
     """P1 (2026-09-10; line dropped 2026-09-17, kept to load its checkpoints): add a gsplat
     rasterization of the input splat (same camera, log10(x+1) space) to the ray tokens through a

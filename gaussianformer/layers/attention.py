@@ -83,7 +83,8 @@ class FeedForwardGeLU(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, query_dim, num_heads, kv_dim=None, bias=True, qk_norm=False, norm_type='layer_norm'):
+    def __init__(self, query_dim, num_heads, kv_dim=None, bias=True, qk_norm=False, norm_type='layer_norm',
+                 value_rope=False):
         super().__init__()
         self.apply_rope_cossin = apply_rotary_emb_cossin
 
@@ -111,11 +112,19 @@ class MultiHeadAttention(nn.Module):
         else:
             self.q_norm = nn.Identity()
             self.k_norm = nn.Identity()
+        if value_rope:
+            # offset-aware values: v <- v + g (R_k v - v) before attention, o <- o + g (R_q^-1 o - o)
+            # after; zero-init gate per head = exactly the plain attention at load
+            self.v_gate = nn.Parameter(torch.zeros(num_heads))
 
     def forward(self, q, k, v, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, attn_bias=None):
+                rope_ctx_sin=None, force_sdpa=False, attn_bias=None,
+                rope_v_cos=None, rope_v_sin=None, rope_o_cos=None, rope_o_sin=None):
         # src_key_padding_mask: (B, N), key padding mask, things you want to attend to is True
         # attn_bias: (B, 1, src_len, ctx_len) float, added to attention logits (SDPA only)
+        # rope_v_*: value rotation by the key's projected (u,v); rope_o_*: inverse rotation of the
+        # output by the query's patch centre (cos, -sin) -- together the aggregate carries
+        # sum_k w_k R(uv_k - uv_q) v_k
         bs, src_len = q.shape[0], q.shape[1]
         ctx_len = k.shape[1]
         use_sdpa = ATTN == 'sdpa' or force_sdpa or attn_bias is not None
@@ -142,6 +151,9 @@ class MultiHeadAttention(nn.Module):
             else:
                 q = apply_rotary_emb_one_cossin(q, rope_cos, rope_sin)
                 k = apply_rotary_emb_one_cossin(k, rope_ctx_cos, rope_ctx_sin)
+        if rope_v_cos is not None:
+            g = self.v_gate.view(1, -1, 1, 1).to(v.dtype)
+            v = v + g * (apply_rotary_emb_one_cossin(v, rope_v_cos, rope_v_sin) - v)
 
         if use_sdpa:
             # create attention mask
@@ -210,6 +222,11 @@ class MultiHeadAttention(nn.Module):
         else:
             raise ValueError("Unsupported attention type. Choose from 'flash_attn' and 'sdpa'.")
 
+        if rope_o_cos is not None:
+            o = attn_output.view(bs, src_len, self.num_heads, -1).transpose(1, 2)
+            g = self.v_gate.view(1, -1, 1, 1).to(o.dtype)
+            o = o + g * (apply_rotary_emb_one_cossin(o, rope_o_cos, rope_o_sin) - o)
+            attn_output = o.transpose(1, 2).contiguous().view(bs, src_len, -1)
         return self.out_proj(attn_output)
 
 
@@ -407,6 +424,7 @@ class AttentionLayer(nn.Module):
             use_swin_attn: bool = False,
             window_size: int = 8,
             shift_size: int = 0,
+            value_rope: bool = False,
     ):
         """
         Attention layer with feed forward and pre-norm.
@@ -437,7 +455,8 @@ class AttentionLayer(nn.Module):
             kv_dim=kv_dim,
             bias=bias,
             qk_norm=qk_norm,
-            norm_type=norm_type
+            norm_type=norm_type,
+            value_rope=value_rope,
         )
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
@@ -500,7 +519,7 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = norm_module(query_dim, eps=EPS)
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
-                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None):
+                rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, rope_v=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -529,7 +548,7 @@ class AttentionLayer(nn.Module):
 
         attn_output = self.dropout(
             self.multihead_attn(q, kv, kv, src_key_padding_mask, rope_cos, rope_sin, rope_ctx_cos, rope_ctx_sin,
-                                force_sdpa=force_sdpa))
+                                force_sdpa=force_sdpa, **(rope_v or {})))
         query = query + attn_output
 
         if self.add_self_attn:
@@ -632,6 +651,9 @@ class TransformerDecoder(nn.Module):
             ray_rope_2d_dim: int = 16,
             ray_rope_2d_scale: float = 0.25,
             proj_rope_2d: bool = False,
+            value_rope_2d: bool = False,
+            value_rope_2d_dim: int = 32,
+            value_rope_2d_scale: float = 1.0,
     ):
         """
         Transformer decoder. Each layer has cross-attention and self-attention.
@@ -674,6 +696,7 @@ class TransformerDecoder(nn.Module):
                 use_swin_attn=use_swin_attn,
                 window_size=window_size,
                 shift_size=0 if i % 2 == 0 else shift_size,  # w-attn and swin-attn are on alternate layers
+                value_rope=value_rope_2d,
             ) for i in range(num_layers)
         ])
 
@@ -694,6 +717,12 @@ class TransformerDecoder(nn.Module):
             n3 = pos_dim * rope_dim // 2
             self.rope_uv = SpatialRotaryEmbedding(dim=ray_rope_2d_dim, pos_dim=2, pos_scale=ray_rope_2d_scale)
             assert n3 + ray_rope_2d_dim <= self.head_dim // 2, "not enough head channels for 2-D RoPE"
+        # offset-aware values: their own 2-D band from channel 0 (values have no pretrained rotation
+        # layout to respect; the zero-init gate keeps the load bit-exact)
+        self.value_rope_2d = value_rope_2d
+        if value_rope_2d:
+            assert value_rope_2d_dim <= self.head_dim // 2, "not enough head channels for the value RoPE"
+            self.rope_v = SpatialRotaryEmbedding(dim=value_rope_2d_dim, pos_dim=2, pos_scale=value_rope_2d_scale)
 
     def _freqs_3d(self, pos3):
         """Pretrained 3-D band, un-duplicated: [B,1,N,n_pairs]."""
@@ -723,12 +752,17 @@ class TransformerDecoder(nn.Module):
                 rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d(spatial_pos)
         else:
             rope_cos = rope_sin = rope_ctx_cos = rope_ctx_sin = None
+        rope_v = None
+        if self.value_rope_2d and uv_k is not None:
+            v_cos, v_sin = freqs_to_cos_sin(self.rope_v.get_spatial_freqs(uv_k), head_dim=self.head_dim)
+            o_cos, o_sin = freqs_to_cos_sin(self.rope_v.get_spatial_freqs(uv_q), head_dim=self.head_dim)
+            rope_v = dict(rope_v_cos=v_cos, rope_v_sin=v_sin, rope_o_cos=o_cos, rope_o_sin=-o_sin)
 
         out_list = []
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w)
+                      patch_w=patch_w, rope_v=rope_v)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list

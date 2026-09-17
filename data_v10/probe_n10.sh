@@ -41,6 +41,8 @@ TAG=${TAG:?TAG required}
 MODEL_CFG=${MODEL_CFG:-}
 STAGE_R=${STAGE_R:-0}
 N=${N:-10}; NGPU=4; TARGET_STEPS=${TARGET_STEPS:-30000}   # N=100 reuses the same 30k-step budget
+RES_MAIN=${RES_MAIN:-512}                                # main-stage resolution (256 for the patch-4 pair)
+H5=${H5:-data_v10/nsweep/n${N}_h5}; RENDERS=${RENDERS:-data_v10/nsweep/n${N}_renders}  # override for augmented sets
                                                          # so arms are compared at EQUAL COMPUTE
 STEPS_PER_EPOCH=$(( N * 4 / NGPU ))            # views_per_epoch=4, bs1
 EPOCHS=$(( TARGET_STEPS / STEPS_PER_EPOCH ))
@@ -51,7 +53,7 @@ SAVE=checkpoints_probe_${TAG}
 CFG=(); [ -n "$MODEL_CFG" ] && CFG=(--model_cfg ${(s:;:)MODEL_CFG})
 # EXTRA_TRAIN: ;-separated extra train.py args (e.g. "--fg_bg_weight;0.05")
 XT=(); [ -n "$EXTRA_TRAIN" ] && XT=(${(s:;:)EXTRA_TRAIN})
-COMMON=(--gaussian_h5_dir data_v10/nsweep/n${N}_h5 --renders_dir data_v10/nsweep/n${N}_renders
+COMMON=(--gaussian_h5_dir $H5 --renders_dir $RENDERS
         --val_h5_dir data_v10/nsweep/val100_h5 --val_renders_dir data_v10/nsweep/val100_renders
         --batch_size 1 --pe_type rope --augment_rotation --views_per_epoch 4
         --phase2_lr 5e-5 --keep_last_n 2 --num_workers 8 "${CFG[@]}" "${XT[@]}")
@@ -79,7 +81,7 @@ p2=( ${SAVE}/phase2_epoch_*.pt(Nom) )
 if [ ${#p2} -gt 0 ]; then RESUME=(--resume ${p2[1]}); echo "RESUME from ${p2[1]}"
 else RESUME=(--init_from $SEED); echo "INIT from $SEED"; fi
 uv run --no-sync torchrun --standalone --nproc_per_node=$NGPU -m training.train "${COMMON[@]}" \
-  --save_dir $SAVE --resolution 512 --phase2_epochs $EPOCHS --save_interval $SAVE_INT \
+  --save_dir $SAVE --resolution $RES_MAIN --phase2_epochs $EPOCHS --save_interval $SAVE_INT \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 "${RESUME[@]}"
 rc=$?
 # torchrun has exited 135/7 after a clean finish (final ckpt written), cancelling afterok evals;

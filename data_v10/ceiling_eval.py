@@ -35,7 +35,7 @@ import numpy as np
 import torch
 import lpips as lpips_lib
 
-from data_external.orbit import make_orbit_views
+from data_external.orbit import make_orbit_views, orbit_c2w
 from render_compare import load_model, ModelSpec, load_gt
 from infer_gaussian import load_single_gaussian_h5_data
 from data_v10.model_on_v10 import _fg_crop
@@ -120,6 +120,9 @@ def main() -> None:
     ap.add_argument("--pe_type", default="rope")
     ap.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL",
                     help="GaussianFormerConfig overrides; must match the ones used in training")
+    ap.add_argument("--res", type=int, default=RES, help="render/eval resolution (GT is resized)")
+    ap.add_argument("--radius", type=float, default=RADIUS, help="orbit radius of the views (must match --renders_dir)")
+    ap.add_argument("--renders_dir", type=Path, default=None, help="override the split's GT renders dir")
     ap.add_argument("--canvas_ablate", choices=("none", "zero", "rollviews"), default="none",
                     help="EVAL-ONLY ablation of a canvas_cond model: 'zero' feeds an all-black "
                          "canvas (what pruning the rasterizer arm at test time would do); "
@@ -132,7 +135,11 @@ def main() -> None:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     device = "cuda"
+    global RES, RADIUS
+    RES, RADIUS = args.res, args.radius
     h5_dir, ren_dir = SPLITS[args.split]
+    if args.renders_dir is not None:
+        ren_dir = args.renders_dir
     views = list(range(14)) if args.views == "all" else [int(v) for v in args.views.split(",")]
     scenes = [int(x) for x in json.loads(args.scenes_file.read_text())][args.shard::args.nshards]
     if args.limit:
@@ -188,6 +195,8 @@ def main() -> None:
             for k in ("gaussians", "mask", "c2w", "fov"):
                 data[k] = data[k].to(device)
 
+            if args.radius != 1.7:  # the H5's c2w are the r=1.7 orbit; re-aim the model's cameras
+                data["c2w"] = torch.from_numpy(orbit_c2w(14, RADIUS)).to(data["c2w"].device, data["c2w"].dtype)
             recs = render_rec_all(h5, todo, vm, K, RES, device)
             mdls = render_model_all(pipe, data, todo, RES, args.view_chunk)
 

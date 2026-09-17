@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--orbit_radius", type=float, default=1.7)
     p.add_argument("--orbit_fov_deg", type=float, default=45.0)
     p.add_argument("--max_opacity_min", type=float, default=0.4)
+    p.add_argument("--scenes", type=int, nargs="*", default=None, help="only these scene_idx (overrides start/end)")
     p.add_argument("--start_idx", type=int, default=0)
     p.add_argument("--end_idx", type=int, default=-1)
     p.add_argument("--rm_zips", action="store_true",
@@ -125,7 +126,11 @@ def main():
     device = torch.device("cuda")
 
     objects = json.loads(args.object_list.read_text())
-    objects = [o for o in objects if o["scene_idx"] >= args.start_idx and (args.end_idx < 0 or o["scene_idx"] < args.end_idx)]
+    if args.scenes:
+        keep = set(args.scenes)
+        objects = [o for o in objects if o["scene_idx"] in keep]
+    else:
+        objects = [o for o in objects if o["scene_idx"] >= args.start_idx and (args.end_idx < 0 or o["scene_idx"] < args.end_idx)]
     print(f"Loaded {len(objects)} objects from {args.object_list} (split={args.split})", flush=True)
 
     by_chunk = defaultdict(list)

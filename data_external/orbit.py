@@ -30,6 +30,21 @@ def c2w_to_viewmat(c2w: np.ndarray) -> np.ndarray:
     return (flip @ w2c).astype(np.float32)
 
 
+def orbit_c2w(n_views: int, radius: float, up_axis: str = "y") -> np.ndarray:
+    """c2w [V,4,4] (Blender convention) of the same orbit make_orbit_views rasterizes."""
+    assert up_axis in ("y", "z")
+    out = []
+    for i in range(n_views):
+        theta = 2 * np.pi * i / n_views
+        elev = 0.4 * radius if i % 2 == 0 else -0.1 * radius
+        if up_axis == "z":
+            eye, up = np.array([radius * np.cos(theta), radius * np.sin(theta), elev], np.float32), np.array([0, 0, 1], np.float32)
+        else:
+            eye, up = np.array([radius * np.cos(theta), elev, radius * np.sin(theta)], np.float32), np.array([0, 1, 0], np.float32)
+        out.append(look_at_blender(eye, np.zeros(3, np.float32), up=up))
+    return np.stack(out).astype(np.float32)
+
+
 def make_orbit_views(
     n_views: int, radius: float, fov_deg: float, resolution: int, up_axis: str = "y"
 ) -> tuple[np.ndarray, np.ndarray]:
