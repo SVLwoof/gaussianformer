@@ -3976,7 +3976,7 @@ Branch `v20/placement` (ac66be6) off it:
   process_full.py --scenes.
 Launched (all on the P2+fg recipe: proj_rope_2d + fg 0.05, V18 seed, stage R 3000, 30k steps):
   arm            cfg                                          train -> eval            readout
-  p2r_fg_vrope   + value_rope_2d (band 0.47..7)              31686383 -> 31686384 (31682587 restarted: band fix)     fit/heldout vs p2r_fg 3.35/19.39
+  p2r_fg_vrope   + value_rope_2d (band 0.47..7)              31686885 -> 31686886 (31686383 died: refactor NameError; resumes after stage R)     fit/heldout vs p2r_fg 3.35/19.39
   p2r_fg_r256p8  RES_MAIN=256 (control, 1024 tokens)          31682589 -> 31682590     fit/heldout at 256
   p2r_fg_r256p4  RES_MAIN=256 patch 4 + ray_embed_patch 8     31682591 -> 31682592     vs r256p8: per-token load halved/axis
   aug data       rebuild 10 full splats + n10_r3 + heldout r1.15   31686246 (killable; 31682593 died: HF token)
