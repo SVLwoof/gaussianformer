@@ -10,6 +10,9 @@
 # Close-range held-out readout (plan 2026-09-17 #3): heldout300 at orbit radius RADIUS with GT
 # rendered from the full splats (data_v10/multi_radius_datagen.py --eval_radius).
 #   sbatch --killable --account=killable-cs --export=TAG=probe_p2r_fg,CKPT=...,EXTRA="--model_cfg;proj_rope_2d=true" data_v10/run_radius_eval.sh
+source /etc/profile.d/huji-lmod.sh
+module load nvidia
+module load cuda
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONUNBUFFERED=1 PYTORCH_ALLOC_CONF=expandable_segments:True
 export PATH="$HOME/.local/bin:$PATH"

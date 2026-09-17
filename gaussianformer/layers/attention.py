@@ -558,7 +558,9 @@ class AttentionLayer(nn.Module):
                 self_attn_output = self.self_attn(q)
                 self_attn_output = self_attn_output.view(bs, patch_h * patch_w, -1)
             else:
-                # query RoPE, which for ray tokens is the identity (all patches share the camera origin)
+                # the query RoPE table: identity among ray tokens in the 3-D pairs (all patches share the
+                # camera origin); with proj_rope_2d it also carries the patch-centre 2-D band, so the
+                # patches get relative 2-D RoPE among themselves (see config.proj_rope_2d)
                 self_attn_output = self.self_attn(q, q, q, None, rope_cos, rope_sin, force_sdpa=force_sdpa)
             query = query + self.dropout(self_attn_output)
 

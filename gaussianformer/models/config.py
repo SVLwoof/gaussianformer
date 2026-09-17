@@ -55,7 +55,10 @@ class GaussianFormerConfig:
     """P2 (2026-09-09, positive): every Gaussian is perspective-projected into the view; its
     projected patch coordinate (u, v) gets a 2-D RoPE on the cross-attention KEYS and each ray
     token its patch centre on the QUERIES, in the channel pairs right after the pretrained 3-D
-    ones. Alters pretrained function: needs a 256px recovery stage."""
+    ones. The query table is also what the ray-token SELF-attention uses, so with this on the
+    patches additionally get relative 2-D RoPE among themselves (every P2 run since 09-09 has
+    both; the self-attention part alone, P3 ray2d, was null). Alters pretrained function: needs
+    a 256px recovery stage."""
     ray_rope_2d_dim: int = 16
     """Rotary dim of that 2-D RoPE (8 log-spaced freqs per axis)."""
     ray_rope_2d_scale: float = 0.25
@@ -69,8 +72,10 @@ class GaussianFormerConfig:
     zero-init mixing gate: bit-exact at load, warm-safe. Uses the P2 projection."""
     value_rope_2d_dim: int = 32
     """Rotary dim of the value RoPE (16 log-spaced freqs per axis), from channel 0 of each head."""
-    value_rope_2d_scale: float = 1.0
-    """Patch coordinates x this before the value RoPE: 1.0 -> 1..7 rad/patch (wavelengths 0.9..6 patches)."""
+    value_rope_2d_scale: float = 0.47
+    """Patch coordinates x this before the value RoPE. SpatialRotaryEmbedding(dim=32) spans 1..15
+    rad/patch at scale 1; 0.47 gives 0.47..7 rad/patch (wavelengths 0.9..13 patches), so no
+    frequency wraps inside one patch and the within-patch offset stays unambiguous."""
     ray_embed_patch: int = 0
     """Finer ray grid with a warm start: if > patch_size, each patch's ray directions are
     nearest-upsampled to this size before the pretrained ray-map Linear (e.g. patch_size=4,
