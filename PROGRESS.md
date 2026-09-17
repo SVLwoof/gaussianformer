@@ -3941,3 +3941,16 @@ close range (7/8), same shape as the slipper. But the molecule's rasterizer bar 
 The full fine-tune on this object needed five cycles to reach +1.47. Verdict: the "adapter over
 fit" win is OBJECT-DEPENDENT — it exists where the rasterizer is weak (fine texture, close
 range) and not where the rasterizer is already near-perfect. Report §3 updated with this table.
+
+## 2026-09-17 morning: **render-heavy report for the meeting — `docs/report/v19_renders_report.pdf` (19 pp, 27 figures)**
+New `data_v10/report_renders.py` (+ `.sh`, killable/sagieb 1-GPU, ~25 min): `ladder` mode = GT | rasterizer |
+V18 seed | P2+fg c3 | canvas c4 on 18 heldout objects x views {0,7} (FG-cropped strips + 96-px native zoom
+rows with error maps) + a 40-object contact sheet (rasterizer vs canvas c4); `codec` mode = GT | rasterizer |
+canvas-c3 base (no adapter) | adapter on the slipper / molecule codec views, full frame + zoom. Outputs in
+docs/report/renders/ (ladder.json, codec_*.json carry every number). Picks: axe s7, diver s23, seahorse s31,
+creature s16; biggest canvas gains s395 (+8.9 over P2+fg c3), s359, s831 (33.6 dB, best heldout), s940;
+failures s646/s533 (rasterizer 47-53 dB, canvas no better than P2+fg), s185 (banded sphere).
+Slipper close views: adapter beats the rasterizer on all 8 by +1.7..+2.2 dB; base alone loses 3-4 dB; the
+8-px grid is plainly visible in the adapter zoom column (view 1 clearest). Molecule far views: -3.4..-5.1 dB
+vs a 47-49 dB rasterizer -> the object-dependence in one figure. No deblock render of the slipper exists
+(the layer was only trained in the base, where it stayed at zero); that needs the adapter-stage deblock run.
