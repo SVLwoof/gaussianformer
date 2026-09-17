@@ -3980,8 +3980,8 @@ Launched (all on the P2+fg recipe: proj_rope_2d + fg 0.05, V18 seed, stage R 300
   p2r_fg_r256p8  RES_MAIN=256 (control, 1024 tokens)          31682589 -> 31682590     fit/heldout at 256
   p2r_fg_r256p4  RES_MAIN=256 patch 4 + ray_embed_patch 8     31682591 -> 31682592     vs r256p8: per-token load halved/axis
   aug data       rebuild 10 full splats + n10_r3 + heldout r1.15   31686246 (killable; 31682593 died: HF token)
-  p2r_fg ctrl    heldout300 @ r1.15                           31686247 (after data)
-  p2r_fg_aug     H5/RENDERS = n10_r3 (42 views/object)        31686248 -> 31686249 (std), 31686288 (r1.15)
+  p2r_fg ctrl    heldout300 @ r1.15                           31686799 (resubmitted with module loads)
+  p2r_fg_aug     H5/RENDERS = n10_r3 (42 views/object)        31686248 -> 31686249 (std), 31686800 (r1.15)
 Sagieb budget: 3 x 4 GPUs; the aug training waits for r256p8 to finish (afterany) to stay <= 12.
 Pass criteria: vrope fit moves by dB (not tenths); r256p4 >> r256p8 on fit; aug wins at r1.15 without
 losing at r1.7. ETA: 256 pair ~3 h after start, vrope ~10 h, aug data ~2 h then ~10 h.
