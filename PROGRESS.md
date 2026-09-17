@@ -4010,3 +4010,13 @@ Review (Shahaf ran `/code-review 14`; branch v20/placement vs main). Acted on, n
   ray-embed fold into a 4x4 Linear.
 Timing correction: at 256 px an epoch costs 8.3 s (patch 8) / 10.8 s (patch 4) vs 10.2 s at 512/8 —
 the 20k-token scene encoder dominates, so the 256 pair takes ~7 h / ~9 h, not 2.5 h.
+
+## 2026-09-17 21:00: vrope main stage crashed on a refactor NameError (training_forward `config`, not `model_config`); fixed; ctrl close-range readout in
+`p2r_fg_vrope` 31686383 finished stage R (checkpoints_probe_p2r_fg_vrope_r/phase2_epoch_300.pt) and died on
+the first main-stage step: the review refactor's `[..., :pos_dim]` change used a name that does not exist
+in training_forward. My CPU checks covered loading and inference only — added a one-step CPU training
+test (P2+vrope, patch 4) so the training path is exercised too. Fixed on v19/cleanup (PR #14) and rebased
+into v20/placement; vrope relaunched (resume-safe: skips stage R). The aug and pure-P2 arms had not started.
+Control close-range readout (heldout300 @ r 1.15, GT from full splats): p2r_fg margin **20.60**
+(model 21.64 / rec 42.24) vs 19.39 at r 1.7 (model 25.58 / rec 44.97) — the model loses 3.9 dB absolute
+moving in, the rasterizer 2.7, so close range is 1.2 dB harder in margin. That is the bar for p2r_fg_aug.
