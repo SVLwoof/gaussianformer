@@ -4028,3 +4028,20 @@ moving in, the rasterizer 2.7, so close range is 1.2 dB harder in margin. That i
 ~16 dB. So margins at 256 are meaningless; the 256/4 vs 256/8 comparison is read on **model PSNR vs GT**
 (same GT, same crop for both arms): 256/8 = train 36.96 / heldout 25.79 (512/8 P2+fg for scale: 41.10 /
 25.58 at 512). If a 256 rec bar is ever needed, rasterize at 512 and downsample the same way as the GT.
+
+## 2026-09-18 02:30: **PATCH 4 = POSITIVE on both axes — +1.95 fit / +1.94 held-out [+1.85, +2.04] at 256 px, 293/300 objects**
+`probe_p2r_fg_r256p4` vs `probe_p2r_fg_r256p8` (identical recipe, seed, schedule; 256 px; read as model PSNR
+vs GT because the 256 rec bar is a resampling artifact, see 00:40):
+
+  arm      tokens  fit PSNR  fit LPIPS  heldout PSNR  heldout LPIPS
+  256/8    1024    36.96     0.0268     25.79         0.0966
+  256/4    4096    38.91     0.0197     27.73         0.0712
+  delta            +1.95     -27 %      +1.94 [+1.85, +2.04]   -26 %      wins 293/300, every train object +1.2..+2.7
+
+Halving the Gaussians per token per axis buys ~2 dB on fit AND on 300 unseen objects — the same size on
+both, i.e. an architectural gain, not memorisation. Largest non-canvas lever so far (P2 was 1.1 / 1.4).
+Consistent with the placement diagnosis (fewer primitives per token = less to place per token), though a
+2 dB step is not the multi-dB collapse of the gap a complete fix would give; the value-RoPE arm (running)
+tests the other half. Stage 2 launched: `p2r_fg_r512p4` = patch 4 at 512 (16k ray tokens, ~4x view-stage
+cost), sagieb, after vrope frees its GPUs.
+  jobs: 31688355 -> 31688356
