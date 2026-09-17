@@ -4020,3 +4020,11 @@ into v20/placement; vrope relaunched (resume-safe: skips stage R). The aug and p
 Control close-range readout (heldout300 @ r 1.15, GT from full splats): p2r_fg margin **20.60**
 (model 21.64 / rec 42.24) vs 19.39 at r 1.7 (model 25.58 / rec 44.97) — the model loses 3.9 dB absolute
 moving in, the rasterizer 2.7, so close range is 1.2 dB harder in margin. That is the bar for p2r_fg_aug.
+
+## 2026-09-18 00:40: 256/8 control readout — the 256-px "rasterizer bar" is an artifact; the pair is read as model-vs-GT PSNR
+`probe_p2r_fg_r256p8` (eval at --res 256): train margin −8.58 (rec 28.38 / model 36.96), heldout 1.94
+(rec 27.73 / model 25.79). The rec column is NOT the rasterizer's quality at 256: ceiling_eval resizes the
+512 GT PNG to 256 (LANCZOS) but rasterizes rec-GT natively at 256, and the two resamplings disagree by
+~16 dB. So margins at 256 are meaningless; the 256/4 vs 256/8 comparison is read on **model PSNR vs GT**
+(same GT, same crop for both arms): 256/8 = train 36.96 / heldout 25.79 (512/8 P2+fg for scale: 41.10 /
+25.58 at 512). If a 256 rec bar is ever needed, rasterize at 512 and downsample the same way as the GT.
