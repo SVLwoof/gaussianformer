@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from data_external.orbit import c2w_to_viewmat, make_orbit_views
+from data_external.orbit import c2w_to_viewmat, make_orbit_views, orbit_c2w
 from data_v10.ceiling_eval import FOV, RADIUS, RES, SPLITS, psnr, render_model_all, render_rec_all
 from data_v10.model_on_v10 import _fg_crop
 from data_v10.prune_recovery import rasterize
@@ -108,12 +108,14 @@ def zoom_row(gt: np.ndarray, others: list[tuple[str, np.ndarray]], font, tag: st
 
 
 def ladder(a: argparse.Namespace, device) -> None:
-    global RES, LADDER
-    RES = a.res
+    global RES, RADIUS, LADDER
+    RES, RADIUS = a.res, a.radius
     if a.models:  # label:ckpt:cfg (cfg space-separated key=val, may be empty)
         LADDER = [tuple(m.split(":", 2)) for m in a.models]
     font, small = ImageFont.truetype(FONT, 17), ImageFont.truetype(FONT, 12)
     h5_dir, ren_dir = SPLITS["val"]
+    if a.renders_dir is not None:
+        ren_dir = a.renders_dir
     vm_np, K_np = make_orbit_views(14, RADIUS, FOV, RES, up_axis="y")
     vm, K = torch.from_numpy(vm_np).to(device), torch.from_numpy(K_np).to(device)
     scenes = sorted(set(a.scenes) | set(a.sheet_scenes))
@@ -125,6 +127,8 @@ def ladder(a: argparse.Namespace, device) -> None:
             data = load_single_gaussian_h5_data(h5_dir / f"scene_{s:04d}.h5")
             for k in ("gaussians", "mask", "c2w", "fov"):
                 data[k] = data[k].to(device)
+            if RADIUS != 1.7:  # the H5's cameras are the r=1.7 orbit; re-aim to the requested radius
+                data["c2w"] = torch.from_numpy(orbit_c2w(14, RADIUS)).to(device, data["c2w"].dtype)
             vs = views if s in a.scenes else [0]
             out = render_model_all(pipe, data, vs, RES, 7)
             for j, v in enumerate(vs):
@@ -234,6 +238,8 @@ def main() -> None:
     l.add_argument("--sheet_cols", type=int, default=4)
     l.add_argument("--out", type=Path, required=True)
     l.add_argument("--res", type=int, default=RES, help="render/eval resolution (GT resized)")
+    l.add_argument("--radius", type=float, default=RADIUS, help="orbit radius; pair with --renders_dir of GT at that radius")
+    l.add_argument("--renders_dir", type=Path, default=None)
     l.add_argument("--models", nargs="*", default=None, help="override the ladder: label:ckpt:cfg")
     c = sub.add_parser("codec")
     c.add_argument("--scene", choices=sorted(CODEC), required=True)
