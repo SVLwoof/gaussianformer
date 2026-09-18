@@ -4070,3 +4070,15 @@ only the extracted copy) plus five finished arms' stage-R dirs (5 x 5.8 GB). Fre
 the resume-safe probe script picks up from the newest intact checkpoint. Relaunched: aug evals + 512/4.
 Rule going forward: the monitor reports free space and warns under 40 GB; stage-R dirs are deleted once an
 arm's main stage has started. Proposed (needs a go): delete the retired arms' checkpoints (~25 GB).
+
+## 2026-09-18 22:00: **camera-distance augmentation = STRONGLY POSITIVE** — close-range heldout margin −4.43 [−4.63, −4.24] (299/300), standard −0.43 (279/300)
+`probe_p2r_fg_aug` (n10_r3: 14 views @ r1.7 + 14 @ 1.15 + 14 @ 2.45 per object, same 30k steps) vs p2r_fg:
+  readout                     P2+fg              +aug               delta
+  fit (r1.7 train views)      3.35               6.98               +3.63 (each r1.7 view got 1/3 the passes: memorisation only)
+  heldout300 @ r1.7 margin    19.39 (mdl 25.58)  18.96 (mdl 26.01)  −0.43 [−0.47, −0.39], better on 279/300
+  heldout300 @ r1.15 margin   20.60 (mdl 21.64)  16.17 (mdl 26.07)  −4.43 [−4.63, −4.24], better on 299/300; LPIPS margin 0.199 -> 0.087
+The close-range penalty is eliminated (26.07 @ r1.15 vs 26.01 @ r1.7) and the standard radius improves too.
+A chunk of the "generalisation gap" was camera-distribution mismatch. The full-data run must use multi-radius
+orbits (and the training views are cheap: GT from the full splat). Slipper zero-shot close-range readout queued.
+Scoreboard (v20): patch 4 POSITIVE (+1.9/+1.9 at 256), radius aug POSITIVE (−0.43/−4.43), value RoPE NULL,
+pure-P2 NULL. Pending: 512/4 (resumed, ~43 h).
