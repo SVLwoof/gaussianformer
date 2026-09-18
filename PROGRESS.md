@@ -4045,3 +4045,10 @@ Consistent with the placement diagnosis (fewer primitives per token = less to pl
 tests the other half. Stage 2 launched: `p2r_fg_r512p4` = patch 4 at 512 (16k ray tokens, ~4x view-stage
 cost), sagieb, after vrope frees its GPUs.
   jobs: 31688355 -> 31688356
+
+## 2026-09-18 15:30: **pure-P2 ablation = NULL — P2's gain is the projected keys, not the leaked self-attention band**
+`probe_p2r_fg_pure` (`ray_self_rope_2d=false`, otherwise the exact p2r_fg recipe/seed/schedule):
+fit 3.47 vs 3.35 (+0.13 [+0.06, +0.22], i.e. marginally worse), heldout 19.40 vs 19.39 (+0.01 [-0.02, +0.03]),
+LPIPS margins identical. The review's confound (every P2 run also gave the ray self-attention relative 2-D
+RoPE) is resolved: that part contributes nothing, consistent with P3 ray2d being null. P2 = projected keys.
+Keep `ray_self_rope_2d=true` as the default (it is what every P2 checkpoint was trained with).
