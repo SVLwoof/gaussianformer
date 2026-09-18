@@ -4061,3 +4061,12 @@ heads and gained nothing from it. Same shape as geom-bias (2026-08). Together wi
 narrows the placement diagnosis: what limits a token is how many primitives it must paint (load per
 token), not the absence of an offset channel in the values. No second value-RoPE variant; the arm's
 40 % step-time cost is not worth carrying. Remaining: 512/4 (running), aug (epoch ~1850).
+
+## 2026-09-18 21:00: **DISK FULL killed three jobs** — /cs/labs/sagieb hit 100 % at 20:37
+Casualties: `p2r_fg_r512p4` 31688355 (died writing phase2_epoch_400.pt, truncated 1.76/2.34 GB; deleted, resumes
+from epoch 200), aug evals 31686249 / 31686800 (died mid-write). Root cause on my side: the HF chunk zips
+the aug pipeline downloaded stayed in /cs/labs/sagieb/shahaf_levy/tmp/hf/hub (25 GB; `--rm_zips` removes
+only the extracted copy) plus five finished arms' stage-R dirs (5 x 5.8 GB). Freed both (49 GB free);
+the resume-safe probe script picks up from the newest intact checkpoint. Relaunched: aug evals + 512/4.
+Rule going forward: the monitor reports free space and warns under 40 GB; stage-R dirs are deleted once an
+arm's main stage has started. Proposed (needs a go): delete the retired arms' checkpoints (~25 GB).
