@@ -4085,3 +4085,12 @@ pure-P2 NULL. Pending: 512/4 (resumed, ~43 h).
 Slipper zero-shot (no adapter, real scan, codec views; model PSNR): P2+fg base close 20.84 / rand 28.10 / far 27.58;
 +aug base close **24.58** (+3.7) / rand 28.30 (+0.2) / far **30.08** (+2.5). Transfers to a real scan, both ends of
 the radius range. All-40 delta vs rasterizer −8.25 -> −6.88.
+
+## 2026-09-19 00:30: axe (val scene 7) per-object stage on the aug base — can the architecture emit the etchings at all?
+Launched behind the codec datagen for scene_0007 (31696273, 9000 dense views from the full splat + 40 eval views):
+  zero-shot control    p2r_fg_aug base on the axe codec views          31696279
+  adapter r4           lr 1e-3, fg 0.05, 27 ep, 4 GPUs sagieb         31696275 -> eval 31696276  (checkpoints_lora_p2rfgaug_scene_0007_r4)
+  full fine-tune       27 ep, 4 GPUs sagieb (NPROC=4, accum 2)        31696277 -> eval 31696278  (checkpoints_codec_so_scene_0007_p2rfgaug)
+Question: the etchings are hundreds of 1-2 px Gaussians a token receives as a weighted average. If even the full
+fine-tune cannot reproduce them, it is the averaging bottleneck (-> windowed attention / finer grid); if it can,
+it is generalisation (-> data). train_codec_scaleout.sh gained SEED/MODEL_CFG knobs. Budget: 512/4 (4) + 4 + 4 = 12.
