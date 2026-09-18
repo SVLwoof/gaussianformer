@@ -4052,3 +4052,12 @@ fit 3.47 vs 3.35 (+0.13 [+0.06, +0.22], i.e. marginally worse), heldout 19.40 vs
 LPIPS margins identical. The review's confound (every P2 run also gave the ray self-attention relative 2-D
 RoPE) is resolved: that part contributes nothing, consistent with P3 ray2d being null. P2 = projected keys.
 Keep `ray_self_rope_2d=true` as the default (it is what every P2 checkpoint was trained with).
+
+## 2026-09-18 16:30: **value RoPE = NULL** — heldout −0.00 [−0.02, +0.01] (149/300), fit +0.20 worse; gates mostly declined
+`probe_p2r_fg_vrope` (band 0.47..7 rad/patch, per-head zero-init gates) vs p2r_fg: heldout 19.38 vs 19.39,
+fit 3.54 vs 3.35, LPIPS margins identical. Learned gates: 31 of 36 heads ≤ 0.08, five heads 0.12–0.21
+(L0h1 0.17, L2h3 0.17, L2h5 0.13, L3h1 0.21, L3h4 0.18) — the model opened the offset channel in a few
+heads and gained nothing from it. Same shape as geom-bias (2026-08). Together with patch 4 POSITIVE this
+narrows the placement diagnosis: what limits a token is how many primitives it must paint (load per
+token), not the absence of an offset channel in the values. No second value-RoPE variant; the arm's
+40 % step-time cost is not worth carrying. Remaining: 512/4 (running), aug (epoch ~1850).
