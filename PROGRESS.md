@@ -4082,3 +4082,6 @@ A chunk of the "generalisation gap" was camera-distribution mismatch. The full-d
 orbits (and the training views are cheap: GT from the full splat). Slipper zero-shot close-range readout queued.
 Scoreboard (v20): patch 4 POSITIVE (+1.9/+1.9 at 256), radius aug POSITIVE (−0.43/−4.43), value RoPE NULL,
 pure-P2 NULL. Pending: 512/4 (resumed, ~43 h).
+Slipper zero-shot (no adapter, real scan, codec views; model PSNR): P2+fg base close 20.84 / rand 28.10 / far 27.58;
++aug base close **24.58** (+3.7) / rand 28.30 (+0.2) / far **30.08** (+2.5). Transfers to a real scan, both ends of
+the radius range. All-40 delta vs rasterizer −8.25 -> −6.88.
