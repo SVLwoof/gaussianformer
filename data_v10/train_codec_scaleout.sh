@@ -41,7 +41,8 @@ mkdir -p "$TORCH_EXTENSIONS_DIR"
 SCENE=${SCENE:?SCENE required, e.g. scene_0959}
 GH5=experiments/overfit/data/codec_scaleout/$SCENE/h5s
 REN=experiments/overfit/data/codec_scaleout/$SCENE/renders
-SEED=checkpoints_v18_256/phase2_epoch_30.pt
+SEED=${SEED:-checkpoints_v18_256/phase2_epoch_30.pt}   # override to fine-tune from another base (its stored config is used)
+CFG=(); [ -n "$MODEL_CFG" ] && CFG=(--model_cfg ${(s:;:)MODEL_CFG})   # ;-separated overrides on top of the seed's config
 # Cycle N (CYCLE=N; CYCLE2=1 kept as an alias for N=2) trains in _rN and seeds from cycle N-1's
 # final. Seed only when there is nothing to resume from. Testing the DIR here (not its
 # contents) cold-started 0262/0772 c2 from v18 after a preemption that had mkdir'd the r2
@@ -77,4 +78,4 @@ uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train
   --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
   --save_interval $SAVE_INT --keep_last_n 2 \
   --log_loss_weight 0.5 --lpips_loss_weight 0.5 \
-  --num_workers 3 $RESUME_ARG
+  --num_workers 3 "${CFG[@]}" $RESUME_ARG
