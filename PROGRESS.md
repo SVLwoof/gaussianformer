@@ -4094,3 +4094,13 @@ Launched behind the codec datagen for scene_0007 (31696273, 9000 dense views fro
 Question: the etchings are hundreds of 1-2 px Gaussians a token receives as a weighted average. If even the full
 fine-tune cannot reproduce them, it is the averaging bottleneck (-> windowed attention / finer grid); if it can,
 it is generalisation (-> data). train_codec_scaleout.sh gained SEED/MODEL_CFG knobs. Budget: 512/4 (4) + 4 + 4 = 12.
+
+## 2026-09-19 03:30: axe full fine-tune, epoch 3/27 — the etchings ARE reproducible by this architecture
+`checkpoints_codec_so_scene_0007_p2rfgaug/phase2_epoch_3.pt` on the axe codec views (model PSNR):
+  zero-shot aug base   rand 35.63  close 32.22  far 37.83      (rasterizer 52.5 / 46.9 / 54.9)
+  full FT epoch 3      rand 41.64  close 38.69  far 43.73      (+6.0 / +6.5 / +5.9)
+At native resolution the concentric strokes of the etching are in the right places on held-out views after
+3 epochs; the zero-shot base has a cyan smear. So the token-averaging is NOT a hard ceiling: given the
+object, the decoder learns to emit the layout. The etchings are a GENERALISATION failure (10 training
+objects), which points at data (full run with P2 + fg + radius aug + patch 4), not at more placement
+machinery. Final FT (epoch 27) and the r4 adapter will say how far per-object training goes.
