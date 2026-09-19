@@ -4122,3 +4122,17 @@ Mid-cycle ckpt (warm-restart dip caveat); final at epoch 3000 ~Sat 16:00.
 regime tops out where the tomato codec did (near-parity was never reached here either). Etchings are legible at ep27
 (experiments/.../axe_blade_zoom_ep27.png). Verdict: the architecture can EMIT the etchings but only by memorising
 the object; the remaining gap at N=1 is the same fine-detail bandwidth wall. Adapter r4 (31696275, ep 14/27) pending.
+
+## 2026-09-19 19:00: **axe N=1 is a FITTING ceiling, not memorisation and not generalisation** (job 31702819)
+Axe FT ep27 on 24 of its OWN 9000 training views: model 45.90 / rec 52.22 (-6.32, beats 0/24); zero-shot 35.56.
+Held-out rand was 45.80. Train == held-out to 0.1 dB -> the model cannot fit the views it trained on.
+Gap ordering far 8.0 > rand 6.7 > close 3.6 = the object spans fewer patches -> more Gaussians per token (same
+axis as the patch-4 win). Structural finding: RenderFormer's view-stage RoPE encodes all THREE camera-space
+vertices per triangle (9 coords -> orientation + size in the camera frame); our view stage gets the camera-space
+CENTRE only -- transform_gaussians_to_cam_coord computes rotations_cam and gaussians.py drops it via [..., :pos_dim].
+Scale/rotation exist only in the world-frame context token; the camera rotation is never given to the view stage,
+so the projected footprint of anisotropic Gaussians (etching strokes, stripes) has to be inferred indirectly.
+Tomato codec reached near-parity on a smooth object with the same architecture -> the ceiling is content-dependent.
+Next candidates: (1) camera-frame Gaussian shape in the view-stage RoPE ("Gaussian as a triangle": centre +- principal
+axes in the 9-coord slot RenderFormer used; zero-gated), (2) 512/4 verdict + windowed cross-attn, (3) cheap
+training-side control: L2-only (no LPIPS) axe FT to rule out a loss-induced PSNR ceiling.
