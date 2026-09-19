@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import roma
 
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
@@ -69,6 +70,9 @@ class ViewTransformer(nn.Module):
             value_rope_2d=self.config.value_rope_2d,
             value_rope_2d_dim=self.config.value_rope_2d_dim,
             value_rope_2d_scale=self.config.value_rope_2d_scale,
+            shape_rope_2d=self.config.shape_rope_2d,
+            shape_rope_2d_dim=self.config.shape_rope_2d_dim,
+            shape_rope_2d_scale=self.config.shape_rope_2d_scale,
         )
         assert not self.config.ray_embed_patch or self.config.ray_embed_patch > self.config.patch_size, \
             "ray_embed_patch must exceed patch_size (it is the pretrained embedding's patch)"
@@ -103,8 +107,26 @@ class ViewTransformer(nn.Module):
         v = (H / 2 - focal * Y / depth) / ps
         return torch.stack([u, v], -1), depth, (Z > -1e-3), focal
 
+    def axis_endpoints(self, spatial_pos, shape, fov, H, W):
+        """Projected endpoints of each Gaussian's two largest principal axes: [B, N, 4] = (u1, v1, u2, v2)
+        in patch units. `shape` = camera-frame [scale(3), quat(w,x,y,z)(4)]. Each axis' sign is
+        fixed so its projected offset from the centre points to v > 0 (v == 0: u > 0)."""
+        scale, quat = shape[..., :3], shape[..., 3:7]
+        R = roma.unitquat_to_rotmat(quat[..., [1, 2, 3, 0]])  # [B, N, 3, 3], columns = principal directions
+        top2 = scale.argsort(-1, descending=True)[..., :2]  # [B, N, 2]
+        axes = torch.gather(R * scale[..., None, :], -1, top2[..., None, :].expand(-1, -1, 3, -1))  # [B, N, 3, 2]
+        B, N = spatial_pos.shape[:2]
+        plus = (spatial_pos[..., None] + axes).transpose(-1, -2).reshape(B, N * 2, 3)
+        minus = (spatial_pos[..., None] - axes).transpose(-1, -2).reshape(B, N * 2, 3)
+        uv_p, _, _, _ = self.project(plus, fov, H, W)
+        uv_m, _, _, _ = self.project(minus, fov, H, W)
+        uv_c = self.project(spatial_pos, fov, H, W)[0].repeat_interleave(2, 1)
+        d = uv_p - uv_c
+        flip = (d[..., 1] < 0) | ((d[..., 1] == 0) & (d[..., 0] < 0))
+        return torch.where(flip[..., None], uv_m, uv_p).reshape(B, N, 4)
+
     def forward(self, camera_o, ray_map, ctx_tokens, spatial_pos, valid_mask, tf32_mode=False,
-                fov=None, canvas=None):
+                fov=None, canvas=None, shape=None):
         """
         Cross attention between ray map and context tokens (gaussians).
 
@@ -147,6 +169,11 @@ class ViewTransformer(nn.Module):
             ii, jj = torch.meshgrid(torch.arange(patch_h, device=ray_map.device),
                                     torch.arange(patch_w, device=ray_map.device), indexing="ij")
             uv_q = (torch.stack([jj, ii], -1).reshape(1, -1, 2).float() + 0.5).expand(ray_map.size(0), -1, -1)
+        ends_q = ends_k = None
+        if self.config.shape_rope_2d:
+            assert shape is not None, "shape_rope_2d needs the camera-frame scale + rotation per Gaussian"
+            ends_k = self.axis_endpoints(spatial_pos, shape, fov, ray_map.size(1), ray_map.size(2))
+            ends_q = uv_q.repeat(1, 1, 2)
 
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.
@@ -162,7 +189,7 @@ class ViewTransformer(nn.Module):
                     tf32_mode=tf32_mode,
                     patch_h=patch_h,
                     patch_w=patch_w,
-                    uv_q=uv_q, uv_k=uv_k,
+                    uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
             return self.out_proj_act(decoded_img)
@@ -176,7 +203,7 @@ class ViewTransformer(nn.Module):
                 tf32_mode=tf32_mode,
                 patch_h=patch_h,
                 patch_w=patch_w,
-                uv_q=uv_q, uv_k=uv_k,
+                uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k,
             )  # [B, N_PATCHES, D]
             decoded_patches = self.out_proj_act(self.out_proj(seq))  # [B, N_PATCHES, P*P*3]
             decoded_img = rearrange(

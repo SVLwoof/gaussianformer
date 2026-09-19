@@ -93,7 +93,7 @@ class GaussianFormerRenderingPipeline:
                 rays_o=rays_o,
                 rays_d=rays_d,
                 canvas=canvas,
-                gaussians_view_tf=gaussians_for_view_tf[..., :self.config.pos_dim],  # camera-frame position
+                gaussians_view_tf=gaussians_for_view_tf,  # camera-frame Gaussians
                 tf32_view_tf=tf32_view_tf,
                 fov=(fov / 180. * torch.pi).reshape(bs, nv),
             )

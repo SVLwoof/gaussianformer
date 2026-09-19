@@ -2,14 +2,15 @@
 
   ATTN_IMPL=sdpa PYTHONPATH=. uv run --no-sync python tests/test_train_step_cpu.py
 
-One real optimizer step on CPU through training_forward + compute_loss, P2 + value RoPE, patch 4."""
+One real optimizer step on CPU through training_forward + compute_loss, P2 + value RoPE, patch 4, shape band."""
 import torch
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.models.gaussianformer import GaussianFormer
 from gaussianformer.utils.ray_generator import RayGenerator
 from training.train import training_forward, compute_loss
 torch.manual_seed(0)
-for cfg in (["proj_rope_2d=true", "value_rope_2d=true"], ["proj_rope_2d=true", "patch_size=4", "ray_embed_patch=8"]):
+for cfg in (["proj_rope_2d=true", "value_rope_2d=true"], ["proj_rope_2d=true", "patch_size=4", "ray_embed_patch=8"],
+            ["proj_rope_2d=true", "shape_rope_2d=true"]):
     c = GaussianFormerConfig(pe_type="rope", num_layers=2, view_transformer_n_layers=4).with_overrides(cfg)
     m = GaussianFormer(c).train()
     rg = RayGenerator()

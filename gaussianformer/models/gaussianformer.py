@@ -136,7 +136,9 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             valid_mask: [batch_size, max_num_items], boolean mask for valid items.
             rays_o: [batch_size, num_views, 3]
             rays_d: [batch_size, num_views, img_h, img_w, 3]
-            gaussians_view_tf: [batch_size, num_views, max_num_items, pos_dim], padded view-transformed positions
+            gaussians_view_tf: [batch_size, num_views, max_num_items, gaussian_dim], padded camera-frame Gaussians
+                (position, scale, rotation, ...); the view stage uses the position for RoPE and, with
+                shape_rope_2d, the scale + rotation for the axis-endpoint band
             tf32_view_tf: bool, whether to use tf32 for view transformer.
         """
         seq, valid_mask_padded, pos_list_padded = self.construct_sequence(
@@ -150,10 +152,15 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         rays_o = rays_o.view(-1, *rays_o.shape[2:])
         rays_d = rays_d.view(-1, *rays_d.shape[2:])
 
-        pos_view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])[..., :self.config.pos_dim]
+        gaussians_view_tf = gaussians_view_tf.reshape(-1, *gaussians_view_tf.shape[2:])
+        pos_view_tf = gaussians_view_tf[..., :self.config.pos_dim]
         valid_mask_repeated = valid_mask.repeat_interleave(num_views, dim=0)
 
         pos_seq_view, valid_mask_padded_view = self._prepare_padded_positions(pos_view_tf, valid_mask_repeated)
+        shape_seq_view = None
+        if self.config.shape_rope_2d:  # register tokens: zero scale -> endpoints at their centre
+            shape = gaussians_view_tf[..., 3:10]
+            shape_seq_view = torch.cat([shape.new_zeros(shape.size(0), self.skip_token_num, 7), shape], dim=1)
 
         res = self.view_transformer(
             rays_o,
@@ -164,6 +171,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             tf32_mode=tf32_view_tf,
             fov=None if fov is None else fov.reshape(-1),
             canvas=canvas,  # [B*V, H, W, 3] or None
+            shape=shape_seq_view,
         )
 
         res = res.view(

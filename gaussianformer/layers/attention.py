@@ -659,6 +659,9 @@ class TransformerDecoder(nn.Module):
             value_rope_2d: bool = False,
             value_rope_2d_dim: int = 32,
             value_rope_2d_scale: float = 1.0,
+            shape_rope_2d: bool = False,
+            shape_rope_2d_dim: int = 14,
+            shape_rope_2d_scale: float = 0.5,
     ):
         """
         Transformer decoder. Each layer has cross-attention and self-attention.
@@ -723,6 +726,14 @@ class TransformerDecoder(nn.Module):
             n3 = pos_dim * rope_dim // 2
             self.rope_uv = SpatialRotaryEmbedding(dim=ray_rope_2d_dim, pos_dim=2, pos_scale=ray_rope_2d_scale)
             assert n3 + ray_rope_2d_dim <= self.head_dim // 2, "not enough head channels for 2-D RoPE"
+        # shape band: the two projected principal-axis endpoints (u1, v1, u2, v2) of every Gaussian
+        # on the keys, the patch centre twice on the queries, in the pairs right after the P2 band
+        self.shape_rope_2d = shape_rope_2d
+        if shape_rope_2d:
+            assert proj_rope_2d, "shape_rope_2d needs proj_rope_2d (same projection, following band)"
+            self.rope_shape = SpatialRotaryEmbedding(dim=shape_rope_2d_dim, pos_dim=4, pos_scale=shape_rope_2d_scale)
+            assert n3 + ray_rope_2d_dim + 2 * shape_rope_2d_dim <= self.head_dim // 2, \
+                "not enough head channels for the shape RoPE"
         # offset-aware values: their own 2-D band from channel 0 (values have no pretrained rotation
         # layout to respect; the zero-init gate keeps the load bit-exact)
         self.value_rope_2d = value_rope_2d
@@ -739,21 +750,26 @@ class TransformerDecoder(nn.Module):
         f = self._freqs_3d(pos3)
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
 
-    def _cos_sin_3d_2d(self, pos3, uv):
-        """3-D band in the pretrained channel pairs plus 2-D (u,v) RoPE in the pairs right after."""
+    def _cos_sin_3d_2d(self, pos3, uv, ends=None):
+        """3-D band in the pretrained channel pairs, 2-D (u,v) RoPE in the pairs right after, then
+        (if shape_rope_2d) the axis-endpoint band over `ends` [B,N,4]."""
         f2 = self.rope_uv.get_spatial_freqs(uv)
-        f = torch.cat([self._freqs_3d(pos3), f2[..., : f2.shape[-1] // 2]], -1)
+        bands = [self._freqs_3d(pos3), f2[..., : f2.shape[-1] // 2]]
+        if self.shape_rope_2d:
+            f4 = self.rope_shape.get_spatial_freqs(ends)
+            bands.append(f4[..., : f4.shape[-1] // 2])
+        f = torch.cat(bands, -1)
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
 
     def forward(self, x, ctx, src_key_padding_mask=None, spatial_pos=None, ray_pos=None, out_layers=[], tf32_mode=False,
-                patch_h=None, patch_w=None, uv_q=None, uv_k=None):
+                patch_h=None, patch_w=None, uv_q=None, uv_k=None, ends_q=None, ends_k=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
             rope_self_cos = rope_self_sin = None
             if self.proj_rope_2d and uv_k is not None:
                 # P2: queries carry their patch centre, keys the Gaussian's projected patch coords
-                rope_cos, rope_sin = self._cos_sin_3d_2d(ray_pos, uv_q)
-                rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d_2d(spatial_pos, uv_k)
+                rope_cos, rope_sin = self._cos_sin_3d_2d(ray_pos, uv_q, ends_q)
+                rope_ctx_cos, rope_ctx_sin = self._cos_sin_3d_2d(spatial_pos, uv_k, ends_k)
                 if not self.ray_self_rope_2d:
                     rope_self_cos, rope_self_sin = self._cos_sin_3d(ray_pos)
             else:

@@ -80,6 +80,18 @@ class GaussianFormerConfig:
     """Patch coordinates x this before the value RoPE. SpatialRotaryEmbedding(dim=32) spans 1..15
     rad/patch at scale 1; 0.47 gives 0.47..7 rad/patch (wavelengths 0.9..13 patches), so no
     frequency wraps inside one patch and the within-patch offset stays unambiguous."""
+    shape_rope_2d: bool = False
+    """Camera-frame Gaussian SHAPE in the view-stage cross-attention (2026-09-19). RenderFormer's
+    view stage RoPE-encodes all three camera-space vertices of a triangle; ours encoded only the
+    Gaussian's centre, so the projected footprint of an anisotropic Gaussian was never visible to
+    the attention. Each Gaussian's two largest principal axes (camera-frame rotation x scale,
+    sign fixed so the projected offset points down/right) are projected to patch coordinates as
+    endpoints (u1, v1, u2, v2) and get a 2-D RoPE band on the KEYS right after the P2 band; queries
+    carry their patch centre in both slots. Requires proj_rope_2d. Alters pretrained function."""
+    shape_rope_2d_dim: int = 14
+    """Rotary dim of the shape band (7 log-spaced freqs per coordinate; 4 coords = 28 channel pairs)."""
+    shape_rope_2d_scale: float = 0.5
+    """Endpoint patch coordinates x this: 0.5 -> 0.5..3 rad/patch (wavelengths 2..12 patches)."""
     ray_embed_patch: int = 0
     """Finer ray grid with a warm start: if > patch_size, each patch's ray directions are
     nearest-upsampled to this size before the pretrained ray-map Linear (e.g. patch_size=4,
