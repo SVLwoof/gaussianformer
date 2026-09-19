@@ -4111,3 +4111,14 @@ s7 axe 26.3/27.0 -> 28.0/28.0; s16 fringe 28.4/28.9 -> 30.6/31.4; s23 helmet 26.
 Zooms: 8-px blockiness on flat surfaces gone (helmet/seahorse contours track GT); edges crisper. Axe etchings still smeared
 (spirals not resolved), seahorse stripes still missing -> patch 4 fixes *placement* blur, not the fine-texture generalisation gap.
 Mid-cycle ckpt (warm-restart dip caveat); final at epoch 3000 ~Sat 16:00.
+
+## 2026-09-19 17:30: **axe full fine-tune FINAL (ep 27/27, job 31696277 / eval 31696278)**
+`checkpoints_codec_so_scene_0007_p2rfgaug/phase2_epoch_27.pt`, codec held-out views (model PSNR / delta vs rasterizer):
+  zero-shot   rand 35.63 (-16.86)   close 32.22 (-14.67)   far 37.83 (-17.04)
+  FT ep3      rand 41.64 (-10.85)   close 38.69 ( -8.20)   far 43.73 (-11.14)
+  FT ep15     rand 45.02 ( -7.46)   close 42.53 ( -4.36)   far 46.20 ( -8.67)
+  FT ep27     rand 45.80 ( -6.68)   close 43.28 ( -3.61)   far 46.82 ( -8.05)   beats rec 0/40
++10 dB over zero-shot, saturating (ep15->27 only +0.8). Still 3.6-8 dB under the rasterizer at N=1: the per-object
+regime tops out where the tomato codec did (near-parity was never reached here either). Etchings are legible at ep27
+(experiments/.../axe_blade_zoom_ep27.png). Verdict: the architecture can EMIT the etchings but only by memorising
+the object; the remaining gap at N=1 is the same fine-detail bandwidth wall. Adapter r4 (31696275, ep 14/27) pending.
