@@ -4146,3 +4146,7 @@ off path verified bit-exact; CPU train step + endpoint geometry checks pass.
 Readout: axe full FT from the aug base, same recipe as 31696277 (control ep27: close 43.28 / rand 45.80 / far 46.82).
   31702830 train (8 GPUs, ~9 h) -> 31702831 eval (shape_p2rfgaug_0007_verdict.json).
 Adapter run 31696275 cancelled (user: no use for it after the full FT lost). Fleet: 512/4 (4) + shape (8) = 12.
+
+### 2026-09-20 00:30 — shape-band axe, epoch 9/27 interim (eval 31704045)
+close 41.03 / rand 43.78 / far 45.22 (control ep3 38.69/41.64/43.73, ep15 42.53/45.02/46.20): on the control's
+trajectory, ~+0.3 dB vs interpolation = noise. Train loss matched the control by epoch 6 after the un-gated start.
