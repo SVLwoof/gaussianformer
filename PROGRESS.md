@@ -4150,3 +4150,14 @@ Adapter run 31696275 cancelled (user: no use for it after the full FT lost). Fle
 ### 2026-09-20 00:30 — shape-band axe, epoch 9/27 interim (eval 31704045)
 close 41.03 / rand 43.78 / far 45.22 (control ep3 38.69/41.64/43.73, ep15 42.53/45.02/46.20): on the control's
 trajectory, ~+0.3 dB vs interpolation = noise. Train loss matched the control by epoch 6 after the un-gated start.
+
+## 2026-09-20 06:00: **shape_rope_2d = NULL on the axe N=1 readout** (31702830 / eval 31702831)
+Same recipe as the control (aug base, 27 ep, 9000 views), 8 GPUs 8h37:
+  close   control 43.28 (-3.61)   shape 43.19 (-3.70)
+  rand    control 45.80 (-6.68)   shape 45.80 (-6.69)
+  far     control 46.82 (-8.05)   shape 46.90 (-7.97)     beats rec 0/40; LPIPS identical to 1e-4
+Train loss ep27 0.000630 vs control 0.000620. Giving the cross-attention the projected principal-axis
+endpoints of every Gaussian changes NOTHING at N=1: the 46 dB fitting ceiling is not a routing/geometry
+visibility limit. Together with geom-bias NULL, value-RoPE NULL and pure-P2 NULL: every extra key/value
+signal is declined; only the ray-grid density (patch 4) has moved the ceiling. Strip: docs/report/renders_aug/
+axe_blade_zoom_shape.png. Train-view check of the shape ckpt: 31711034.
