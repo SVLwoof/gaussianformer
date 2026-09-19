@@ -4104,3 +4104,10 @@ At native resolution the concentric strokes of the etching are in the right plac
 object, the decoder learns to emit the layout. The etchings are a GENERALISATION failure (10 training
 objects), which points at data (full run with P2 + fg + radius aug + patch 4), not at more placement
 machinery. Final FT (epoch 27) and the r4 adapter will say how far per-object training goes.
+
+### 2026-09-19 ~13:30 — 512/4 mid-run renders (epoch 1000/3000, job 31697228)
+Native-512 ladder vs 512/8 final (`docs/report/renders_p4_512/`), fit objects, views 0/7, FG-crop PSNR:
+s7 axe 26.3/27.0 -> 28.0/28.0; s16 fringe 28.4/28.9 -> 30.6/31.4; s23 helmet 26.3/27.3 -> 28.9/30.0; s31 seahorse 22.9/23.2 -> 26.3/27.0.
+Zooms: 8-px blockiness on flat surfaces gone (helmet/seahorse contours track GT); edges crisper. Axe etchings still smeared
+(spirals not resolved), seahorse stripes still missing -> patch 4 fixes *placement* blur, not the fine-texture generalisation gap.
+Mid-cycle ckpt (warm-restart dip caveat); final at epoch 3000 ~Sat 16:00.
