@@ -4136,3 +4136,13 @@ Tomato codec reached near-parity on a smooth object with the same architecture -
 Next candidates: (1) camera-frame Gaussian shape in the view-stage RoPE ("Gaussian as a triangle": centre +- principal
 axes in the 9-coord slot RenderFormer used; zero-gated), (2) 512/4 verdict + windowed cross-attn, (3) cheap
 training-side control: L2-only (no LPIPS) axe FT to rule out a loss-induced PSNR ceiling.
+
+## 2026-09-19 20:30: **shape_rope_2d BUILT + axe N=1 readout launched (8 GPUs sagieb)**
+Commit b3f60b5. Each Gaussian's two largest principal axes (camera-frame R x scale, sign fixed to v>0) are
+projected to patch coords and RoPE'd on the cross-attn KEYS as (u1,v1,u2,v2) in the 28 channel pairs after the
+P2 band (3-D 18 + P2 16 + shape 28 = 62 of 64 pairs); queries carry the patch centre twice. dim 14, scale 0.5 ->
+0.5..3 rad/patch. Un-gated (like P2), so not bit-exact at load (rel. output change 0.3% on a random model);
+off path verified bit-exact; CPU train step + endpoint geometry checks pass.
+Readout: axe full FT from the aug base, same recipe as 31696277 (control ep27: close 43.28 / rand 45.80 / far 46.82).
+  31702830 train (8 GPUs, ~9 h) -> 31702831 eval (shape_p2rfgaug_0007_verdict.json).
+Adapter run 31696275 cancelled (user: no use for it after the full FT lost). Fleet: 512/4 (4) + shape (8) = 12.
