@@ -128,6 +128,10 @@ class GaussianFormerConfig:
     """Whether to include self-attention between ray tokens in the view transformer."""
     view_transformer_use_swin_attn: bool = False
     """Whether to use swin self-attention in the view transformer."""
+    view_bf16: bool = False
+    """Run the view stage under bf16 autocast instead of tf32 (RenderFormer's choice). With bf16 the
+    ray-token self-attention uses the flash kernel (memory linear in tokens), which is what makes
+    global self-attention affordable at 65k ray tokens; precision cost measured zero-shot."""
     view_grad_checkpoint: bool = False
     """Recompute each view-stage layer in backward (torch.utils.checkpoint) instead of storing its
     activations: training memory ~ one layer instead of all, for finer ray grids (patch 2 at 512

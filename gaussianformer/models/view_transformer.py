@@ -190,7 +190,7 @@ class ViewTransformer(nn.Module):
         # --- Decode with Transformer ---
         # The TransformerDecoder internally handles RoPE based on `ray_pos` and `spatial_pos`.
         if self.config.use_dpt_decoder:
-            with torch.autocast(device_type="cuda", dtype=torch.float32 if tf32_mode else torch.bfloat16):
+            with torch.autocast(device_type="cuda", dtype=torch.float32 if tf32_mode and not self.config.view_bf16 else torch.bfloat16):
                 out_features = self.transformer(
                     ray_tokens,
                     ctx_tokens,
@@ -198,7 +198,7 @@ class ViewTransformer(nn.Module):
                     spatial_pos=spatial_pos,  # For context RoPE
                     ray_pos=ray_pos,  # For query RoPE
                     out_layers=self.out_layers,
-                    tf32_mode=tf32_mode,
+                    tf32_mode=tf32_mode and not self.config.view_bf16,
                     patch_h=patch_h,
                     patch_w=patch_w,
                     uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k, window=window,
