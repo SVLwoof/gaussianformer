@@ -4221,3 +4221,4 @@ Same recipe as the control (aug base, 27 ep, 9000 views, 8 GPUs) with --log_loss
 Close views are now 1.6 dB from the rasterizer. Caveat: PSNR vs perceptual -- judge the etchings on the strip
 (docs/report/renders_aug/axe_blade_zoom_l2.png) before changing the probe loss; all N=10 arms share the same
 loss so their RELATIVE verdicts stand, but every absolute margin carries a loss-induced ~2 dB.
+Train-view check of the L2 ckpt (31718976): 48.27 on its own training views (held-out rand 48.20; control 45.90) -- still train == held-out, the ceiling simply moved up.
