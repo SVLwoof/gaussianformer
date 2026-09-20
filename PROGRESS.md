@@ -4209,5 +4209,5 @@ bf16 in the view stage is free and makes the flash kernel available to the globa
 Parity test queued behind the L2 run: probe p2r_fg_r512p4_win = the 512/4 recipe + window (job 31715558, ~14 h on 4 GPUs)
 -> eval 31715559; readout vs the dense 512/4 (31714635 chain). 512/2 probe (~49 h on 4 GPUs) proposed, not launched.
 
-### 2026-09-20 16:45 — deleted retired arms with the user's go: checkpoints_probe_p4_deblock9 + checkpoints_probe_p1res_{p2,p2_fg,p2_fg_c2,p2_fg_c3} (17.8 GB)
+### 2026-09-20 16:37 — deleted retired arms with the user's go: checkpoints_probe_p4_deblock9 + checkpoints_probe_p1res_{p2,p2_fg,p2_fg_c2,p2_fg_c3} (17.8 GB)
 Lab share was at 28 GB and falling (another user). Reported checkpoints of those arms live in docs/report/ figures + jsonl only.
