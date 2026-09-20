@@ -4166,3 +4166,6 @@ axe_blade_zoom_shape.png. Train-view check of the shape ckpt (31711034): 45.89 o
 Its chained eval 31696041 started on the missing epoch-3000 ckpt -> cancelled. Resubmitted with --time=12:00:00
 (31714097, resumes from phase2_epoch_2200.pt, ~800 epochs x 55 s ~ 12 h... tight; SAVE_INT 200 so a second
 timeout costs <3 h) + eval 31714098 (afterany). Verdict now expected ~Mon 03:00.
+
+### 2026-09-20 16:30 — 512/4 resume (31714097) at 56 s/epoch will overrun its 12 h limit (~epoch 2950)
+Queued a follow-up probe 31714635 (afterany, 24 h, resumes from the last 200-epoch save) + eval 31714636 (afterany); old eval cancelled.
