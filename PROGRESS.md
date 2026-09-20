@@ -4211,3 +4211,13 @@ Parity test queued behind the L2 run: probe p2r_fg_r512p4_win = the 512/4 recipe
 
 ### 2026-09-20 16:37 — deleted retired arms with the user's go: checkpoints_probe_p4_deblock9 + checkpoints_probe_p1res_{p2,p2_fg,p2_fg_c2,p2_fg_c3} (17.8 GB)
 Lab share was at 28 GB and falling (another user). Reported checkpoints of those arms live in docs/report/ figures + jsonl only.
+
+## 2026-09-20 22:20: **L2-only axe control = +2.0 / +2.4 / +2.3 dB over the LPIPS-mixed fine-tune** (31715317 / eval 31715318)
+Same recipe as the control (aug base, 27 ep, 9000 views, 8 GPUs) with --log_loss_weight 1.0 --lpips_loss_weight 0:
+  close   control 43.28   L2-only 45.30 (-1.59 vs rec 46.9; beats rec 1/8)   LPIPS 0.0017 -> 0.0039
+  rand    control 45.80   L2-only 48.20 (-4.29 vs rec 52.5)                  LPIPS 0.0006 -> 0.0011
+  far     control 46.82   L2-only 49.08 (-5.79 vs rec 54.9)                  LPIPS 0.0004 -> 0.0006
+~2.3 dB of the "46 dB N=1 ceiling" was the LPIPS term pulling the optimum off PSNR (both LPIPS values are tiny).
+Close views are now 1.6 dB from the rasterizer. Caveat: PSNR vs perceptual -- judge the etchings on the strip
+(docs/report/renders_aug/axe_blade_zoom_l2.png) before changing the probe loss; all N=10 arms share the same
+loss so their RELATIVE verdicts stand, but every absolute margin carries a loss-induced ~2 dB.
