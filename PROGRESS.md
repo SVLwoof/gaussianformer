@@ -4233,3 +4233,7 @@ patch 4 the model fits its ten objects past the rasterizer for the first time at
 (2 timeouts); the windowed recipe does it in ~14 h (parity probe 31715558 at epoch ~600/3000).
 Next: 512/2 via the windowed recipe once parity is confirmed; the held-out gap goes to the full-data run.
 Renders (native 512, s7/16/23/31 vs 512/8): job 31719499 -> docs/report/renders_p4_512_final/.
+Renders landed (docs/report/renders_p4_512_final/, held-out s7/16/23/31, views 0/7, FG-crop PSNR, 512/8 -> 512/4 final):
+s7 axe 26.3/27.0 -> 27.7/27.6; s16 fringe 28.4/28.9 -> 30.3/31.2; s23 helmet 26.3/27.3 -> 28.4/29.4; s31 seahorse 22.9/23.2 -> 26.0/26.5.
+Note: the epoch-1000 mid-run ckpt read 0.3-0.5 dB HIGHER on these held-out views than the final (28.0/30.6-31.4/28.9-30.0/26.3-27.0)
+-> the last 2000 epochs at low LR drift toward the fit objects (known memorisation pattern), not the warm-restart dip.
