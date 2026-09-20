@@ -71,6 +71,7 @@ class ViewTransformer(nn.Module):
             value_rope_2d=self.config.value_rope_2d,
             value_rope_2d_dim=self.config.value_rope_2d_dim,
             value_rope_2d_scale=self.config.value_rope_2d_scale,
+            grad_checkpoint=self.config.view_grad_checkpoint,
             shape_rope_2d=self.config.shape_rope_2d,
             shape_rope_2d_dim=self.config.shape_rope_2d_dim,
             shape_rope_2d_scale=self.config.shape_rope_2d_scale,

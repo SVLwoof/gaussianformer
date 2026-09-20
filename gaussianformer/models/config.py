@@ -128,6 +128,10 @@ class GaussianFormerConfig:
     """Whether to include self-attention between ray tokens in the view transformer."""
     view_transformer_use_swin_attn: bool = False
     """Whether to use swin self-attention in the view transformer."""
+    view_grad_checkpoint: bool = False
+    """Recompute each view-stage layer in backward (torch.utils.checkpoint) instead of storing its
+    activations: training memory ~ one layer instead of all, for finer ray grids (patch 2 at 512
+    = 65k ray tokens). No effect on the function or on inference."""
     vdir_pe_type: Literal['nerf'] = 'nerf'
     """The type of positional encoding to use for view direction."""
     vdir_num_freqs: int = 0

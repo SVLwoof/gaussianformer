@@ -2,6 +2,7 @@ import os
 from typing import Literal
 
 import torch
+import torch.utils.checkpoint
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -160,7 +161,7 @@ class MultiHeadAttention(nn.Module):
 
         if window is not None:
             assert not self.is_self_attn and rope_v_cos is None and attn_bias is None
-            attn_output = windowed_attention(q.type(v.dtype), k.type(v.dtype), v, window, use_flash=not use_sdpa)
+            attn_output = windowed_attention(q.type(v.dtype), k.type(v.dtype), v, window, flash_available=ATTN == 'flash_attn')
         elif use_sdpa:
             # create attention mask
             if attn_bias is not None:
@@ -665,6 +666,7 @@ class TransformerDecoder(nn.Module):
             value_rope_2d: bool = False,
             value_rope_2d_dim: int = 32,
             value_rope_2d_scale: float = 1.0,
+            grad_checkpoint: bool = False,
             shape_rope_2d: bool = False,
             shape_rope_2d_dim: int = 14,
             shape_rope_2d_scale: float = 0.5,
@@ -716,6 +718,7 @@ class TransformerDecoder(nn.Module):
 
         self.rope_dim = rope_dim
         self.pos_dim = pos_dim
+        self.grad_checkpoint = grad_checkpoint
         if rope_dim is not None:
             assert rope_dim % 2 == 0, "rope_dim must be even"
             self.rope_emb = SpatialRotaryEmbedding(
@@ -790,11 +793,15 @@ class TransformerDecoder(nn.Module):
             rope_v = dict(rope_v_cos=v_cos, rope_v_sin=v_sin, rope_o_cos=o_cos, rope_o_sin=-o_sin)
 
         out_list = []
+        kw = dict(src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
+                  rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
+                  patch_w=patch_w, rope_v=rope_v, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin,
+                  window=window)
         for idx, layer in enumerate(self.layers):
-            x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
-                      rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w, rope_v=rope_v, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin,
-                      window=window)
+            if self.grad_checkpoint and self.training and torch.is_grad_enabled():
+                x = torch.utils.checkpoint.checkpoint(lambda x_, layer_=layer: layer_(x_, ctx, **kw), x, use_reentrant=False)
+            else:
+                x = layer(x, ctx, **kw)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list
