@@ -4173,3 +4173,15 @@ Queued a follow-up probe 31714635 (afterany, 24 h, resumes from the last 200-epo
 ## 2026-09-20 19:00: L2-only axe control launched (is part of the 46 dB ceiling the LPIPS term?)
 Same recipe as the control (aug base, 27 ep, 9000 views, 8 GPUs) with --log_loss_weight 1.0 --lpips_loss_weight 0:
 31715317 -> eval 31715318 (l2_p2rfgaug_0007_verdict.json). Control: close 43.28 / rand 45.80 / far 46.82.
+
+## 2026-09-20 22:30: **windowed cross-attention BUILT (xattn_window) -- correct, near-lossless zero-shot, modest speedup**
+Commits 5bdd86a + bf16 fix. `xattn_window=T` bins Gaussians by the image tile (T patches) their projected
+footprint (xattn_sigmas x max scale + xattn_margin) reaches; each tile attends to its bin + the register
+tokens (flash varlen, one sequence per tile; padded SDPA on CPU). Built once per forward, shared by all layers.
+Checks: image-sized margin == dense (CPU 1e-7; GPU 57 dB = bf16 rounding); flash == padded 57 dB.
+Zero-shot, dense-trained 512/8 P2+fg on 60 held-out scenes (views 0,7), model fg PSNR:
+  dense 25.59 | margin 4: 25.42 | 2: 25.34 | 1: 25.23 | 0.5: 25.12   -> <=0.5 dB before any adaptation.
+Axe view, per-view forward (bs1): 512/8 0.477 -> 0.397 s (-17%); 512/4 1.19 -> 0.83 s (-31%); memory ~+0.7 GB.
+Pairs at 512/8 margin 1: 2.9 tiles/Gaussian (57k pairs vs 1.3M dense). Cross-attention was not the dominant
+cost; the ray-token self-attention (global) and the DPT head remain -> patch 2 needs swin self-attn (bench running).
+Note: the view stage runs under tf32 (fp32) by design, so the flash path casts q/k/v to bf16.
