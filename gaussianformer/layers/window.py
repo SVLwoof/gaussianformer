@@ -66,20 +66,25 @@ def build_window(uv: Tensor, radius: Tensor, key_ok: Tensor, n_reg: int, patch_h
                 max_k=int(counts.max()), tiles=T, tile_q=tile * tile, B=B, N=N)
 
 
-def windowed_attention(q: Tensor, k: Tensor, v: Tensor, win: dict, use_flash: bool) -> Tensor:
-    """q [B, H, S, d] (raster order), k/v [B, H, N, d] (RoPE already applied) -> [B, S, H*d]."""
+def windowed_attention(q: Tensor, k: Tensor, v: Tensor, win: dict, flash_available: bool) -> Tensor:
+    """q [B, H, S, d] (raster order), k/v [B, H, N, d] (RoPE already applied) -> [B, S, H*d].
+    flash-attn varlen (one sequence per tile, no padding) whenever it is installed and the tensors
+    are on the GPU -- in bf16, since flash has no fp32 kernel and the view stage runs under tf32;
+    otherwise a padded gather + SDPA (CPU). The padded path costs tiles x max_k, so it is only
+    for tests: a single tile can hold most of a small object's Gaussians."""
     B, H, S, d = q.shape
     N, T, tq = win["N"], win["tiles"], win["tile_q"]
     q_t = q[:, :, win["q_perm"]]  # tile-major queries
-    k_flat = k.transpose(1, 2).reshape(B * N, H, d)[win["kv_index"]]  # [total_k, H, d]
-    v_flat = v.transpose(1, 2).reshape(B * N, H, d)[win["kv_index"]]
-    if use_flash:
+    if flash_available and q.is_cuda:
         from flash_attn import flash_attn_varlen_kvpacked_func
-        q_flat = q_t.permute(0, 2, 1, 3).reshape(B * S, H, d)
-        out = flash_attn_varlen_kvpacked_func(q_flat, torch.stack([k_flat, v_flat], 1), win["cu_q"], win["cu_k"],
-                                              tq, win["max_k"])
-        out = out.reshape(B, S, H * d)
+        ht = q.dtype if q.dtype in (torch.float16, torch.bfloat16) else torch.bfloat16
+        kv = torch.stack([k, v], 2).permute(0, 3, 2, 1, 4).reshape(B * N, 2, H, d)[win["kv_index"]].to(ht)  # [total_k, 2, H, d]
+        q_flat = q_t.permute(0, 2, 1, 3).reshape(B * S, H, d).to(ht)
+        out = flash_attn_varlen_kvpacked_func(q_flat, kv, win["cu_q"], win["cu_k"], tq, win["max_k"])
+        out = out.reshape(B, S, H * d).to(q.dtype)
     else:
+        k_flat = k.transpose(1, 2).reshape(B * N, H, d)[win["kv_index"]]  # [total_k, H, d]
+        v_flat = v.transpose(1, 2).reshape(B * N, H, d)[win["kv_index"]]
         # padded gather: one row per (b, tile), keys padded to max_k and masked
         Kmax = win["max_k"]
         counts = (win["cu_k"][1:] - win["cu_k"][:-1]).long()
