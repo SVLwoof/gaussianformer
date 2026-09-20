@@ -6,6 +6,7 @@ import roma
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.encodings.nerf_encoding import NeRFEncoding
 from gaussianformer.layers.attention import TransformerDecoder
+from gaussianformer.layers.window import build_window
 from gaussianformer.layers.dpt import DPTHead
 
 from einops import rearrange
@@ -169,6 +170,16 @@ class ViewTransformer(nn.Module):
             ii, jj = torch.meshgrid(torch.arange(patch_h, device=ray_map.device),
                                     torch.arange(patch_w, device=ray_map.device), indexing="ij")
             uv_q = (torch.stack([jj, ii], -1).reshape(1, -1, 2).float() + 0.5).expand(ray_map.size(0), -1, -1)
+        window = None
+        if self.config.xattn_window:
+            assert fov is not None and shape is not None, "windowed cross-attention needs fov and the camera-frame scales"
+            uv_k_all, depth, behind, focal = self.project(spatial_pos, fov, ray_map.size(1), ray_map.size(2))
+            n_reg = self.config.num_register_tokens
+            radius = self.config.xattn_sigmas * shape[..., :3].amax(-1) * focal / depth / self.config.patch_size
+            key_ok = valid_mask & ~behind
+            key_ok[:, :n_reg] = False
+            window = build_window(uv_k_all, radius, key_ok, n_reg, patch_h, patch_w,
+                                  self.config.xattn_window, self.config.xattn_margin)
         ends_q = ends_k = None
         if self.config.shape_rope_2d:
             assert shape is not None, "shape_rope_2d needs the camera-frame scale + rotation per Gaussian"
@@ -189,7 +200,7 @@ class ViewTransformer(nn.Module):
                     tf32_mode=tf32_mode,
                     patch_h=patch_h,
                     patch_w=patch_w,
-                    uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k,
+                    uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k, window=window,
                 )
             decoded_img = self.out_dpt(out_features, patch_h, patch_w, patch_size=self.config.patch_size)
             return self.out_proj_act(decoded_img)
@@ -203,7 +214,7 @@ class ViewTransformer(nn.Module):
                 tf32_mode=tf32_mode,
                 patch_h=patch_h,
                 patch_w=patch_w,
-                uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k,
+                uv_q=uv_q, uv_k=uv_k, ends_q=ends_q, ends_k=ends_k, window=window,
             )  # [B, N_PATCHES, D]
             decoded_patches = self.out_proj_act(self.out_proj(seq))  # [B, N_PATCHES, P*P*3]
             decoded_img = rearrange(

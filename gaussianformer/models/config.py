@@ -92,6 +92,16 @@ class GaussianFormerConfig:
     """Rotary dim of the shape band (7 log-spaced freqs per coordinate; 4 coords = 28 channel pairs)."""
     shape_rope_2d_scale: float = 0.5
     """Endpoint patch coordinates x this: 0.5 -> 0.5..3 rad/patch (wavelengths 2..12 patches)."""
+    xattn_window: int = 0
+    """Projection-windowed cross-attention (2026-09-20): tile size in PATCHES. Each tile of ray
+    tokens attends only to the Gaussians whose projected footprint (xattn_sigmas x max scale,
+    + xattn_margin patches) reaches it, plus the register tokens -- rasterizer-style binning.
+    Makes the cost linear in Gaussians x tiles touched, so finer ray grids become affordable.
+    0 = dense (every Gaussian). Alters the function (off-tile Gaussians are dropped)."""
+    xattn_margin: float = 1.0
+    """Tile expansion in patches on top of the footprint."""
+    xattn_sigmas: float = 3.0
+    """Footprint radius = this x the Gaussian's largest scale, projected."""
     ray_embed_patch: int = 0
     """Finer ray grid with a warm start: if > patch_size, each patch's ray directions are
     nearest-upsampled to this size before the pretrained ray-map Linear (e.g. patch_size=4,

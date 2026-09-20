@@ -158,7 +158,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
 
         pos_seq_view, valid_mask_padded_view = self._prepare_padded_positions(pos_view_tf, valid_mask_repeated)
         shape_seq_view = None
-        if self.config.shape_rope_2d:  # register tokens: zero scale -> endpoints at their centre
+        if self.config.shape_rope_2d or self.config.xattn_window:  # register tokens: zero scale -> endpoints at their centre
             shape = gaussians_view_tf[..., 3:10]
             shape_seq_view = torch.cat([shape.new_zeros(shape.size(0), self.skip_token_num, 7), shape], dim=1)
 

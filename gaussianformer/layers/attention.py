@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from gaussianformer.layers.window import windowed_attention
 from gaussianformer.encodings.rope import (
     SpatialRotaryEmbedding,
     freqs_to_cos_sin,
@@ -119,8 +120,10 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, q, k, v, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
                 rope_ctx_sin=None, force_sdpa=False, attn_bias=None,
-                rope_v_cos=None, rope_v_sin=None, rope_o_cos=None, rope_o_sin=None):
+                rope_v_cos=None, rope_v_sin=None, rope_o_cos=None, rope_o_sin=None, window=None):
         # src_key_padding_mask: (B, N), key padding mask, things you want to attend to is True
+        # window: projection-windowed cross-attention structure from layers.window.build_window
+        #   (replaces the dense query x key product; padding is already excluded from it)
         # attn_bias: (B, 1, src_len, ctx_len) float, added to attention logits (SDPA only)
         # rope_v_*: value rotation by the key's projected (u,v); rope_o_*: inverse rotation of the
         # output by the query's patch centre (cos, -sin) -- together the aggregate carries
@@ -155,7 +158,10 @@ class MultiHeadAttention(nn.Module):
             g = self.v_gate.view(1, -1, 1, 1).to(v.dtype)
             v = v + g * (apply_rotary_emb_one_cossin(v, rope_v_cos, rope_v_sin) - v)
 
-        if use_sdpa:
+        if window is not None:
+            assert not self.is_self_attn and rope_v_cos is None and attn_bias is None
+            attn_output = windowed_attention(q.type(v.dtype), k.type(v.dtype), v, window, use_flash=not use_sdpa)
+        elif use_sdpa:
             # create attention mask
             if attn_bias is not None:
                 attn_mask = attn_bias.to(v.dtype)
@@ -520,7 +526,7 @@ class AttentionLayer(nn.Module):
 
     def forward(self, query, kv=None, src_key_padding_mask=None, rope_cos=None, rope_sin=None, rope_ctx_cos=None,
                 rope_ctx_sin=None, force_sdpa=False, patch_h=None, patch_w=None, rope_v=None,
-                rope_self_cos=None, rope_self_sin=None):
+                rope_self_cos=None, rope_self_sin=None, window=None):
         """
         Args:
             query (torch.Tensor): (B, N, query_dim)
@@ -549,7 +555,7 @@ class AttentionLayer(nn.Module):
 
         attn_output = self.dropout(
             self.multihead_attn(q, kv, kv, src_key_padding_mask, rope_cos, rope_sin, rope_ctx_cos, rope_ctx_sin,
-                                force_sdpa=force_sdpa, **(rope_v or {})))
+                                force_sdpa=force_sdpa, window=window, **(rope_v or {})))
         query = query + attn_output
 
         if self.add_self_attn:
@@ -762,7 +768,7 @@ class TransformerDecoder(nn.Module):
         return freqs_to_cos_sin(torch.cat([f, f], -1), head_dim=self.head_dim)
 
     def forward(self, x, ctx, src_key_padding_mask=None, spatial_pos=None, ray_pos=None, out_layers=[], tf32_mode=False,
-                patch_h=None, patch_w=None, uv_q=None, uv_k=None, ends_q=None, ends_k=None):
+                patch_h=None, patch_w=None, uv_q=None, uv_k=None, ends_q=None, ends_k=None, window=None):
         if self.rope_dim is not None:
             assert spatial_pos is not None and ray_pos is not None, "spatial_pos and ray_pos must be provided if rope_dim is not None"
             rope_self_cos = rope_self_sin = None
@@ -787,7 +793,8 @@ class TransformerDecoder(nn.Module):
         for idx, layer in enumerate(self.layers):
             x = layer(x, ctx, src_key_padding_mask=src_key_padding_mask, rope_cos=rope_cos, rope_sin=rope_sin,
                       rope_ctx_cos=rope_ctx_cos, rope_ctx_sin=rope_ctx_sin, force_sdpa=tf32_mode, patch_h=patch_h,
-                      patch_w=patch_w, rope_v=rope_v, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin)
+                      patch_w=patch_w, rope_v=rope_v, rope_self_cos=rope_self_cos, rope_self_sin=rope_self_sin,
+                      window=window)
             if idx in out_layers:
                 out_list.append([x])
         return x if not out_list else out_list
