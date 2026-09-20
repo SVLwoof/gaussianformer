@@ -4200,3 +4200,11 @@ BUT zero-shot, dense-trained 512/8 P2+fg on the 60 held-out scenes: swin self-at
 adaptation and may cost permanently. Alternative under test: keep global self-attention, run the view stage in
 bf16 (`view_bf16`) so the self-attention uses the flash kernel (memory linear in tokens) -- bench + zero-shot
 precision sweep running.
+
+## 2026-09-21 01:30: **windowed recipe settled: xattn_window + view_bf16 + view_grad_checkpoint, GLOBAL self-attention**
+Zero-shot (dense-trained 512/8, 60 held-out scenes): tf32 25.59 | bf16 25.56 (-0.03) | bf16+win m1 25.21 | swin 22.73.
+Bench (bs1 @512, train step): 512/4 win8+global+gc+bf16 1.64 s / 16 GB (dense: 5.25 s / 26 GB, 3.2x);
+512/2 win16+global+gc+bf16 5.9 s / 24 GB (= today's 512/4 dense cost); 512/2 swin 2.5 s but -2.9 dB zero-shot.
+bf16 in the view stage is free and makes the flash kernel available to the global self-attention.
+Parity test queued behind the L2 run: probe p2r_fg_r512p4_win = the 512/4 recipe + window (job 31715558, ~14 h on 4 GPUs)
+-> eval 31715559; readout vs the dense 512/4 (31714635 chain). 512/2 probe (~49 h on 4 GPUs) proposed, not launched.
