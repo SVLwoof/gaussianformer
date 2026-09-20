@@ -4151,7 +4151,7 @@ Adapter run 31696275 cancelled (user: no use for it after the full FT lost). Fle
 close 41.03 / rand 43.78 / far 45.22 (control ep3 38.69/41.64/43.73, ep15 42.53/45.02/46.20): on the control's
 trajectory, ~+0.3 dB vs interpolation = noise. Train loss matched the control by epoch 6 after the un-gated start.
 
-## 2026-09-20 06:00: **shape_rope_2d = NULL on the axe N=1 readout** (31702830 / eval 31702831)
+## 2026-09-20 02:45: **shape_rope_2d = NULL on the axe N=1 readout** (31702830 / eval 31702831)
 Same recipe as the control (aug base, 27 ep, 9000 views), 8 GPUs 8h37:
   close   control 43.28 (-3.61)   shape 43.19 (-3.70)
   rand    control 45.80 (-6.68)   shape 45.80 (-6.69)
@@ -4170,11 +4170,11 @@ timeout costs <3 h) + eval 31714098 (afterany). Verdict now expected ~Mon 03:00.
 ### 2026-09-20 16:30 — 512/4 resume (31714097) at 56 s/epoch will overrun its 12 h limit (~epoch 2950)
 Queued a follow-up probe 31714635 (afterany, 24 h, resumes from the last 200-epoch save) + eval 31714636 (afterany); old eval cancelled.
 
-## 2026-09-20 19:00: L2-only axe control launched (is part of the 46 dB ceiling the LPIPS term?)
+## 2026-09-20 13:25: L2-only axe control launched (is part of the 46 dB ceiling the LPIPS term?)
 Same recipe as the control (aug base, 27 ep, 9000 views, 8 GPUs) with --log_loss_weight 1.0 --lpips_loss_weight 0:
 31715317 -> eval 31715318 (l2_p2rfgaug_0007_verdict.json). Control: close 43.28 / rand 45.80 / far 46.82.
 
-## 2026-09-20 22:30: **windowed cross-attention BUILT (xattn_window) -- correct, near-lossless zero-shot, modest speedup**
+## 2026-09-20 14:00: **windowed cross-attention BUILT (xattn_window) -- correct, near-lossless zero-shot, modest speedup**
 Commits 5bdd86a + bf16 fix. `xattn_window=T` bins Gaussians by the image tile (T patches) their projected
 footprint (xattn_sigmas x max scale + xattn_margin) reaches; each tile attends to its bin + the register
 tokens (flash varlen, one sequence per tile; padded SDPA on CPU). Built once per forward, shared by all layers.
@@ -4186,7 +4186,7 @@ Pairs at 512/8 margin 1: 2.9 tiles/Gaussian (57k pairs vs 1.3M dense). Cross-att
 cost; the ray-token self-attention (global) and the DPT head remain -> patch 2 needs swin self-attn (bench running).
 Note: the view stage runs under tf32 (fp32) by design, so the flash path casts q/k/v to bf16.
 
-## 2026-09-21 00:30: **patch 2 at 512 is affordable; swin self-attention is NOT free**
+## 2026-09-20 14:15: **patch 2 at 512 is affordable; swin self-attention is NOT free**
 Bench (axe view, bs1, train step = fwd+bwd, 44 GB card), docs/report/window_bench*.json:
   512/4 dense                      fwd 1.20 s   train 5.25 s / 26.1 GB
   512/4 win8                       fwd 0.83 s   train 3.27 s / 27.0 GB
@@ -4201,7 +4201,7 @@ adaptation and may cost permanently. Alternative under test: keep global self-at
 bf16 (`view_bf16`) so the self-attention uses the flash kernel (memory linear in tokens) -- bench + zero-shot
 precision sweep running.
 
-## 2026-09-21 01:30: **windowed recipe settled: xattn_window + view_bf16 + view_grad_checkpoint, GLOBAL self-attention**
+## 2026-09-20 14:20: **windowed recipe settled: xattn_window + view_bf16 + view_grad_checkpoint, GLOBAL self-attention**
 Zero-shot (dense-trained 512/8, 60 held-out scenes): tf32 25.59 | bf16 25.56 (-0.03) | bf16+win m1 25.21 | swin 22.73.
 Bench (bs1 @512, train step): 512/4 win8+global+gc+bf16 1.64 s / 16 GB (dense: 5.25 s / 26 GB, 3.2x);
 512/2 win16+global+gc+bf16 5.9 s / 24 GB (= today's 512/4 dense cost); 512/2 swin 2.5 s but -2.9 dB zero-shot.
