@@ -4222,3 +4222,14 @@ Close views are now 1.6 dB from the rasterizer. Caveat: PSNR vs perceptual -- ju
 (docs/report/renders_aug/axe_blade_zoom_l2.png) before changing the probe loss; all N=10 arms share the same
 loss so their RELATIVE verdicts stand, but every absolute margin carries a loss-induced ~2 dB.
 Train-view check of the L2 ckpt (31718976): 48.27 on its own training views (held-out rand 48.20; control 45.90) -- still train == held-out, the ceiling simply moved up.
+
+## 2026-09-21 00:55: **512/4 = POSITIVE at 512: fit margin 3.35 -> -1.17 (model BEATS the rasterizer bar on the fit objects), held-out 19.39 -> 17.85** (31714635 / eval 31714636)
+probe_p2r_fg (512/8)   fit  3.35 (model 41.10 / rec 44.44)   heldout 19.39 (25.58 / 44.97)   LPIPS m 0.0879
+probe_p2r_fg_r512p4    fit -1.17 (model 45.62 / rec 44.44)   heldout 17.85 (27.11 / 44.97)   LPIPS m 0.0684
+Fit +4.52 dB, held-out +1.53 dB, LPIPS margin -0.020 (300/300 objects, views 0,4,7,11). At 256 the pair gave
++1.95 / +1.94; at 512 the fit gain more than doubles while the held-out gain is a bit smaller -> the grid axis
+is real and grows with resolution, and what remains on held-out (17.85 dB) is generalisation, not fit: with
+patch 4 the model fits its ten objects past the rasterizer for the first time at 512. Run cost 46 h dense
+(2 timeouts); the windowed recipe does it in ~14 h (parity probe 31715558 at epoch ~600/3000).
+Next: 512/2 via the windowed recipe once parity is confirmed; the held-out gap goes to the full-data run.
+Renders (native 512, s7/16/23/31 vs 512/8): job 31719499 -> docs/report/renders_p4_512_final/.
