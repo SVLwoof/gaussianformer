@@ -4185,3 +4185,18 @@ Axe view, per-view forward (bs1): 512/8 0.477 -> 0.397 s (-17%); 512/4 1.19 -> 0
 Pairs at 512/8 margin 1: 2.9 tiles/Gaussian (57k pairs vs 1.3M dense). Cross-attention was not the dominant
 cost; the ray-token self-attention (global) and the DPT head remain -> patch 2 needs swin self-attn (bench running).
 Note: the view stage runs under tf32 (fp32) by design, so the flash path casts q/k/v to bf16.
+
+## 2026-09-21 00:30: **patch 2 at 512 is affordable; swin self-attention is NOT free**
+Bench (axe view, bs1, train step = fwd+bwd, 44 GB card), docs/report/window_bench*.json:
+  512/4 dense                      fwd 1.20 s   train 5.25 s / 26.1 GB
+  512/4 win8                       fwd 0.83 s   train 3.27 s / 27.0 GB
+  512/4 win8 + swin                fwd 0.52 s   train 1.59 s / 27.0 GB
+  512/4 win8 + swin + grad-ckpt    fwd 0.53 s   train 1.76 s / 16.4 GB
+  512/2 win16 + swin + grad-ckpt   fwd 1.08 s   train 3.72 s / 24.0 GB   <- cheaper than today's 512/4 dense
+  512/2 (any) without grad-ckpt    OOM (activations at 65k ray tokens, not attention)
+Added `view_grad_checkpoint` (per-layer recompute in the view stage; gradients identical on CPU to 3e-11).
+BUT zero-shot, dense-trained 512/8 P2+fg on the 60 held-out scenes: swin self-attn 25.59 -> 22.73 (-2.9 dB;
++windowed cross 22.67). The global ray-token self-attention is load-bearing; windowing it needs real
+adaptation and may cost permanently. Alternative under test: keep global self-attention, run the view stage in
+bf16 (`view_bf16`) so the self-attention uses the flash kernel (memory linear in tokens) -- bench + zero-shot
+precision sweep running.
