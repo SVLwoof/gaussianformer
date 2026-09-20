@@ -4160,4 +4160,4 @@ Train loss ep27 0.000630 vs control 0.000620. Giving the cross-attention the pro
 endpoints of every Gaussian changes NOTHING at N=1: the 46 dB fitting ceiling is not a routing/geometry
 visibility limit. Together with geom-bias NULL, value-RoPE NULL and pure-P2 NULL: every extra key/value
 signal is declined; only the ray-grid density (patch 4) has moved the ceiling. Strip: docs/report/renders_aug/
-axe_blade_zoom_shape.png. Train-view check of the shape ckpt: 31711034.
+axe_blade_zoom_shape.png. Train-view check of the shape ckpt (31711034): 45.89 on its own training views (control 45.90) -- same ceiling.
