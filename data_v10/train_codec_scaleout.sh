@@ -58,6 +58,7 @@ NPROC=${NPROC:-8}
 # Submit 4-GPU variant with: sbatch --gres=gg:g4:4 -c 16 --export=SCENE=...,NPROC=4 <script>
 GRAD_ACCUM=${GRAD_ACCUM:-$((8/NPROC))}
 EPOCHS=${EPOCHS_OVR:-27}; SAVE_INT=${SAVE_INT_OVR:-3}
+LOG_W=${LOG_W:-0.5}; LPIPS_W=${LPIPS_W:-0.5}   # loss mix; LPIPS_W=0 = the L2-only control
 echo "CODEC-SO $SCENE cycle$CYCLE: $EPOCHS epochs, ${NPROC}xbs1 x accum${GRAD_ACCUM} ($((9000/NPROC/GRAD_ACCUM)) steps/epoch), node=$(hostname) sm_${ARCH}"
 
 RESUME_ARG=()
@@ -77,5 +78,5 @@ uv run --no-sync torchrun --standalone --nproc_per_node=$NPROC -m training.train
   --pe_type rope --augment_rotation \
   --phase2_epochs $EPOCHS --phase2_lr 5e-5 \
   --save_interval $SAVE_INT --keep_last_n 2 \
-  --log_loss_weight 0.5 --lpips_loss_weight 0.5 \
+  --log_loss_weight $LOG_W --lpips_loss_weight $LPIPS_W \
   --num_workers 3 "${CFG[@]}" $RESUME_ARG
