@@ -4161,3 +4161,8 @@ endpoints of every Gaussian changes NOTHING at N=1: the 46 dB fitting ceiling is
 visibility limit. Together with geom-bias NULL, value-RoPE NULL and pure-P2 NULL: every extra key/value
 signal is declined; only the ray-grid density (patch 4) has moved the ceiling. Strip: docs/report/renders_aug/
 axe_blade_zoom_shape.png. Train-view check of the shape ckpt (31711034): 45.89 on its own training views (control 45.90) -- same ceiling.
+
+### 2026-09-20 14:30 — 512/4 hit the 36 h TIMEOUT at epoch 2393/3000 (31696040); resubmitted
+Its chained eval 31696041 started on the missing epoch-3000 ckpt -> cancelled. Resubmitted with --time=12:00:00
+(31714097, resumes from phase2_epoch_2200.pt, ~800 epochs x 55 s ~ 12 h... tight; SAVE_INT 200 so a second
+timeout costs <3 h) + eval 31714098 (afterany). Verdict now expected ~Mon 03:00.
