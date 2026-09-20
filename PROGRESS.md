@@ -4169,3 +4169,7 @@ timeout costs <3 h) + eval 31714098 (afterany). Verdict now expected ~Mon 03:00.
 
 ### 2026-09-20 16:30 — 512/4 resume (31714097) at 56 s/epoch will overrun its 12 h limit (~epoch 2950)
 Queued a follow-up probe 31714635 (afterany, 24 h, resumes from the last 200-epoch save) + eval 31714636 (afterany); old eval cancelled.
+
+## 2026-09-20 19:00: L2-only axe control launched (is part of the 46 dB ceiling the LPIPS term?)
+Same recipe as the control (aug base, 27 ep, 9000 views, 8 GPUs) with --log_loss_weight 1.0 --lpips_loss_weight 0:
+31715317 -> eval 31715318 (l2_p2rfgaug_0007_verdict.json). Control: close 43.28 / rand 45.80 / far 46.82.
