@@ -4255,3 +4255,5 @@ Readouts: 512/2 vs the 512/4 pair (-1.17..-1.25 / 17.85..17.88); aug vs p2r_fg_a
 r1.15 16.17) and vs win (17.88) -> are patch 4 and radius aug additive?; L2 vs win -> does the LPIPS-off gain
 (+2.3 dB at N=1) reach the N=10 held-out margin? Renders 31721815 -> docs/report/renders_p4_512_win/ (512/8 | 512/4 | 512/4win).
 probe_n10.sh gained LOG_W/LPIPS_W knobs. 12/12 sagieb GPUs in use.
+Parity renders (docs/report/renders_p4_512_win/, FG-crop PSNR 512/8 | 512/4 | 512/4win): s7 26.3/27.0 | 27.7/27.6 | 27.8/27.7;
+s16 28.4/28.9 | 30.3/31.2 | 30.5/30.9; s23 26.3/27.3 | 28.4/29.4 | 28.3/29.3; s31 22.9/23.2 | 26.0/26.5 | 26.2/26.6 -> identical to the eye.
