@@ -4266,3 +4266,12 @@ ckpts of both finished 512/4 runs (finals kept). 30 GB free. Three probes still 
 Share was at 20 GB. Each main stage is well past its seed (512/2 ep400, aug ep1400, L2 ep2800) and resumes from its
 own save dir, so the stage-R seeds are dead weight. Caveat: probe_n10.sh runs the stage-R block BEFORE the main
 resume check, so a requeue now re-runs stage R (~1 h) before resuming the main stage correctly.
+
+## 2026-09-21 20:40: **L2-only at N=10: +0.77 dB FIT, −0.21 dB HELD-OUT — the LPIPS gain does NOT generalise** (31721813 / eval 31721814)
+Windowed 512/4 recipe, identical schedule, only --log_loss_weight 1 --lpips_loss_weight 0:
+  win (log+LPIPS)  fit -1.25 (45.69)  heldout 17.88 (27.09)  LPIPS m -0.0011 / 0.0694
+  win_l2           fit -2.02 (46.46)  heldout 18.09 (26.87)  LPIPS m  0.0007 / 0.0715
+So the +2.3 dB the L2 loss bought at N=1 ([[project_l2_only_control]]) is a FIT effect: at N=10 it is +0.77 on the
+ten training objects and -0.21 on heldout300, with LPIPS slightly worse on both. Dropping LPIPS buys memorisation,
+not generalisation -> KEEP lpips_w 0.5 for the full-data run; the N=1 ceiling number carries the ~2 dB caveat but
+every held-out verdict in the campaign stands as measured.
