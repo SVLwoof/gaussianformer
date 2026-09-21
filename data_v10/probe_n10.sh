@@ -43,6 +43,7 @@ STAGE_R=${STAGE_R:-0}
 N=${N:-10}; NGPU=4; TARGET_STEPS=${TARGET_STEPS:-30000}   # N=100 reuses the same 30k-step budget
 RES_MAIN=${RES_MAIN:-512}                                # main-stage resolution (256 for the patch-4 pair)
 H5=${H5:-data_v10/nsweep/n${N}_h5}; RENDERS=${RENDERS:-data_v10/nsweep/n${N}_renders}  # override for augmented sets
+LOG_W=${LOG_W:-0.5}; LPIPS_W=${LPIPS_W:-0.5}   # main-stage loss mix; LPIPS_W=0 = L2-only arm
                                                          # so arms are compared at EQUAL COMPUTE
 STEPS_PER_EPOCH=$(( N * 4 / NGPU ))            # views_per_epoch=4, bs1
 EPOCHS=$(( TARGET_STEPS / STEPS_PER_EPOCH ))
@@ -82,7 +83,7 @@ if [ ${#p2} -gt 0 ]; then RESUME=(--resume ${p2[1]}); echo "RESUME from ${p2[1]}
 else RESUME=(--init_from $SEED); echo "INIT from $SEED"; fi
 uv run --no-sync torchrun --standalone --nproc_per_node=$NGPU -m training.train "${COMMON[@]}" \
   --save_dir $SAVE --resolution $RES_MAIN --phase2_epochs $EPOCHS --save_interval $SAVE_INT \
-  --log_loss_weight 0.5 --lpips_loss_weight 0.5 "${RESUME[@]}"
+  --log_loss_weight $LOG_W --lpips_loss_weight $LPIPS_W "${RESUME[@]}"
 rc=$?
 # torchrun has exited 135/7 after a clean finish (final ckpt written), cancelling afterok evals;
 # the final checkpoint is the success criterion.
