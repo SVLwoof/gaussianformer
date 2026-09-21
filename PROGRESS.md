@@ -4261,3 +4261,8 @@ s16 28.4/28.9 | 30.3/31.2 | 30.5/30.9; s23 26.3/27.3 | 28.4/29.4 | 28.3/29.3; s3
 ### 2026-09-21 10:40 — lab share hit 15 GB (100%); freed ~14 GB of ours
 Deleted: stage-R dirs of the finished 512/4 dense + windowed runs, the L2 arm's stage-R epoch-244, and the epoch-2800
 ckpts of both finished 512/4 runs (finals kept). 30 GB free. Three probes still to save 2 x 2.3 GB each.
+
+### 2026-09-21 19:50 — freed the three running arms' stage-R dirs (~10 GB, user go)
+Share was at 20 GB. Each main stage is well past its seed (512/2 ep400, aug ep1400, L2 ep2800) and resumes from its
+own save dir, so the stage-R seeds are dead weight. Caveat: probe_n10.sh runs the stage-R block BEFORE the main
+resume check, so a requeue now re-runs stage R (~1 h) before resuming the main stage correctly.
