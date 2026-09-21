@@ -4245,3 +4245,13 @@ Recipe: xattn_window=8 (margin 1) + view_bf16 + view_grad_checkpoint, global ray
 schedule/seed. Differences 0.03-0.08 dB = noise. Windowed cross-attention is the default for finer grids from
 here. Next run (proposed, needs go): 512/2 probe with the same recipe (patch_size=2, xattn_window=16, ~5.9 s/step
 -> ~49 h on 4 GPUs) vs this 512/4 pair; 12 sagieb GPUs idle.
+
+## 2026-09-21 09:30: **512/2 launched + two windowed-512/4 arms (aug, L2-only) + parity renders** (user go)
+All on the windowed recipe (xattn_window, view_bf16, view_grad_checkpoint; global self-attn), 4 GPUs each, stage R 3000:
+  p2r_fg_r512p2_win      patch 2, tile 16, 60 h limit        31721808 -> eval 31721809            (~49 h)
+  p2r_fg_r512p4_win_aug  n10_r3 (42 views/obj, r 1.7/1.15/2.45)  31721810 -> eval 31721811 + r1.15 eval 31721812 (~11 h)
+  p2r_fg_r512p4_win_l2   --log_loss_weight 1 --lpips 0        31721813 -> eval 31721814            (~11 h)
+Readouts: 512/2 vs the 512/4 pair (-1.17..-1.25 / 17.85..17.88); aug vs p2r_fg_aug (512/8 dense: heldout r1.7 18.96,
+r1.15 16.17) and vs win (17.88) -> are patch 4 and radius aug additive?; L2 vs win -> does the LPIPS-off gain
+(+2.3 dB at N=1) reach the N=10 held-out margin? Renders 31721815 -> docs/report/renders_p4_512_win/ (512/8 | 512/4 | 512/4win).
+probe_n10.sh gained LOG_W/LPIPS_W knobs. 12/12 sagieb GPUs in use.
