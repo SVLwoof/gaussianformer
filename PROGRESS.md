@@ -4237,3 +4237,11 @@ Renders landed (docs/report/renders_p4_512_final/, held-out s7/16/23/31, views 0
 s7 axe 26.3/27.0 -> 27.7/27.6; s16 fringe 28.4/28.9 -> 30.3/31.2; s23 helmet 26.3/27.3 -> 28.4/29.4; s31 seahorse 22.9/23.2 -> 26.0/26.5.
 Note: the epoch-1000 mid-run ckpt read 0.3-0.5 dB HIGHER on these held-out views than the final (28.0/30.6-31.4/28.9-30.0/26.3-27.0)
 -> the last 2000 epochs at low LR drift toward the fit objects (known memorisation pattern), not the warm-restart dip.
+
+## 2026-09-21 09:05: **windowed 512/4 = PARITY with dense 512/4 at 1/4 the wall time** (31715558 / eval 31715559)
+probe_p2r_fg_r512p4      fit -1.17 (45.62)   heldout 17.85 (27.11)   LPIPS m 0.0684   46 h dense (2 timeouts)
+probe_p2r_fg_r512p4_win  fit -1.25 (45.69)   heldout 17.88 (27.09)   LPIPS m 0.0694   10 h 49 incl. stage R (11.8 s/epoch)
+Recipe: xattn_window=8 (margin 1) + view_bf16 + view_grad_checkpoint, global ray-token self-attention, same
+schedule/seed. Differences 0.03-0.08 dB = noise. Windowed cross-attention is the default for finer grids from
+here. Next run (proposed, needs go): 512/2 probe with the same recipe (patch_size=2, xattn_window=16, ~5.9 s/step
+-> ~49 h on 4 GPUs) vs this 512/4 pair; 12 sagieb GPUs idle.
