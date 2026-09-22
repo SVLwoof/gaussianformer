@@ -4304,3 +4304,29 @@ costs only 0.7 dB. The Gaussians go through transform_gaussians_to_cam_coord any
 is the same problem as a camera move -- confirmed empirically, and the quaternion composition path is correct.
 Caveat: the dB figures are measured off the h264 clips (compression floors both sides), so read them relatively.
 First-pass bug (fixed): the object clips orbited the camera too, hiding the object motion.
+
+## 2026-09-22 21:15: **HANDOFF (model migration)** — tree clean, pushed, one job live
+Branch `v20/placement`, 38 commits ahead of main at push time, working tree clean, everything committed AND pushed.
+
+LIVE: 512/2 probe 31721808 (4 GPUs sagieb, TAG p2r_fg_r512p2_win, epoch ~1800/3000 at 64 s/epoch, ~24 h of
+wall left inside its 60 h limit -> finishes ~Wed 17:30) -> eval 31721809 (afterany, killable).
+When its eval writes DONE_NSWEEP_EVAL in runs/nsweval_31721809.out:
+  PYTHONPATH=. uv run --no-sync python data_v10/probe_report.py --tags probe_p2r_fg probe_p2r_fg_r512p4 \
+    probe_p2r_fg_r512p4_win probe_p2r_fg_r512p4_win_aug probe_p2r_fg_r512p4_win_l2 probe_p2r_fg_r512p2_win
+  compare with 512/4 win (fit -1.25 / heldout 17.88); then renders:
+  sbatch --killable --account=killable-cs --export=ARGS="ladder --scenes 7 16 23 31 --res 512 --out docs/report/renders_p2_512 --models '512/4win:checkpoints_probe_p2r_fg_r512p4_win/phase2_epoch_3000.pt:proj_rope_2d=true' '512/2win:checkpoints_probe_p2r_fg_r512p2_win/phase2_epoch_3000.pt:proj_rope_2d=true'" data_v10/report_renders.sh
+If it TIMEOUTs: resubmit `sbatch -A sagieb --time=24:00:00 --export=TAG=p2r_fg_r512p2_win,MODEL_CFG="proj_rope_2d=true;patch_size=2;ray_embed_patch=8;xattn_window=16;view_bf16=true;view_grad_checkpoint=true",STAGE_R=3000,EXTRA_TRAIN="--fg_bg_weight;0.05" data_v10/probe_n10.sh` (resumes from its save dir; note probe_n10.sh re-runs stage R first, ~1 h, because its stage-R dir was deleted) and re-chain the eval.
+
+THE 2-HOURLY FLEET CHECK IS A SESSION-ONLY CRON (3255eeac) AND DIES WITH THIS SESSION -- re-arm it after migration.
+
+STATE OF THE SCIENCE (post-meeting campaign, all verdicts in this file + memory):
+  Full-data recipe SETTLED: proj_rope_2d + fg_bg_weight 0.05 + patch_size 4/ray_embed_patch 8 + xattn_window 8
+  + view_bf16 + view_grad_checkpoint (global self-attn) + multi-radius orbits + lpips_w 0.5.
+  heldout300: 19.39 (512/8) -> 17.88 (patch 4) -> 17.50 (+ radius aug, additive); close range 20.60 -> 15.12.
+  NULL arms (do not revisit): value RoPE, pure-P2, shape band (camera-frame axis endpoints), swin self-attn
+  (-2.9 dB zero-shot), L2-only (fit-only gain).
+NOT STARTED, awaiting the user: (a) full-data multi-radius datagen for the 1000-object set (~20-30 GB, blocked on
+the lab share, which another user has been filling: 25 GB free), (b) the pixel-query readout layer (item 2 of the
+2026-09-21 idea list: a final cross-attention with per-pixel queries over each pixel's windowed Gaussians --
+the windowing makes it affordable; readout = axe N=1), (c) splat-realisation augmentation for the full-data run.
+Video tooling is new and committed: data_v10/render_video.{py,sh} (orbit/dolly/move/tumble, model vs rasterizer).
