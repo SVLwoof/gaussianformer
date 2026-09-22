@@ -4275,3 +4275,16 @@ So the +2.3 dB the L2 loss bought at N=1 ([[project_l2_only_control]]) is a FIT 
 ten training objects and -0.21 on heldout300, with LPIPS slightly worse on both. Dropping LPIPS buys memorisation,
 not generalisation -> KEEP lpips_w 0.5 for the full-data run; the N=1 ceiling number carries the ~2 dB caveat but
 every held-out verdict in the campaign stands as measured.
+
+## 2026-09-22 04:46: **patch 4 + radius aug are ADDITIVE on held-out — best generalisation of the campaign (17.50 standard, 15.12 close)** (31721810 / evals 31721811 + 31721812)
+                              fit    heldout(r1.7)   heldout r1.15
+  p2r_fg            (512/8)   3.35      19.39           20.60
+  p2r_fg_aug        (512/8)   6.98      18.96           16.17
+  p2r_fg_r512p4_win (patch4) -1.25      17.88            --
+  ..._win_aug       (both)    2.94      17.50           15.12
+Held-out: patch 4 alone -1.51, aug alone -0.43, both -1.89 = additive (sum -1.94, within noise). Close range
+(r1.15): aug alone -4.43, both -5.48 -> patch 4 adds another -1.05 at close range on top of aug. Fit is WORSE
+with aug (2.94 vs -1.25) exactly as expected: 42 views/object at three radii is 3x the fitting work for the same
+30k steps, and the ten training objects are no longer the point. LPIPS margin also best (0.0663).
+=> FULL-DATA RECIPE SETTLED: P2 + fg 0.05 + patch 4 + windowed cross-attn (bf16 + grad-ckpt) + multi-radius orbits
++ lpips_w 0.5. Remaining question is only the grid: 512/2 (31721808, epoch ~950/3000, ETA Wed ~10:00).
