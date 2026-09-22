@@ -4288,3 +4288,19 @@ with aug (2.94 vs -1.25) exactly as expected: 42 views/object at three radii is 
 30k steps, and the ten training objects are no longer the point. LPIPS margin also best (0.0663).
 => FULL-DATA RECIPE SETTLED: P2 + fg 0.05 + patch 4 + windowed cross-attn (bf16 + grad-ckpt) + multi-radius orbits
 + lpips_w 0.5. Remaining question is only the grid: 512/2 (31721808, epoch ~950/3000, ETA Wed ~10:00).
+
+## 2026-09-22 18:00: **first animations — the model handles camera AND object motion zero-shot** (31727243 / 31727269)
+`data_v10/render_video.py` (+ .sh): per-frame forward passes written with imageio at 24 fps, the way RenderFormer
+does animation (batch_infer.py --save_video); no temporal model anywhere. Axe scene_0007 with its L2 full FT,
+rasterizer | model side by side, 120 frames each, docs/report/video/:
+  orbit   360 deg camera orbit r1.7            model-vs-rast 24.83 dB   flicker 0.0015 (rast 0.0018)
+  dolly   camera 2.45 -> 1.15 -> 2.45          24.78                    0.0014
+  move    OBJECT toward/away + bob, cam fixed  24.89                    0.0035 (rast 0.0039)
+  tumble  OBJECT rotates, tilted axis, cam fix 24.11                    0.0019 (rast 0.0023)
+Two findings: (1) TEMPORAL STABILITY is free — per-frame renders flicker LESS than the rasterizer's own frames
+in every clip, so no video model / temporal loss is needed; (2) OBJECT motion is as good as camera motion
+(move 24.89 = orbit 24.83) even though the FT only ever saw this object centred at the origin, and the tumble
+costs only 0.7 dB. The Gaussians go through transform_gaussians_to_cam_coord anyway, so a rigid object transform
+is the same problem as a camera move -- confirmed empirically, and the quaternion composition path is correct.
+Caveat: the dB figures are measured off the h264 clips (compression floors both sides), so read them relatively.
+First-pass bug (fixed): the object clips orbited the camera too, hiding the object motion.
