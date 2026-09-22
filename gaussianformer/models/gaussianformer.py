@@ -1,4 +1,6 @@
+import roma
 import torch
+import torch.nn.functional as F
 from huggingface_hub import PyTorchModelHubMixin
 from torch import nn
 
@@ -6,6 +8,17 @@ from gaussianformer.encodings.nerf_encoding import NeRFEncoding
 from gaussianformer.layers.attention import TransformerEncoder
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.models.view_transformer import ViewTransformer
+
+
+def log_covariance(gaussians: torch.Tensor) -> torch.Tensor:
+    """[..., 14] Gaussians -> [..., 6] upper triangle of R diag(log s) R^T (half the covariance's matrix log).
+    Invariant to the quaternion's sign and to relabelling/flipping the principal axes."""
+    quat = F.normalize(gaussians[..., 6:10].float(), dim=-1)  # padded all-zero rows stay finite
+    R = roma.unitquat_to_rotmat(quat[..., [1, 2, 3, 0]])  # ours wxyz, roma xyzw
+    log_s = torch.log(gaussians[..., 3:6].float().clamp(min=1e-6))
+    L = (R * log_s[..., None, :]) @ R.transpose(-1, -2)
+    i, j = torch.triu_indices(3, 3)
+    return L[..., i, j].to(gaussians.dtype)
 
 
 class GaussianFormer(nn.Module, PyTorchModelHubMixin):
@@ -29,6 +42,10 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             )
             nn.init.zeros_(self.gaussian_encoder_mlp[-1].weight)
             nn.init.zeros_(self.gaussian_encoder_mlp[-1].bias)
+        if self.config.log_cov_input:
+            self.gaussian_logcov_encoder = nn.Linear(6, self.config.latent_dim)
+            nn.init.zeros_(self.gaussian_logcov_encoder.weight)
+            nn.init.zeros_(self.gaussian_logcov_encoder.bias)
         self.rope_dim = self.config.rope_dim or self.config.pos_pe_num_freqs
 
         if self.config.pe_type == 'nerf':
@@ -113,6 +130,8 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
             tokens.append(self.gaussian_token + gaussian_emb)
         else:  # rope
             e = self.gaussian_encoder(gaussians)
+            if self.config.log_cov_input:
+                e = e + self.gaussian_logcov_encoder(log_covariance(gaussians))
             if self.config.input_mlp_hidden:
                 e = e + self.gaussian_encoder_mlp(e)
             gaussian_emb = self.gaussian_encoder_norm(e)

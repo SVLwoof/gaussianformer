@@ -14,6 +14,7 @@
 # STAGE_R (steps) prepends a 256px log-L1 recovery stage for changes that alter pretrained
 # function (RoPE dim/frequency); zero-init additions (gates, canvas) run without it.
 #   sbatch -A sagieb --export=TAG=p2_rope2d,MODEL_CFG="proj_rope_2d=true",STAGE_R=3000 data_v10/probe_n10.sh
+# 8 GPUs (same epochs at batch 8): sbatch -A sagieb --gres=gg:g4:8 -c 32 --mem=96GB --export=NGPU=8,TARGET_STEPS=15000,STAGE_R=1500,...
 #   eval: sbatch --killable --account=killable-cs --dependency=afterany:<id> --export=N=10,TAG=probe_<TAG>,CKPT=...,EXTRA="--model_cfg;..." data_v10/run_nsweep_eval.sh
 
 source /etc/profile.d/huji-lmod.sh
@@ -40,7 +41,7 @@ mkdir -p "$TORCH_EXTENSIONS_DIR"
 TAG=${TAG:?TAG required}
 MODEL_CFG=${MODEL_CFG:-}
 STAGE_R=${STAGE_R:-0}
-N=${N:-10}; NGPU=4; TARGET_STEPS=${TARGET_STEPS:-30000}   # N=100 reuses the same 30k-step budget
+N=${N:-10}; NGPU=${NGPU:-4}; TARGET_STEPS=${TARGET_STEPS:-30000}   # N=100 reuses the same 30k-step budget; NGPU=8 + half TARGET_STEPS/STAGE_R = same epochs at batch 8
 RES_MAIN=${RES_MAIN:-512}                                # main-stage resolution (256 for the patch-4 pair)
 H5=${H5:-data_v10/nsweep/n${N}_h5}; RENDERS=${RENDERS:-data_v10/nsweep/n${N}_renders}  # override for augmented sets
 LOG_W=${LOG_W:-0.5}; LPIPS_W=${LPIPS_W:-0.5}   # main-stage loss mix; LPIPS_W=0 = L2-only arm

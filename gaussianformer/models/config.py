@@ -21,6 +21,12 @@ class GaussianFormerConfig:
     """The number of heads in the transformer."""
     input_mlp_hidden: int = 0
     """Hidden dim of the residual input-head MLP (0 = single-linear baseline)."""
+    log_cov_input: bool = False
+    """Add each Gaussian's log-covariance R diag(log s) R^T (6 unique entries) to its embedding through
+    a zero-init Linear (2026-09-22). The raw 14-dim input carries linear scales, where the whole
+    fine-detail range (0.0003..0.003) moves the embedding ~0.03 vs ~1.3 for colour, and quaternions
+    whose sign (q == -q) and axis labelling are arbitrary; this 6-vector is unique, continuous and
+    log-scaled. Exactly the baseline at init (warm-safe, no recovery stage needed)."""
     dim_feedforward: int = 768 * 4
     """The dimension of the feedforward network in the transformer."""
     num_register_tokens: int = 16

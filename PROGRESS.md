@@ -4330,3 +4330,15 @@ the lab share, which another user has been filling: 25 GB free), (b) the pixel-q
 2026-09-21 idea list: a final cross-attention with per-pixel queries over each pixel's windowed Gaussians --
 the windowing makes it affordable; readout = axe N=1), (c) splat-realisation augmentation for the full-data run.
 Video tooling is new and committed: data_v10/render_video.{py,sh} (orbit/dolly/move/tumble, model vs rasterizer).
+
+## 2026-09-22 22:12: **log-covariance input probe launched (8 GPUs)** + tier-1 checkpoint cleanup
+Diagnosis (512/4 win ckpt, n10 objects): the scene encoder's Linear(14) sees raw linear scales; object scales
+span 0.0003..0.03 but a few background splats (to 1.8) set the input spread, so the whole fine-detail range
+moves the embedding ~0.03 vs ~1.3 for colour. Quaternions are sign-ambiguous (15% have w<0) and axis labels
+are arbitrary. Fix: `log_cov_input` adds R diag(log s) R^T (6 entries: unique, continuous, log-scaled)
+through a zero-init Linear -> exact baseline at load. tests/test_logcov_cpu.py (identity, q/-q + axis
+relabel invariance, gradient reaches the layer).
+  p2r_fg_r512p4_win_logcov  31728543 (8 GPUs: NGPU=8, TARGET_STEPS=15000, STAGE_R=1500 = control's epochs
+  at batch 8) -> eval 31728544. Control p2r_fg_r512p4_win fit -1.25 / heldout 17.88 (4 GPUs). Batch
+  differs: a significant gain warrants a 4-vs-8 control; also check the logcov layer's weight norm opened.
+Tier-1 deletions (user go): 40 dirs, codec_so_* except scene_0007 family + P1/canvas probes; disk 25 -> 115 GB.
