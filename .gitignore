@@ -345,6 +345,7 @@ my-gaussianformer-model/
 checkpoints/
 checkpoints_v[0-9]*/
 checkpoints_probe*/
+checkpoints_full*/
 checkpoint_renders/
 
 # Renders (large)
@@ -443,3 +444,5 @@ data_external/flowers/flowers_*/
 # per-scene metric rows of retired diagnostics (canvas share, patch-grid score)
 data_v10/canvas_share/
 data_v10/patch_artifact/
+data_v10/h5s_20k_rec_r3/
+data_v10/renders_r3/
