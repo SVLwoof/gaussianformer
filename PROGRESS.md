@@ -4358,3 +4358,10 @@ predicts. Control without log-cov at the same 8-GPU schedule: p2r_fg_r512p4_win_
   memorisation, better heldout (N=10 is in the overfitting regime; says nothing about full data, which underfits).
 NULL arms (do not revisit): value RoPE, pure-P2, shape band, swin self-attn, log-cov input. log_cov_input stays
 in config (default off) to load the checkpoint.
+
+## 2026-09-23 11:26: **full-data multi-radius datagen running** (data_v10/multi_radius_full.{py,sh}, killable array 31733182 x 11)
+26,820 h5s_20k_rec objects: + 7 views @ r1.15 + 7 @ r2.45 each, GT from the full splat streamed out of the
+Objaverse_Splats chunk zips (node-local cache), base views hardlinked -> data_v10/renders_r3 + h5s_20k_rec_r3
+(external-link H5s, 28 views). Frame check (re-render base view 0 vs data_v10/renders) 60-69 dB on all 11 tasks.
+First 1,524 objects measured (user asked to pause there): df ~0.6 MB/object -> ~16 GB total (du says 54 GB worst
+case); ~140 objects/min -> ~3 h. Mix per object 14 @ r1.7 / 7 @ 1.15 / 7 @ 2.45.
