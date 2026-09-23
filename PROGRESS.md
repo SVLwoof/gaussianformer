@@ -4350,3 +4350,11 @@ Layer opened slowly: W norm 0.014 (end stage R) -> 0.034 (ep600) -> 0.056 (ep300
 0.031 vs off-diagonal 0.007 -> the model uses the log sizes, barely the orientation.
 Confound: 8 GPUs = half the optimizer steps at batch 8; "fit worse, heldout better" is also what less training
 predicts. Control without log-cov at the same 8-GPU schedule: p2r_fg_r512p4_win_b8 31731419 -> eval 31731420 (~6 h).
+
+## 2026-09-23 10:51: **log-cov input = NULL** — the whole −0.24 was the batch-8 schedule
+  probe_p2r_fg_r512p4_win_b8 (8 GPUs, no log-cov)  fit 0.42 (44.02)  heldout 17.59 (27.37)  LPIPS m 0.0675
+  log-cov − b8: heldout +0.04 [+0.02, +0.07] (122/300 better), fit +0.04 [−0.01, +0.08] -> null/slightly worse.
+  b8 − 4-GPU win: heldout −0.29 [−0.36, −0.21], fit +1.67 -> half the optimizer steps at batch 8 = less
+  memorisation, better heldout (N=10 is in the overfitting regime; says nothing about full data, which underfits).
+NULL arms (do not revisit): value RoPE, pure-P2, shape band, swin self-attn, log-cov input. log_cov_input stays
+in config (default off) to load the checkpoint.
