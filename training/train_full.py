@@ -14,6 +14,8 @@ checkpoint: a new --save_dir with --resume_from <stable ckpt> and --steps = its 
 One epoch = one random view of every object (views_per_epoch 1, redrawn per epoch). Checkpoints are
 step-numbered; the newest in --save_dir is resumed automatically (preemption / time limit), else
 --resume_from (optimizer + step carried over), else --init_from (weights only, step 0).
+Freeze on demand: `touch <save_dir>/FREEZE` -> the run checkpoints within 20 steps and exits cleanly; resubmitting
+the same command continues from that step. Otherwise a kill loses at most --save_every steps.
 
   torchrun --standalone --nproc_per_node=8 -m training.train_full \
       --gaussian_h5_dir data_v10/h5s_20k_rec_r3 --renders_dir data_v10/renders_r3 \
@@ -152,6 +154,7 @@ def main() -> None:
         model.train()
         return (sums / max(n, 1)).tolist()
 
+    frozen = False
     while step < a.steps:
         if sampler is not None:
             sampler.set_epoch(epoch)
@@ -190,11 +193,24 @@ def main() -> None:
                           f"lpips: {v[2]:.6f} | {(time.time() - t0) / n:.2f} s/step", flush=True)
                     save(step, avg[0])
                 sums, n, t0 = torch.zeros(3, device=device), 0, time.time()
+            if step % 20 == 0:  # freeze: `touch <save_dir>/FREEZE` -> checkpoint within ~20 steps and exit
+                flag = torch.tensor(float((a.save_dir / "FREEZE").exists()), device=device)
+                if dist.is_initialized():
+                    dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+                if flag.item():
+                    frozen = True
+                    if is_main_process():
+                        save(step, float("nan"))
+                        (a.save_dir / "FREEZE").unlink()
+                        print(f"FROZEN at step {step}: resubmit the same command to continue", flush=True)
+                    break
             if step >= a.steps:
                 break
+        if frozen:
+            break
         epoch += 1
 
-    if is_main_process():
+    if is_main_process() and not frozen:
         print(f"DONE_FULL step {step}", flush=True)
     if dist.is_initialized():
         dist.destroy_process_group()
