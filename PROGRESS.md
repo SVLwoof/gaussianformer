@@ -4365,3 +4365,9 @@ Objaverse_Splats chunk zips (node-local cache), base views hardlinked -> data_v1
 (external-link H5s, 28 views). Frame check (re-render base view 0 vs data_v10/renders) 60-69 dB on all 11 tasks.
 First 1,524 objects measured (user asked to pause there): df ~0.6 MB/object -> ~16 GB total (du says 54 GB worst
 case); ~140 objects/min -> ~3 h. Mix per object 14 @ r1.7 / 7 @ 1.15 / 7 @ 2.45.
+
+## 2026-09-23 14:54: **full-data multi-radius datagen DONE** — 26,820 objects x 28 views (750,960 PNGs incl. hardlinks)
+data_v10/h5s_20k_rec_r3 (external-link H5s, 28 c2w) + data_v10/renders_r3 (views 0-13 hardlinked base r1.7,
+14-20 r1.15, 21-27 r2.45). Sample check: 5 random objects 28 c2w / 20k Gaussians / 28 PNGs; 0 blank far views in 200.
+Disk: 94 -> 78 GB free (~16 GB, as measured on the first 1,524). New trainer training/train_full.py (warmup-stable-
+decay LR, extendable, decay branches; CPU-tested). Full-data run awaits the 512/2 verdict (~tonight) + user go.
