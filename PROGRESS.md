@@ -4379,3 +4379,14 @@ Grid density still moves the fitting ceiling (+2.2 dB on the training objects, 3
 half a dB transfers to held-out at N=10 -- comparable to radius aug (−0.38), at ~4-5x the step cost.
 Eval gotcha: patch 2 decoder upsamples to 2048^2 -> ceiling_eval needs --view_chunk 1 (INT_MAX in upsample_bilinear2d
 with 4 views); first eval 31721809 died, rerun 31737877 OK. Renders queued: 31738741 (docs/report/renders_p2_512).
+
+## 2026-09-23 22:00: **FULL-DATA RUN LAUNCHED** — gf_full 31739786 on firefoot-14 (8x L40S, sagieb)
+`sbatch -A sagieb --exclude=cyril-01,epona-01,epona-02,khan-01,khan-02,firefoot-01,firefoot-08 data_v10/train_full.sh`
+Recipe: v18_256 seed -> stage R (256 px log-L1, 3000 steps, checkpoints_full_p4_r) -> main 512/4 windowed + P2 +
+fg 0.05 + LPIPS 0.5 on h5s_20k_rec_r3/renders_r3 (26,820 objects x 28 views), WSD LR 5e-5 (warmup 1000, DECAY=0 ->
+extendable), 375k steps = 112 views/object, save every 2000 (val100 loss), milestone every 94k (one per pass).
+Expected ~1.2 s/step on L40S -> ~5.5 days. Freeze: touch checkpoints_full_p4/FREEZE (or scontrol requeuehold;
+loses <= 2000 steps). Excluded A40/A6000 (8-GPU smoke on A40: ~1.8 s/step) and khan-01/02 (RTX Pro 6000: untested
+Blackwell stack, khan-01 on the debian13 reservation). Smoke test 31739019/31739563 passed stage R -> main -> FREEZE
+-> resume -> done; dataset index fix (one listdir) found by it. Smoke dirs deleted (user go).
+Eval plan: decay branch off each milestone (--resume_from milestone, new save dir, +~10k decay steps) -> heldout300.
