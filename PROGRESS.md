@@ -4390,3 +4390,6 @@ loses <= 2000 steps). Excluded A40/A6000 (8-GPU smoke on A40: ~1.8 s/step) and k
 Blackwell stack, khan-01 on the debian13 reservation). Smoke test 31739019/31739563 passed stage R -> main -> FREEZE
 -> resume -> done; dataset index fix (one listdir) found by it. Smoke dirs deleted (user go).
 Eval plan: decay branch off each milestone (--resume_from milestone, new save dir, +~10k decay steps) -> heldout300.
+2026-09-23 23:32: gf_full main stage measured 1.04 s/step (steps 200-1200, 8x L40S, no val in window) -> ~1.1 s/step with val/ckpt
+every 2000 -> 375k steps ~4.8 days (main started ~23:12 -> ETA ~Mon 2026-09-28 evening). First milestone (94k) ~Fri 04:00.
+Stage R: 3000 steps done (val log-L1 0.0049).
