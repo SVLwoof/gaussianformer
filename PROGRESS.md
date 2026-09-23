@@ -4371,3 +4371,11 @@ data_v10/h5s_20k_rec_r3 (external-link H5s, 28 c2w) + data_v10/renders_r3 (views
 14-20 r1.15, 21-27 r2.45). Sample check: 5 random objects 28 c2w / 20k Gaussians / 28 PNGs; 0 blank far views in 200.
 Disk: 94 -> 78 GB free (~16 GB, as measured on the first 1,524). New trainer training/train_full.py (warmup-stable-
 decay LR, extendable, decay branches; CPU-tested). Full-data run awaits the 512/2 verdict (~tonight) + user go.
+
+## 2026-09-23 20:35: **512/2 = POSITIVE but modest** — heldout 17.38 vs 17.88 (−0.50 [−0.60, −0.42], 229/300), fit −3.45 vs −1.25
+  probe_p2r_fg_r512p2_win  fit -3.45 (47.89)  heldout 17.38 (27.59)  LPIPS m 0.0659   2 d 9.5 h on 4 A40 (64 s/epoch)
+  p2 − p4 (both windowed, 4 GPUs, same schedule): heldout −0.50 [−0.60, −0.42], fit −2.20 [−2.85, −1.72] (10/10).
+Grid density still moves the fitting ceiling (+2.2 dB on the training objects, 3.45 dB ABOVE the rasterizer) but only
+half a dB transfers to held-out at N=10 -- comparable to radius aug (−0.38), at ~4-5x the step cost.
+Eval gotcha: patch 2 decoder upsamples to 2048^2 -> ceiling_eval needs --view_chunk 1 (INT_MAX in upsample_bilinear2d
+with 4 views); first eval 31721809 died, rerun 31737877 OK. Renders queued: 31738741 (docs/report/renders_p2_512).
