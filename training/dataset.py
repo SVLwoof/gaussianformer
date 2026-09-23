@@ -1,5 +1,6 @@
 """Dataset for pairing Gaussian H5 scene data with ground-truth rendered images."""
 
+import os
 import random
 from pathlib import Path
 
@@ -47,7 +48,9 @@ class GaussianRenderDataset(Dataset):
         # left untouched. Only the train dataset should set this; val stays fixed.
         self.augment_rotation = augment_rotation
 
-        # Build index of (h5_path, view_index, render_path) triples
+        # Build index of (h5_path, view_index, render_path) triples. One directory listing instead of
+        # a stat per view: at 27k scenes x 28 views the per-view exists() calls took >10 min per DDP rank.
+        rendered = set(os.listdir(self.renders_dir))
         self.samples: list[tuple[Path, int, Path]] = []
         for h5_path in sorted(self.gaussian_h5_dir.glob("*.h5")):
             scene_name = h5_path.stem
@@ -56,12 +59,11 @@ class GaussianRenderDataset(Dataset):
                 num_views = f["c2w"].shape[0]
             for view_idx in range(num_views):
                 # Try EXR first (HDR), fall back to PNG (LDR)
-                exr_path = self.renders_dir / f"{scene_name}_view_{view_idx}.exr"
-                png_path = self.renders_dir / f"{scene_name}_view_{view_idx}.png"
-                if exr_path.exists():
-                    self.samples.append((h5_path, view_idx, exr_path))
-                elif png_path.exists():
-                    self.samples.append((h5_path, view_idx, png_path))
+                stem = f"{scene_name}_view_{view_idx}"
+                if f"{stem}.exr" in rendered:
+                    self.samples.append((h5_path, view_idx, self.renders_dir / f"{stem}.exr"))
+                elif f"{stem}.png" in rendered:
+                    self.samples.append((h5_path, view_idx, self.renders_dir / f"{stem}.png"))
                 # Skip views with no matching render
 
         if max_samples is not None and len(self.samples) > max_samples:
