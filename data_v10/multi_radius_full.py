@@ -4,7 +4,7 @@ Same idea as multi_radius_datagen.py (GT from the FULL splat, inputs = the prune
 scale, streamed so nothing large lands on the lab share:
   - the full splat is decoded straight from the Objaverse_Splats chunk zip (node-local HF cache, deleted per
     chunk) with process_full's normalisation -- never written as a full H5;
-  - the base views are symlinks into data_v10/renders, only the new views are real PNGs;
+  - the base views are hardlinks to data_v10/renders, only the new views are real PNGs;
   - the out H5 holds external links to the h5s_20k_rec Gaussians plus the concatenated cameras (~KB).
 Views 0..13 = base orbit r 1.7, 14.. = N_NEW views per extra radius. Resume-safe per object (H5 written last).
 The first object of every chunk re-renders base view 0 and must match data_v10/renders (frame check).
@@ -77,12 +77,12 @@ def main() -> None:
                 v = N_BASE
                 for vm, K in views:
                     for img in render_full(arr, vm, K, RES, device):
-                        iio.imwrite(OUT_RENDERS / f"{name}_view_{v}.png", (img * 255).astype(np.uint8))
+                        iio.imwrite(OUT_RENDERS / f"{name}_view_{v}.png", (img * 255).astype(np.uint8), compress_level=9)
                         v += 1
-                for b in range(N_BASE):
+                for b in range(N_BASE):  # hardlinks: a symlink costs a 32 KB block on this share, a hardlink nothing
                     link = OUT_RENDERS / f"{name}_view_{b}.png"
-                    if not link.is_symlink():
-                        link.symlink_to(SRC_RENDERS / f"{name}_view_{b}.png")
+                    if not link.exists():
+                        os.link(SRC_RENDERS / f"{name}_view_{b}.png", link)
                 src = SRC_H5 / f"{name}.h5"
                 with h5py.File(src, "r") as f:
                     c2w, fov = np.array(f["c2w"], np.float32), np.array(f["fov"], np.float32)
