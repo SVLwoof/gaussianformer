@@ -4342,3 +4342,11 @@ relabel invariance, gradient reaches the layer).
   at batch 8) -> eval 31728544. Control p2r_fg_r512p4_win fit -1.25 / heldout 17.88 (4 GPUs). Batch
   differs: a significant gain warrants a 4-vs-8 control; also check the logcov layer's weight norm opened.
 Tier-1 deletions (user go): 40 dirs, codec_so_* except scene_0007 family + P1/canvas probes; disk 25 -> 115 GB.
+
+## 2026-09-23 04:54: **log-cov probe: heldout 17.64 vs 17.88 (−0.24 [−0.30, −0.18], 200/300 objs) but fit +0.46 vs −1.25 — batch-confounded; 8-GPU control launched**
+  probe_p2r_fg_r512p4_win_logcov  fit 0.46 (43.98)  heldout 17.64 (27.33)  LPIPS m 0.0678   5 h 36 on 8 GPUs
+  control p2r_fg_r512p4_win (4 GPUs)  fit -1.25 / heldout 17.88; win_aug heldout 17.50 (−0.38 [−0.44, −0.33]).
+Layer opened slowly: W norm 0.014 (end stage R) -> 0.034 (ep600) -> 0.056 (ep3000); diagonal (log-size) columns
+0.031 vs off-diagonal 0.007 -> the model uses the log sizes, barely the orientation.
+Confound: 8 GPUs = half the optimizer steps at batch 8; "fit worse, heldout better" is also what less training
+predicts. Control without log-cov at the same 8-GPU schedule: p2r_fg_r512p4_win_b8 31731419 -> eval 31731420 (~6 h).
