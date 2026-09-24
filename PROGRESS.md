@@ -4393,3 +4393,10 @@ Eval plan: decay branch off each milestone (--resume_from milestone, new save di
 2026-09-23 23:32: gf_full main stage measured 1.04 s/step (steps 200-1200, 8x L40S, no val in window) -> ~1.1 s/step with val/ckpt
 every 2000 -> 375k steps ~4.8 days (main started ~23:12 -> ETA ~Mon 2026-09-28 evening). First milestone (94k) ~Fri 04:00.
 Stage R: 3000 steps done (val log-L1 0.0049).
+
+## 2026-09-25 00:44: first-milestone evaluation armed
+gf_full at step 84k, val 0.0072 (78k), steady 1.06-1.1 s/step, ETA Mon 2026-09-28 ~17:00. A watcher submits, when
+checkpoints_full_p4/milestone_step_94000.pt appears (~03:40): decay branch (data_v10/decay_branch.sh, 8 GPUs sagieb
+with user go, 10k cosine steps -> checkpoints_full_p4_d94000/full_step_104000.pt, ~3 h) -> heldout300 eval
+(TAG full_p4_d94k) + r1.15 eval. Baseline on the same harness: V17b evals 31746478 (heldout300) / 31746479 (r1.15).
+sagieb g4 cap 18, 8 in use before the branch.
