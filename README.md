@@ -1,228 +1,112 @@
-<h1 align="center">GaussianFormer: Adapting RenderFormer to Render 3D Gaussian Splats</h1>
+<h1 align="center">GaussianFormer: Transformer Rendering of 3D Gaussian Splats</h1>
 
 <p align="center">
-  <a href="https://huggingface.co/shahafvl/gaussianformer-v10b"><strong>Pretrained Model</strong></a>
+  <a href="https://huggingface.co/shahafvl/gaussianformer-v17b"><strong>Pretrained model</strong></a>
   ·
-  <a href="https://github.com/microsoft/renderformer"><strong>Parent Project (RenderFormer)</strong></a>
+  <a href="https://github.com/microsoft/renderformer"><strong>RenderFormer (parent project)</strong></a>
 </p>
 
-GaussianFormer is a proof-of-concept neural renderer that takes a 3D Gaussian
-Splatting scene as input and synthesizes novel views without per-scene
-optimization at inference time. It adapts
-[RenderFormer](https://github.com/microsoft/renderformer) (SIGGRAPH 2025) — a
-transformer-based neural renderer designed for triangle meshes — by replacing
-its mesh input encoder with a Gaussian-native module that maps each Gaussian's
-14-dimensional parameter vector to a scene token. The two-stage transformer
-(view-independent scene encoder + view-dependent ray decoder) is otherwise
-unchanged.
+GaussianFormer renders 3D Gaussian Splatting scenes with a transformer, without per-scene optimization. It adapts
+[RenderFormer](https://github.com/microsoft/renderformer) (SIGGRAPH 2025), a transformer renderer for triangle
+meshes: each Gaussian becomes one scene token, and the two-stage architecture is warm-started from RenderFormer's
+pretrained weights.
 
 <div align="center">
-  <img src="medias/tomatoes_strip.png" width="100%"/>
-  <em>Tomatoes scene (real-world 3DGS scan), 14-view orbit, N=30k input
-  Gaussians: full gsplat (left), pruned gsplat used as input (middle),
-  GaussianFormer V10b output (right).</em>
+  <img src="medias/v17b_heldout_axe.png" width="100%"/>
+  <em>GaussianFormer-V17b on an object held out from training, two views.</em>
 </div>
 
-# Pretrained model
+<div align="center">
+  <img src="medias/two_objects.png" width="100%"/>
+  <em>Two objects composed into one scene (40k Gaussians; every training scene holds a single object), rendered by
+  a model from the current architecture line trained on these objects. The rasterizer renders the same Gaussians.</em>
+</div>
 
-| Model | Params | Link | Model ID |
-|-------|--------|------|----------|
-| GaussianFormer-V10b | 195M | [Hugging Face](https://huggingface.co/shahafvl/gaussianformer-v10b) | `shahafvl/gaussianformer-v10b` |
+## Status
 
-V10b epoch 26 is an LPIPS-VGG perceptual fine-tune of the V9 epoch 60 base.
-Weights are downloaded automatically by `from_pretrained`.
+- **Released:** `shahafvl/gaussianformer-v17b`, trained on 13,405 objects. On 1,806 held-out objects it reaches
+  30.3 dB PSNR (object crop, vs. the full splat), against 44.9 dB for rasterizing the same input.
+- **In progress:** a full-data run of the current architecture (projected 2-D RoPE, windowed cross-attention, 4 px
+  ray patches, multi-distance training views) on 26,820 objects. It will replace V17b when evaluated.
 
-# Installation
-
-We use [`uv`](https://github.com/astral-sh/uv) to manage dependencies. From a
-clone of the repo:
+## Installation
 
 ```bash
 uv sync
-uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # for HDR I/O
+uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # HDR I/O
 ```
 
-Flash Attention is optional; the code falls back to PyTorch SDPA automatically.
-To force SDPA: `ATTN_IMPL=sdpa`.
+Flash Attention is optional; without it the code uses PyTorch SDPA (force with `ATTN_IMPL=sdpa`). The windowed
+cross-attention of the current architecture needs Flash Attention on GPU.
 
-If you prefer plain pip: `pip install -r requirements.txt` works against the
-same `pyproject.toml` deps.
-
-# Quickstart: render a Gaussian scene
-
-End-to-end CLI inference, downloading weights from the Hub on first run:
+## Rendering
 
 ```bash
-uv run python infer_gaussian.py \
-  --h5_file gaussian_training_h5s/scene_0000.h5 \
-  --model_id shahafvl/gaussianformer-v10b \
-  --output_dir output/quickstart
+uv run python infer_gaussian.py --h5_file scene.h5 --output_dir out/   # model defaults to gaussianformer-v17b
 ```
-
-Output: one EXR (linear HDR) and one PNG (LDR) per camera view in the H5.
-
-Programmatic use:
 
 ```python
 import torch
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
 
-pipeline = GaussianFormerRenderingPipeline.from_pretrained("shahafvl/gaussianformer-v10b")
+pipeline = GaussianFormerRenderingPipeline.from_pretrained("shahafvl/gaussianformer-v17b")
 pipeline.to(torch.device("cuda"))
-
-# gaussians: [B, N, 14]   (pos[3] | scale[3] | quat[4] | rgb[3] | opacity[1])
-# mask:      [B, N]       boolean
-# c2w:       [B, V, 4, 4] camera-to-world (Blender convention)
-# fov:       [B, V, 1]    field of view in degrees
-imgs = pipeline(gaussians=g, mask=m, c2w=c2w, fov=fov,
-                resolution=512, torch_dtype=torch.float16)
-# imgs: [B, V, H, W, 3], linear HDR
+# gaussians [B, N, 14] = pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1); mask [B, N] bool
+# c2w [B, V, 4, 4] (Blender convention: -Z forward, +Y up); fov [B, V, 1] in degrees
+imgs = pipeline(gaussians=g, mask=m, c2w=c2w, fov=fov, resolution=512, torch_dtype=torch.float16)
+# imgs [B, V, 512, 512, 3], linear HDR
 ```
 
-The `infer_gaussian.py` script wraps this and adds tone mapping + EXR/PNG output.
+An input scene is an HDF5 file with `means [N,3]`, `scales [N,3]`, `rotations [N,4]` (w,x,y,z), `colors [N,3]`,
+`opacities [N,1]`, `c2w [V,4,4]` and `fov [V]`. The models are trained on single objects inside [-0.45, 0.45]³,
+cameras at distance ~1.7 with a 45° field of view, and about 20k Gaussians per object.
 
-# Pipeline overview
+## Model
 
-```
-Scene JSON descriptor
-  │
-  │── (mesh route, RenderFormer)
-  │     scene_processor/convert_scene.py  → triangle H5
-  │     infer.py                           → render
-  │
-  └── (Gaussian route, this project)
-        batch_convert_to_gaussian_examples.py   → Gaussian PLY + JSON
-        gaussian_scene_processor/batch_generate_h5.py   → Gaussian H5
-        infer_gaussian.py                               → render
-```
+| Stage | Input | Role |
+|---|---|---|
+| Scene encoder | one token per Gaussian (Linear over its 14 parameters), 3-D RoPE on positions | 12-layer transformer over the whole splat, view-independent |
+| View decoder | one token per image patch (ray directions) | 6 layers of self-attention between patches and cross-attention to the scene tokens, then a DPT head to pixels |
 
-Both routes share the same architecture. The Gaussian route swaps in
-`gaussianformer/`'s input encoder; the rest of the pipeline (encodings, layers,
-view transformer, DPT decoder) is shared structure with RenderFormer.
+The current architecture adds, all as options in `GaussianFormerConfig` (`gaussianformer/models/config.py`):
 
-The HDF5 fields for a Gaussian scene:
+- `proj_rope_2d`: each Gaussian is projected into the view, and its image coordinates enter the cross-attention as a
+  2-D RoPE matched against each patch's position.
+- `xattn_window`: each image tile attends only to the Gaussians whose projected footprint reaches it
+  (`gaussianformer/layers/window.py`), which makes finer patch grids affordable.
+- `patch_size=4` with `ray_embed_patch=8`: a 4 px patch grid that reuses the pretrained 8 px ray embedding.
 
-- `means [N, 3]`, `scales [N, 3]`, `rotations [N, 4]` (w,x,y,z), `colors [N, 3]`,
-  `opacities [N, 1]`
-- `c2w [V, 4, 4]`, `fov [V]` — camera convention is Blender (-Z view, +Y up,
-  +X right).
+## Data and training
 
-# Training
+| Step | Script |
+|---|---|
+| Download [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats), normalize, render ground truth from the full splat | `data_v10/process_full.py` |
+| Prune each object to 20k Gaussians and fine-tune the kept ones (LightGaussian score + recovery) | `data_v10/prune_recovery.py` |
+| Add views at camera distances 1.15 and 2.45 | `data_v10/multi_radius_full.py` |
+| Training, released models (two phases, cosine LR) | `training/train.py` |
+| Training, current full-data run (warmup-stable-decay LR, resumable, 8 GPUs) | `training/train_full.py`, `data_v10/train_full.sh` |
+| Per-object LoRA adapters | `training/train_lora.py` |
+| Held-out evaluation against the full splat and the rasterized input | `data_v10/ceiling_eval.py` |
 
-Training was done in two phases:
+The loss is log-HDR L1 plus LPIPS-VGG (0.5 each); the current recipe also down-weights background pixels in the L1
+term. SLURM scripts assume HUJI's `lmod` layout.
 
-1. **Phase A — Objaverse_Splats pretrain (V9).** Single-object 3DGS scans from
-   [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats)
-   (2,667 train / 183 val), pure log-HDR L1 loss, 60 epochs on 3 GPUs.
+## Acknowledgements
 
-   ```bash
-   # Build the train/val splits and process the source PLYs into HDF5s
-   uv run python data_v9/build_object_list.py
-   sbatch runs/process_objaverse_v9.sh
-   # Train
-   sbatch runs/train_phase2_v9.sh
-   ```
+Built on [RenderFormer](https://github.com/microsoft/renderformer) by Chong Zeng, Yue Dong, Pieter Peers, Hongzhi Wu
+and Xin Tong (SIGGRAPH 2025), whose architecture, attention layers, DPT decoder and inference code form the backbone
+of this project. Training data is the Objaverse_Splats subset of [Objaverse](https://objaverse.allenai.org/). Pruning
+follows [LightGaussian](https://github.com/VITA-Group/LightGaussian); ground truth is rendered with
+[gsplat](https://github.com/nerfstudio-project/gsplat).
 
-   The committed `data_v9/object_list_{train,val}.json` and
-   `data_v9/metadata_{train,val}.json` pin the exact split.
+## License
 
-2. **Phase B — LPIPS perceptual fine-tune (V10b).** Combined log-HDR L1 +
-   LPIPS-VGG (weight 0.2) on tonemapped LDR output, fine-tuned from V9 ep60,
-   26 epochs on 4 GPUs (cosine LR 5e-5 → 5e-7, batch size 4).
+- **Code:** MIT (inherits RenderFormer).
+- **Weights:** CC-BY-NC-4.0, inheriting the non-commercial terms of the Objaverse_Splats training data.
 
-   ```bash
-   sbatch runs/train_phase2_v10b.sh
-   ```
+## Citation
 
-The SLURM scripts assume HUJI's `lmod` layout but are portable via the
-`LMOD_INIT` env var (see `.env.example`). To reproduce on another cluster, set
-`LMOD_INIT=/path/to/your/lmod.sh` and add a `--mail-user` line to the
-SBATCH header if you want job notifications.
-
-# Headline results
-
-PSNR (dB, vs full-gsplat ground truth) on the *Tomatoes* real-world scan
-across token budgets:
-
-| Model            | N=5k  | N=10k | N=20k | N=30k |
-|------------------|-------|-------|-------|-------|
-| V6 (multi-obj)   | 21.78 | 21.95 | 22.54 | 23.00 |
-| V9 ep60 (L1)     | 25.90 | 26.94 | 27.74 | 28.24 |
-| **V10b ep26**    | 25.80 | 26.70 | 27.41 | 27.81 |
-
-<div align="center">
-  <img src="medias/tomatoes_all_N.png" width="100%"/>
-  <em>V10b ep26 on Tomatoes across N=5k/10k/20k/30k input Gaussians; full
-  gsplat reference at far right.</em>
-</div>
-
-# Limitations
-
-- **Data is the lever.** The +4 dB jump between V6 and V9 came from switching
-  from synthetic multi-object Cornell-box scenes to single-object Objaverse
-  3DGS scans. Loss tweaks and token-budget bumps were near-zero deltas.
-- **N matters less than scene quality.** Going from N=5k to N=30k tokens at
-  V9 ep60 buys +2.3 dB — real, but small compared to the data overhaul. The
-  model generalizes beyond its 5k training token count, but cleanliness of
-  the input distribution matters more.
-- **LPIPS skews PSNR.** V10b's ~0.3 dB regression vs V9 ep60 is expected:
-  LPIPS gradients optimize feature-space similarity, not pixel fidelity. The
-  visual sharpness gain is the goal; PSNR alone undersells perceptual models.
-- **Scope.** Trained on isolated single objects with clean backgrounds.
-  Multi-object scenes, large-scale captures, and unbounded backgrounds degrade
-  significantly. The system still falls short of standard rasterized 3DGS in
-  output quality on the Tomatoes evaluation.
-
-# Bring your own scene
-
-<details>
-<summary>HDF5 schema and JSON descriptor</summary>
-
-A Gaussian scene HDF5 contains:
-
-- `means [N, 3]`, `scales [N, 3]`, `rotations [N, 4]` (quaternion w,x,y,z),
-  `colors [N, 3]`, `opacities [N, 1]`
-- `c2w [V, 4, 4]`, `fov [V]` — Blender camera convention.
-
-To go from a `.ply` + JSON descriptor to an HDF5, see
-`gaussian_scene_processor/batch_generate_h5.py`. The JSON descriptor format
-(v1.1-gaussian) is similar to RenderFormer's v1.0 mesh format but with
-quaternion rotations and a simplified material (`color_tint`,
-`opacity_multiplier`). For the full mesh-side JSON spec, see the upstream
-[RenderFormer README](https://github.com/microsoft/renderformer#bring-your-own-scene).
-
-Stay within the original RenderFormer training-data ranges for best results:
-camera distance to scene center 1.5–2.0 m, FOV 30°–60°, scene bounding box
-[-0.5, 0.5]³.
-
-</details>
-
-# Acknowledgements
-
-This work is built directly on top of
-[**RenderFormer**](https://github.com/microsoft/renderformer) by Chong Zeng,
-Yue Dong, Pieter Peers, Hongzhi Wu, and Xin Tong (SIGGRAPH 2025). Its
-two-stage architecture, attention layers, DPT decoder, scene-conversion
-tooling, and inference code form the backbone of this project. Asset
-attributions for the example meshes are listed in the
-[upstream README](https://github.com/microsoft/renderformer#acknowledgements).
-
-Training data is the [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats)
-subset of [Objaverse](https://objaverse.allenai.org/). Importance-based
-Gaussian pruning follows
-[LightGaussian](https://github.com/VITA-Group/LightGaussian).
-
-# License
-
-- **Code**: MIT (inherits RenderFormer).
-- **Pretrained weights** (`shahafvl/gaussianformer-v10b`): CC-BY-NC-4.0,
-  inheriting the non-commercial restriction of the Objaverse_Splats training
-  data. Research / non-commercial use only.
-
-# Citation
-
-GaussianFormer is built on RenderFormer; if you use it in academic work,
-please cite the original paper:
+Please cite RenderFormer:
 
 ```bibtex
 @inproceedings{zeng2025renderformer,
@@ -232,7 +116,3 @@ please cite the original paper:
   year      = {2025}
 }
 ```
-
-The GaussianFormer adaptation, training pipeline, and pretrained checkpoint
-are documented at
-[github.com/SVLwoof/gaussianformer](https://github.com/SVLwoof/gaussianformer).

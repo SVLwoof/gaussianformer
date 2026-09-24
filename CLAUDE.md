@@ -1,130 +1,89 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code in this repository.
 
 ## Overview
 
-This repository adapts [RenderFormer](https://github.com/microsoft/renderformer) (SIGGRAPH 2025) for **3D Gaussian Splatting** inputs. RenderFormer is a transformer-based neural renderer: it takes triangle-mesh scenes and outputs rendered images without per-scene training. **GaussianFormer** replaces the triangle-mesh input with Gaussians (position, scale, rotation, color, opacity) while keeping the same two-stage transformer architecture.
+GaussianFormer adapts [RenderFormer](https://github.com/microsoft/renderformer) (SIGGRAPH 2025), a transformer
+renderer for triangle meshes, to 3D Gaussian Splatting input. Each Gaussian `[pos(3), scale(3), quat wxyz(4),
+rgb(3), opacity(1)]` is one scene token; the two-stage architecture is warm-started from RenderFormer's weights.
 
-A pretrained checkpoint (V10b ep26, LPIPS-fine-tuned from V9 ep60) is published at [`shahafvl/gaussianformer-v10b`](https://huggingface.co/shahafvl/gaussianformer-v10b). It's the default `--model_id` for `infer_gaussian.py`.
+- Released model: `shahafvl/gaussianformer-v17b` (default `--model_id` of `infer_gaussian.py`); earlier:
+  `shahafvl/gaussianformer-v10b`.
+- Current work: full-data run of the settled recipe (below); experiment log in `PROGRESS.md` (append-only, newest at
+  the bottom).
 
-## Environment Setup
+## Environment
 
-`uv` (`pyproject.toml` + `uv.lock`) is the source of truth for dependencies. From a fresh clone:
+`uv` (`pyproject.toml` + `uv.lock`) is the source of truth.
 
 ```bash
 uv sync
-uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # Needed for HDR image IO
+uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # HDR I/O
 ```
 
-`pip install -r requirements.txt` works as a fallback. Flash Attention is optional; code falls back to SDPA automatically. Force SDPA with `ATTN_IMPL=sdpa`.
+Flash Attention is optional (SDPA fallback, force with `ATTN_IMPL=sdpa`), but windowed cross-attention needs it on
+GPU. In SLURM jobs use `uv run --no-sync` (parallel `uv run` calls re-sync the shared venv).
 
-## Key Commands
+## Layout
 
-### RenderFormer (mesh pipeline) -- use this to verify scene quality
+| Path | Contents |
+|---|---|
+| `gaussianformer/` | model: `models/` (config, GaussianFormer, ViewTransformer), `layers/` (attention, window, DPT, LoRA), `pipelines/`, `utils/` |
+| `renderformer/`, `scene_processor/`, `infer.py` | upstream mesh pipeline, kept for reference |
+| `training/` | `train.py` (two-phase trainer of the released models), `train_full.py` (warmup-stable-decay trainer, current), `train_lora.py` (per-object adapters), `dataset.py` |
+| `data_v10/` | data generation, evaluation, probes, render scripts, and the data itself |
+| `tests/` | CPU tests: `ATTN_IMPL=sdpa PYTHONPATH=. uv run --no-sync python tests/<file>.py` |
+| `docs/report/` | render sheets and report figures; `medias/` holds README figures |
 
-**Single scene: JSON -> H5 -> rendered image:**
-```bash
-uv run python scene_processor/convert_scene.py examples/cbox.json --output_h5_path tmp/cbox/cbox.h5
-uv run python infer.py --h5_file tmp/cbox/cbox.h5 --output_dir output/cbox/
-```
-See `render-images.sh` and `render-videos.sh` for full examples with tone mappers.
+## Model
 
-**Batch (video frames):**
-```bash
-uv run python batch_infer.py --h5_folder <folder> --output_dir <output> --save_video
-```
+`GaussianFormerConfig` (`gaussianformer/models/config.py`) holds every architecture option; checkpoints store it,
+and `--model_cfg key=value ...` overrides it in training and evaluation.
 
-### Scene generation for training data
+- Scene encoder: 12 layers over one token per Gaussian (Linear over the 14 parameters), 3-D RoPE on positions.
+- View decoder (`ViewTransformer`): one token per image patch built from ray directions; 6 layers of patch
+  self-attention plus cross-attention to scene tokens, DPT head to pixels. Output is log-HDR.
+- Options used by the current recipe: `proj_rope_2d` (2-D RoPE on each Gaussian's projected image position),
+  `xattn_window` (tile-windowed cross-attention), `patch_size=4` + `ray_embed_patch=8`, `view_bf16`,
+  `view_grad_checkpoint`.
+- New parameters must be zero-initialised so a seed checkpoint loads unchanged (`load_seed` asserts this); changes to
+  pretrained behaviour need a 256 px recovery stage first.
 
-**Step 1 -- Generate randomized scene descriptor JSONs:**
-```bash
-uv run python generate_training_data.py
-```
-Outputs to `training_examples/`. Edit `NUM_SCENES_TO_GENERATE`, camera/light ranges, and material definitions directly in the script.
+## Data (`data_v10/`)
 
-**Step 2 -- Convert mesh examples to Gaussian format (OBJ -> PLY + JSON rewrite):**
-```bash
-uv run python batch_convert_to_gaussian_examples.py
-```
-Reads `training_examples/` -> writes `gaussian_training_examples/`.
+- `process_full.py`: Objaverse_Splats objects -> normalized full splats + 14 ground-truth views (r 1.7, 45° FOV, 512 px).
+- `prune_recovery.py`: 20k-Gaussian inputs -> `h5s_20k_rec/` (train, 26,820 objects), `h5s_20k_rec_val/` (1,806).
+- `multi_radius_full.py`: + 7 views each at r 1.15 and 2.45 -> `h5s_20k_rec_r3/` + `renders_r3/` (28 views/object;
+  H5s are external links to `h5s_20k_rec/`, base views are hardlinks to `renders/`).
+- `nsweep/`: fixed small sets (n10 train objects, val100, heldout300) for probes.
 
-**Step 3 -- Compile Gaussian scenes to HDF5:**
-```bash
-uv run python gaussian_scene_processor/batch_generate_h5.py
-```
-Reads `gaussian_training_examples/` -> writes `gaussian_training_h5s/`.
+HDF5 fields: `means [N,3]`, `scales [N,3]`, `rotations [N,4]` (w,x,y,z), `colors [N,3]`, `opacities [N,1]`,
+`c2w [V,4,4]`, `fov [V]`. Cameras use the Blender convention (-Z forward, +Y up, +X right).
 
-### GaussianFormer inference
+## Training and evaluation
 
-Defaults to the published checkpoint `shahafvl/gaussianformer-v10b` (downloads on first run):
+- Full-data run: `sbatch -A sagieb data_v10/train_full.sh` (stage R at 256 px, then 512 px; resumes automatically;
+  `touch <save_dir>/FREEZE` checkpoints and exits within 20 steps).
+- Architecture probes: `data_v10/probe_n10.sh` (10 objects, 30k steps, 4 GPUs) -> `data_v10/run_nsweep_eval.sh` ->
+  `data_v10/probe_report.py`. Compare arms only at the same GPU count and schedule. Patch-2 models need
+  `--view_chunk 1` in `ceiling_eval.py`.
+- Evaluation metric: PSNR on the object's bounding box against the full-splat render (`ceiling_eval.py`); "margin" =
+  rasterized input minus model, lower is better.
+- Renders: `data_v10/report_renders.sh` (comparison sheets), `render_video.sh` (orbit/dolly/object-motion clips),
+  `render_pair.sh` (two objects in one scene).
 
-```bash
-uv run python infer_gaussian.py --h5_file path/to/scene.h5 --output_dir output/scene
-```
+Settled recipe: `proj_rope_2d` + `xattn_window=8` + `patch_size=4`/`ray_embed_patch=8` + `view_bf16` +
+`view_grad_checkpoint`, multi-distance views, `--fg_bg_weight 0.05`, log-L1 and LPIPS at 0.5 each.
 
-Pass `--model_id <path-or-hf-id>` to use a local checkpoint or a different Hub model.
+## Cluster (HUJI SLURM)
 
-## Architecture
-
-### Pipeline flow
-
-```
-Scene JSON descriptor
-  |-- scene_processor/convert_scene.py --> H5 (triangles) --> infer.py --> rendered image
-  |-- batch_convert_to_gaussian_examples.py --> Gaussian PLY + JSON
-        |-- gaussian_scene_processor/batch_generate_h5.py --> H5 (gaussians) --> infer_gaussian.py --> rendered image
-```
-
-### Dual-package structure
-
-| Package | Input | Scene processor | Inference |
-|---|---|---|---|
-| `renderformer/` | Triangle meshes (textured) | `scene_processor/` | `infer.py`, `batch_infer.py` |
-| `gaussianformer/` | 3D Gaussians (14-dim) | `gaussian_scene_processor/` | `infer_gaussian.py` |
-
-Both share identical internal structure: `encodings/`, `layers/`, `models/`, `pipelines/`, `utils/`.
-
-### GaussianFormer model
-
-Two-stage transformer:
-
-1. **View-independent** (`GaussianFormer.transformer`): `TransformerEncoder` processes all Gaussians as a sequence. Each Gaussian is a 14-dim vector: `[pos(3), scale(3), rotation_quat(4), color(3), opacity(1)]`. Default positional encoding is RoPE.
-
-2. **View-dependent** (`ViewTransformer`): Cross-attention from ray tokens to scene tokens, producing pixel patches. Uses DPT decoder for upsampling.
-
-Key types:
-- `GaussianFormerConfig` -- frozen dataclass, all hyperparameters
-- `GaussianFormer` -- nn.Module + PyTorchModelHubMixin
-- `GaussianFormerRenderingPipeline` -- wraps model with ray generation + coordinate transforms
-- `transform_gaussians_to_cam_coord()` -- rotates Gaussian positions + quaternions into camera space
-
-### Scene descriptor JSON format (mesh pipeline, v1.0)
-
-Scenes are JSON files referencing `.obj` meshes from `examples/objects/` and `examples/templates/`. Structure:
-- `objects`: dict of named objects, each with `mesh_path`, `material` (diffuse, specular, roughness, emissive, smooth_shading, rand_tri_diffuse_seed/max/type), `transform` (translation, rotation as Euler degrees, scale, normalize)
-- `cameras`: list of cameras with `position`, `look_at`, `up` (Z-up), `fov`
-- Backgrounds use `templates/backgrounds/{plane,wall0,wall1,wall2}.obj` at scale [0.5,0.5,0.5]
-- Lights use `templates/lighting/tri.obj` with high emissive values
-
-### RenderFormer training-data constraints (from README)
-
-When generating scene descriptors, stay within these ranges for best results:
-- Camera distance to scene center: [1.5, 2.0], fov: [30, 60] degrees
-- Scene bounding box: [-0.5, 0.5] in x, y, z
-- Light sources: up to 8 triangles (using `tri.obj`), scale [2.0, 2.5], distance to center [2.1, 2.7], emission sum [2500, 5000]
-- Total triangles: up to 4096 (8192 usually still works at inference)
-- Objects should be water-tight, uniform triangle sizes preferred
-
-### Gaussian scene format (v1.1-gaussian)
-
-References `.ply` files instead of `.obj`. Transform uses quaternion rotation (w,x,y,z) instead of Euler angles. Simplified material: `color_tint` + `opacity_multiplier`.
-
-HDF5 fields: `means [N,3]`, `scales [N,3]`, `rotations [N,4]` (w,x,y,z), `colors [N,3]`, `opacities [N,1]`, `c2w [V,4,4]`, `fov [V]`.
-
-Camera convention: Blender coordinate system (-Z = view direction, +Y = up, +X = right).
-
-## Available assets
-
-- **Templates**: `plane.obj`, `wall0.obj`, `wall1.obj`, `wall2.obj` (backgrounds), `tri.obj` (light)
-- **Objects**: bunny, teapot (classical); cbox tall/short box; tree; fox + rock + tree-leaves/trunk; horse + hearts; lucy (3k/6k/11k); crystals (5 colors); shader-ball; compose objs; constant-width; room furniture; veach-mis; renderformer-logo
+- Every `sbatch`/`srun` needs an account: `-A sagieb` for training; evals, renders and data jobs run
+  `--killable --account=killable-cs`.
+- Scripts are `#!/bin/zsh`, source `/etc/profile.d/huji-lmod.sh`, then `module load nvidia` and `module load cuda`. Never
+  `sbatch --wrap` (runs `sh`). Pass `--export=PATH,HOME,USER,...` explicitly, not `ALL`.
+- gsplat compiles CUDA on first import; set `TORCH_EXTENSIONS_DIR` per GPU architecture.
+- `gg:g4` nodes: 17 L40S, 2 A40 (epona-01/02, ~1.7x slower), 2 RTX Pro 6000 (khan-01/02, untested with this stack),
+  1 A6000 (cyril-01). All have 8 GPUs.
+- The lab share `/cs/labs/sagieb` is shared and often near full; check `df` before writing large outputs and never
+  delete data or checkpoints without the user's approval.
