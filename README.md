@@ -37,7 +37,7 @@ uv run python -c "import imageio; imageio.plugins.freeimage.download()"  # HDR I
 ```
 
 Flash Attention is optional; without it the code uses PyTorch SDPA (force with `ATTN_IMPL=sdpa`). The windowed
-cross-attention of the current architecture needs Flash Attention on GPU.
+cross-attention needs Flash Attention on GPU.
 
 ## Rendering
 
@@ -68,7 +68,9 @@ cameras at distance ~1.7 with a 45° field of view, and about 20k Gaussians per 
 | Scene encoder | one token per Gaussian (Linear over its 14 parameters), 3-D RoPE on positions | 12-layer transformer over the whole splat, view-independent |
 | View decoder | one token per image patch (ray directions) | 6 layers of self-attention between patches and cross-attention to the scene tokens, then a DPT head to pixels |
 
-The current architecture adds, all as options in `GaussianFormerConfig` (`gaussianformer/models/config.py`):
+The current architecture adds, all as options in `GaussianFormerConfig` (`gaussianformer/models/config.py`). The
+last two live on the development branch [`v20/placement`](https://github.com/SVLwoof/gaussianformer/tree/v20/placement)
+until it is merged:
 
 - `proj_rope_2d`: each Gaussian is projected into the view, and its image coordinates enter the cross-attention as a
   2-D RoPE matched against each patch's position.
@@ -82,9 +84,9 @@ The current architecture adds, all as options in `GaussianFormerConfig` (`gaussi
 |---|---|
 | Download [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats), normalize, render ground truth from the full splat | `data_v10/process_full.py` |
 | Prune each object to 20k Gaussians and fine-tune the kept ones (LightGaussian score + recovery) | `data_v10/prune_recovery.py` |
-| Add views at camera distances 1.15 and 2.45 | `data_v10/multi_radius_full.py` |
+| Add views at camera distances 1.15 and 2.45 | `data_v10/multi_radius_full.py` (`v20/placement`) |
 | Training, released models (two phases, cosine LR) | `training/train.py` |
-| Training, current full-data run (warmup-stable-decay LR, resumable, 8 GPUs) | `training/train_full.py`, `data_v10/train_full.sh` |
+| Training, current full-data run (warmup-stable-decay LR, resumable, 8 GPUs) | `training/train_full.py`, `data_v10/train_full.sh` (`v20/placement`) |
 | Per-object LoRA adapters | `training/train_lora.py` |
 | Held-out evaluation against the full splat and the rasterized input | `data_v10/ceiling_eval.py` |
 
