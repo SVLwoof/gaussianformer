@@ -4400,3 +4400,13 @@ checkpoints_full_p4/milestone_step_94000.pt appears (~03:40): decay branch (data
 with user go, 10k cosine steps -> checkpoints_full_p4_d94000/full_step_104000.pt, ~3 h) -> heldout300 eval
 (TAG full_p4_d94k) + r1.15 eval. Baseline on the same harness: V17b evals 31746478 (heldout300) / 31746479 (r1.15).
 sagieb g4 cap 18, 8 in use before the branch.
+
+## 2026-09-25 08:52: **FULL-DATA MILESTONE 1 (94k + 10k decay): heldout300 34.73 dB vs V17b 30.39 (+4.34, 300/300 better)**
+  model (heldout300)        margin   model PSNR   LPIPS m | r1.15 margin / model
+  v17b                      14.57    30.39        0.0336  | 22.19 / 20.05
+  full_p4_d94k              10.23    34.73        0.0176  |  7.70 / 34.54
+  full − v17b: heldout −4.34 [−4.46, −4.22] (300/300 better); r1.15 −14.49 [−14.77, −14.21] (300/300).
+After a quarter of the planned run (one pass over every view) the settled recipe on full data beats the released model
+by 4.3 dB on held-out objects, halves the LPIPS margin, and fixes close range (+14.5 dB; V17b never saw close views).
+Train (n10 objects) and heldout margins are equal (10.14 / 10.23): no generalisation gap, the run is still fitting.
+Branch: checkpoints_full_p4_d94000/full_step_104000.pt (decay 31746856, 3 h 28 on firefoot-07). Renders: 31747714.
