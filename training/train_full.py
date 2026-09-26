@@ -11,7 +11,7 @@ so a run can be stopped or extended at any stable checkpoint (the LR there is th
 continuation point), and a finished model for evaluation is a short DECAY BRANCH off any stable
 checkpoint: a new --save_dir with --resume_from <stable ckpt> and --steps = its step + --decay_steps.
 
-One epoch = one random view of every object (views_per_epoch 1, redrawn per epoch). Checkpoints are
+One epoch = --views_per_object random views of every object (redrawn per epoch), all views of an object in one step. Checkpoints are
 step-numbered; the newest in --save_dir is resumed automatically (preemption / time limit), else
 --resume_from (optimizer + step carried over), else --init_from (weights only, step 0).
 Freeze on demand: `touch <save_dir>/FREEZE` -> the run checkpoints within 20 steps and exits cleanly; resubmitting
@@ -56,6 +56,8 @@ def parse_args() -> argparse.Namespace:
                    help="continue from this checkpoint's weights, optimizer and step (decay branches)")
     p.add_argument("--model_cfg", nargs="*", default=None, metavar="KEY=VAL")
     p.add_argument("--resolution", type=int, default=512)
+    p.add_argument("--views_per_object", type=int, default=1,
+                   help="views of one object per step, sharing one scene encoding (the scene encoder is ~half a step)")
     p.add_argument("--steps", type=int, required=True, help="total optimizer steps (the end of the decay)")
     p.add_argument("--lr", type=float, default=5e-5)
     p.add_argument("--warmup_steps", type=int, default=1000)
@@ -94,7 +96,8 @@ def main() -> None:
     rank, local_rank, world_size, device = setup_ddp()
 
     dataset = GaussianRenderDataset(a.gaussian_h5_dir, a.renders_dir, a.resolution,
-                                    augment_rotation=True, views_per_epoch=1)
+                                    augment_rotation=True, views_per_epoch=a.views_per_object,
+                                    views_per_item=a.views_per_object)
     sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True) if world_size > 1 else None
     loader = DataLoader(dataset, batch_size=1, sampler=sampler, shuffle=sampler is None,
                         num_workers=a.num_workers, persistent_workers=False,  # fresh view draw per epoch
@@ -169,7 +172,8 @@ def main() -> None:
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 pred = training_forward(model, ray_generator, b["gaussians"], b["mask"], b["c2w"], b["fov"],
                                         a.resolution, model_config)
-                loss, log_term, lpips_term = compute_loss(pred, b["target"], a.log_loss_weight,
+                pred = pred.reshape(-1, 1, *pred.shape[2:])  # [bs*V, 1, H, W, 3]
+                loss, log_term, lpips_term = compute_loss(pred, b["target"].reshape(-1, *pred.shape[2:]), a.log_loss_weight,
                                                           a.lpips_loss_weight, device, fg_bg_weight=a.fg_bg_weight)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)

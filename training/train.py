@@ -86,21 +86,22 @@ def training_forward(
     Replicates GaussianFormerRenderingPipeline.render() but allows gradients
     to flow through the model.
 
+    c2w: [bs, 4, 4] (one view) or [bs, V, 4, 4] (V views sharing one scene encoding); fov: [bs] or [bs, V].
+
     Returns:
-        rendered_imgs: [bs, 1, H, W, 3] in log-HDR space
+        rendered_imgs: [bs, V, H, W, 3] in log-HDR space
     """
     bs = gaussians.shape[0]
-    nv = 1  # single view per sample in training
-
-    # Add view dimension: [bs, 4, 4] -> [bs, 1, 4, 4]
-    c2w = c2w.unsqueeze(1)
-    fov = fov.unsqueeze(-1).unsqueeze(-1)  # [bs] -> [bs, 1, 1]
+    if c2w.ndim == 3:
+        c2w, fov = c2w.unsqueeze(1), fov.unsqueeze(1)
+    nv = c2w.shape[1]
+    fov = fov.unsqueeze(-1)  # [bs, V, 1]
 
     # Camera coordinate transform (detached -- no grad through the rigid transform)
     if config.turn_to_cam_coord:
         with torch.no_grad():
             c2w_flat = c2w.reshape(-1, 4, 4)
-            gaussians_repeated = gaussians  # nv=1, no repeat needed
+            gaussians_repeated = gaussians.repeat_interleave(nv, dim=0)
             gaussians_for_view_tf, c2w_for_view_tf = transform_gaussians_to_cam_coord(
                 c2w_flat, gaussians_repeated
             )

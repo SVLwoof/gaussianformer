@@ -32,6 +32,7 @@ class GaussianRenderDataset(Dataset):
         augment_rotation: bool = False,
         views_per_epoch: int | None = None,
         data_seed: int = 0,
+        views_per_item: int = 1,
     ):
         self.gaussian_h5_dir = Path(gaussian_h5_dir)
         self.renders_dir = Path(renders_dir)
@@ -42,6 +43,10 @@ class GaussianRenderDataset(Dataset):
         # each epoch to redraw (seeded by epoch so every DDP rank agrees on the selection).
         self.views_per_epoch = views_per_epoch
         self.data_seed = data_seed  # 0 = order keyed on the epoch alone (default, reproducible)
+        # views_per_item > 1: one item = one scene with that many of this epoch's views (needs
+        # views_per_epoch == views_per_item), so the model encodes the scene once per item.
+        assert views_per_item == 1 or views_per_epoch == views_per_item
+        self.views_per_item = views_per_item
         # On-the-fly Haar-uniform scene+camera rotation (RenderFormer's RoMa aug). The
         # render is invariant under a joint scene+camera rotation (sh_degree=None ->
         # constant per-Gaussian color, no world-fixed lighting), so the GT image is
@@ -95,7 +100,11 @@ class GaussianRenderDataset(Dataset):
         rng = random.Random(epoch if self.data_seed == 0 else epoch + self.data_seed * 10_000_019)
         active: list[int] = []
         for idxs in self._by_scene.values():
-            active.extend(rng.sample(idxs, min(self.views_per_epoch, len(idxs))))
+            drawn = rng.sample(idxs, min(self.views_per_epoch, len(idxs)))
+            if self.views_per_item > 1:
+                active.append(tuple(drawn))
+            else:
+                active.extend(drawn)
         self._active = active
 
     def __len__(self) -> int:
@@ -106,7 +115,7 @@ class GaussianRenderDataset(Dataset):
         """Apply one Haar-uniform rotation R to the scene + camera, image-preserving.
 
         gaussians: [N, 14] = [pos(3), scale(3), rot_quat_wxyz(4), color(3), opacity(1)].
-        c2w: [4, 4] camera-to-world. Positions rotate (means @ R.T), each Gaussian's
+        c2w: [..., 4, 4] camera-to-world. Positions rotate (means @ R.T), each Gaussian's
         orientation world-rotates (R @ M via the matrix path -- avoids quat-product
         operand ambiguity), and the camera pose rotates in world space (R4 @ c2w).
         Scale/color/opacity are rotation-invariant. RoMa quaternions are XYZW; ours are
@@ -137,10 +146,27 @@ class GaussianRenderDataset(Dataset):
 
         return gaussians, c2w_rot
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        h5_path, view_idx, render_path = self.samples[self._active[idx]]
+    def _load_image(self, render_path: Path) -> np.ndarray:
+        img = imageio.v3.imread(render_path).astype(np.float32)
+        if render_path.suffix == ".png":
+            img = img / 255.0
+        if img.ndim == 2:
+            img = np.stack([img] * 3, axis=-1)
+        elif img.shape[-1] == 4:
+            img = img[..., :3]
+        if img.shape[0] != self.resolution or img.shape[1] != self.resolution:
+            t = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
+            t = F.interpolate(t, size=(self.resolution, self.resolution),
+                              mode="bilinear", align_corners=False, antialias=True)
+            img = t.squeeze(0).permute(1, 2, 0).numpy()
+        return img
 
-        # --- Load Gaussian scene data ---
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+        entry = self._active[idx]
+        picks = [self.samples[i] for i in (entry if isinstance(entry, tuple) else (entry,))]
+        h5_path = picks[0][0]
+        views = [v for _, v, _ in picks]
+
         with h5py.File(h5_path, "r") as f:
             means = np.array(f["means"], dtype=np.float32)
             scales = np.array(f["scales"], dtype=np.float32)
@@ -149,48 +175,22 @@ class GaussianRenderDataset(Dataset):
             opacities = np.array(f["opacities"], dtype=np.float32)
             if opacities.ndim == 1:
                 opacities = opacities[:, np.newaxis]
-            c2w = np.array(f["c2w"], dtype=np.float32)  # [num_views, 4, 4]
-            fov = np.array(f["fov"], dtype=np.float32)   # [num_views]
+            c2w = np.array(f["c2w"], dtype=np.float32)[views]  # [K, 4, 4]
+            fov = np.array(f["fov"], dtype=np.float32)[views]  # [K]
 
-        # Assemble 14-dim Gaussian tensor
-        gaussians = np.concatenate([means, scales, rotations, colors, opacities], axis=-1)
-        mask = np.ones(gaussians.shape[0], dtype=np.bool_)
-
-        # Select the single view
-        c2w_view = c2w[view_idx]   # [4, 4]
-        fov_view = fov[view_idx]   # scalar
-
-        # --- Load target image ---
-        img = imageio.v3.imread(render_path).astype(np.float32)
-        if render_path.suffix == ".png":
-            img = img / 255.0
-        # Ensure 3 channels (before resize, so the resize sees a fixed layout)
-        if img.ndim == 2:
-            img = np.stack([img] * 3, axis=-1)
-        elif img.shape[-1] == 4:
-            img = img[..., :3]
-        # Resize to the target resolution (e.g. 512 GT downscaled to 256 for the curriculum's
-        # bulk stage). Float bilinear with antialias, matching PIL's filtering. The old PIL
-        # path round-tripped through uint8 (re-quantizing the interpolated target) and, for
-        # HDR inputs with max > 1, cast to uint16 WITHOUT scaling then divided by 255 --
-        # a silent corruption for any future EXR target.
-        if img.shape[0] != self.resolution or img.shape[1] != self.resolution:
-            t = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
-            t = F.interpolate(t, size=(self.resolution, self.resolution),
-                              mode="bilinear", align_corners=False, antialias=True)
-            img = t.squeeze(0).permute(1, 2, 0).numpy()
-
-        gaussians_t = torch.from_numpy(gaussians)               # [N, 14]
-        c2w_t = torch.from_numpy(c2w_view)                      # [4, 4]
-        if self.augment_rotation:
+        gaussians_t = torch.from_numpy(np.concatenate([means, scales, rotations, colors, opacities], axis=-1))
+        c2w_t = torch.from_numpy(c2w)
+        if self.augment_rotation:  # one rotation for the scene and all its cameras
             gaussians_t, c2w_t = self._rotate_scene(gaussians_t, c2w_t)
+        target = torch.from_numpy(np.stack([self._load_image(p) for _, _, p in picks]))
 
+        one = not isinstance(entry, tuple)
         return {
-            "gaussians": gaussians_t,                           # [N, 14]
-            "mask": torch.from_numpy(mask),                     # [N]
-            "c2w": c2w_t,                                       # [4, 4]
-            "fov": torch.tensor(fov_view),                      # scalar
-            "target": torch.from_numpy(img),                    # [H, W, 3]
+            "gaussians": gaussians_t,                                             # [N, 14]
+            "mask": torch.ones(gaussians_t.shape[0], dtype=torch.bool),         # [N]
+            "c2w": c2w_t[0] if one else c2w_t,                                   # [4, 4] or [K, 4, 4]
+            "fov": torch.tensor(fov[0]) if one else torch.from_numpy(fov),       # scalar or [K]
+            "target": target[0] if one else target,                              # [H, W, 3] or [K, H, W, 3]
         }
 
 
