@@ -4430,3 +4430,5 @@ From checkpoints_full_p4_r/full_step_3000.pt (full run's stage R), 1,000 n1000 o
 data_v10/mv_race.sh. Arms: A K=1 15k steps (31755138, sagieb, ~4 h) | B K=4 15k (31755141, killable, ~10 h) |
 C K=4 6k (31755140, killable, ~4 h = A's wall time). Evals chained (TAG mvrace_{A,B,C}_k*_s*: heldout300 + r1.15).
 B vs A = more meaningful steps at more total time; C vs A = equal wall time.
+
+## 2026-09-26 22:08: race arms B/C (K=4) OOM'd at ~step 100 (flash varlen backward, 10 GB alloc on 44 GB L40S: close-range views of objects whose footprints cover many tiles). Relaunched at K=3: B 31755899 (15k), C 31755900 (7.5k = A's wall time at ~2.85 s/step). Memory-safe multi-view (views processed one at a time, encoder once) is the fallback.
