@@ -4410,3 +4410,6 @@ After a quarter of the planned run (one pass over every view) the settled recipe
 by 4.3 dB on held-out objects, halves the LPIPS margin, and fixes close range (+14.5 dB; V17b never saw close views).
 Train (n10 objects) and heldout margins are equal (10.14 / 10.23): no generalisation gap, the run is still fitting.
 Branch: checkpoints_full_p4_d94000/full_step_104000.pt (decay 31746856, 3 h 28 on firefoot-07). Renders: 31747714.
+
+## 2026-09-26 08:53: milestone 2 (188k) evaluation launched
+decay 31752096 (8 GPUs sagieb) -> nsweep eval 31752097, r1.15 eval 31752098, renders 31752099 (docs/report/renders_full_d188k). TAG full_p4_d188k, CKPT checkpoints_full_p4_d188000/full_step_198000.pt.
