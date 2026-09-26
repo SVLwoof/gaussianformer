@@ -4413,3 +4413,13 @@ Branch: checkpoints_full_p4_d94000/full_step_104000.pt (decay 31746856, 3 h 28 o
 
 ## 2026-09-26 08:53: milestone 2 (188k) evaluation launched
 decay 31752096 (8 GPUs sagieb) -> nsweep eval 31752097, r1.15 eval 31752098, renders 31752099 (docs/report/renders_full_d188k). TAG full_p4_d188k, CKPT checkpoints_full_p4_d188000/full_step_198000.pt.
+
+## 2026-09-26 12:53: **MILESTONE 2 (188k + 10k decay): heldout300 35.79 dB (+1.06 over milestone 1, 297/300 better); axe 36.41**
+  model              heldout margin / model   LPIPS m | r1.15 margin / model | AXE (scene 7) model / margin
+  v17b               14.57 / 30.39            0.0336  | 22.19 / 20.05       | 31.82 / 15.48
+  full_p4_d94k       10.23 / 34.73            0.0176  |  7.70 / 34.54       | 35.14 / 12.16
+  full_p4_d188k       9.18 / 35.79            0.0132  |  6.68 / 35.56       | 36.41 / 10.89
+  188k − 94k: heldout −1.06 [−1.09, −1.02] (297/300), r1.15 −1.02 [−1.05, −0.99] (298/300).
+Second pass bought another dB everywhere (and −25% LPIPS margin); train == heldout still (8.99 / 9.18): still fitting.
+Axe: +1.3 dB, the etching's layout is now right in view 0 (renders docs/report/renders_full_d188k/zoom_s0007.png),
+strokes still soft. Decay 31752096 (3 h 11 on firefoot-04).
