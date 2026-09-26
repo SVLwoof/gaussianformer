@@ -4423,3 +4423,10 @@ decay 31752096 (8 GPUs sagieb) -> nsweep eval 31752097, r1.15 eval 31752098, ren
 Second pass bought another dB everywhere (and −25% LPIPS margin); train == heldout still (8.99 / 9.18): still fitting.
 Axe: +1.3 dB, the etching's layout is now right in view 0 (renders docs/report/renders_full_d188k/zoom_s0007.png),
 strokes still soft. Decay 31752096 (3 h 11 on firefoot-04).
+
+## 2026-09-26 19:04: multi-view race at N=1000 launched (user go)
+From checkpoints_full_p4_r/full_step_3000.pt (full run's stage R), 1,000 n1000 objects x 28 views
+(data_v10/nsweep/n1000_r3_h5 -> h5s_20k_rec_r3), 4 GPUs each, last 20% of steps decayed; branch v20/multiview,
+data_v10/mv_race.sh. Arms: A K=1 15k steps (31755138, sagieb, ~4 h) | B K=4 15k (31755141, killable, ~10 h) |
+C K=4 6k (31755140, killable, ~4 h = A's wall time). Evals chained (TAG mvrace_{A,B,C}_k*_s*: heldout300 + r1.15).
+B vs A = more meaningful steps at more total time; C vs A = equal wall time.
