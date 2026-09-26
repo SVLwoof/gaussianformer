@@ -123,7 +123,7 @@ def main() -> None:
     ray_generator = RayGenerator().to(device)
     if is_main_process():
         a.save_dir.mkdir(parents=True, exist_ok=True)
-        print(f"{'RESUME' if carry else 'INIT'} from {src} at step {step}; epoch = {len(dataset)} objects x 1 view "
+        print(f"{'RESUME' if carry else 'INIT'} from {src} at step {step}; epoch = {len(dataset)} objects x {a.views_per_object} views "
               f"/ {world_size} GPUs = {len(loader)} steps; lr {a.lr:.1e}, warmup {a.warmup_steps}, "
               f"decay {a.decay_steps} of {a.steps} steps", flush=True)
 
