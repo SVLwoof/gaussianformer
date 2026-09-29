@@ -1,5 +1,6 @@
 import roma
 import torch
+import torch.nn.functional as F
 from torch.amp import autocast
 
 
@@ -24,6 +25,6 @@ def transform_gaussians_to_cam_coord(c2w: torch.Tensor, gaussians: torch.Tensor)
     w2c = roma.Rigid.from_homogeneous(c2w).inverse()
     pos = w2c[:, None].apply(gaussians[..., :3])
     w2c_quat = roma.rotmat_to_unitquat(w2c.linear)[..., [3, 0, 1, 2]]  # roma is xyzw
-    rot = gaussians[..., 6:10]
-    rot = quaternion_multiply(w2c_quat[:, None], rot / torch.linalg.norm(rot, dim=-1, keepdim=True))
+    rot = F.normalize(gaussians[..., 6:10], dim=-1)  # padded all-zero rows stay zero instead of NaN
+    rot = quaternion_multiply(w2c_quat[:, None], rot)
     return torch.cat([pos, gaussians[..., 3:6], rot, gaussians[..., 10:]], dim=-1)
