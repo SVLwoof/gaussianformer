@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "A paper on GaussianFormer is in preparation. Until then, please cite this repository and RenderFormer."
+title: "GaussianFormer: Transformer Rendering of 3D Gaussian Splats"
+type: software
+url: "https://github.com/SVLwoof/gaussianformer"
+license: MIT
+authors:
+  - family-names: "Valenciale"
+    given-names: "Shahaf"
+  - family-names: "Benaim"
+    given-names: "Sagie"
+references:
+  - type: conference-paper
+    authors:
+      - family-names: "Zeng"
+        given-names: "Chong"
+      - family-names: "Dong"
+        given-names: "Yue"
+      - family-names: "Peers"
+        given-names: "Pieter"
+      - family-names: "Wu"
+        given-names: "Hongzhi"
+      - family-names: "Tong"
+        given-names: "Xin"
+    doi: "10.1145/3721238.3730595"
+    title: "RenderFormer: Transformer-based Neural Rendering of Triangle Meshes with Global Illumination"
+    collection-title: "ACM SIGGRAPH 2025 Conference Papers"
+    year: 2025

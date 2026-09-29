@@ -1,0 +1,36 @@
+[project]
+name = "gaussianformer"
+version = "1.0.0"
+description = "Transformer rendering of 3D Gaussian Splats, adapted from RenderFormer"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "einops>=0.8.1",
+    "flash-attn>=2.7.0",
+    "gsplat>=1.5.3",
+    "h5py>=3.14.0",
+    "hf-xet>=1.1.5",
+    "huggingface-hub>=0.33.1",
+    "imageio[ffmpeg]>=2.37.0",
+    "lpips>=0.1.4",
+    "ninja>=1.13.0",
+    "numpy==2.3.2",
+    "pillow>=11.0.0",
+    "plyfile>=1.1.2",
+    "roma>=1.5.3",
+    "safetensors>=0.5.3",
+    "torch>=2.9,<2.10",
+    "torchvision>=0.24,<0.25",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+# Prebuilt Flash Attention 2 wheel for torch 2.9, CUDA 12, Python 3.12.
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

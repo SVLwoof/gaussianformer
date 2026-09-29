@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.idea/
+.vscode/
+
+# data, checkpoints and outputs
+data/train/
+data/val/
+checkpoints/
+renders/
+videos/
+*.safetensors
+*.pt
+
