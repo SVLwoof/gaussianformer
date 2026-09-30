@@ -113,10 +113,9 @@ wheels = [
 [[package]]
 name = "gaussianformer"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "einops" },
-    { name = "flash-attn" },
     { name = "gsplat" },
     { name = "h5py" },
     { name = "hf-xet" },
@@ -134,10 +133,20 @@ dependencies = [
     { name = "torchvision", version = "0.24.1+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "python_full_version >= '3.15' or platform_machine != 'aarch64' or platform_python_implementation != 'CPython' or sys_platform != 'linux'" },
 ]
 
+[package.optional-dependencies]
+flash = [
+    { name = "flash-attn" },
+]
+
+[package.dev-dependencies]
+flash = [
+    { name = "flash-attn" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "flash-attn", url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" },
+    { name = "flash-attn", marker = "extra == 'flash'", url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" },
     { name = "gsplat", specifier = ">=1.5.3" },
     { name = "h5py", specifier = ">=3.14.0" },
     { name = "hf-xet", specifier = ">=1.1.5" },
@@ -145,7 +154,7 @@ requires-dist = [
     { name = "imageio", extras = ["ffmpeg"], specifier = ">=2.37.0" },
     { name = "lpips", specifier = ">=0.1.4" },
     { name = "ninja", specifier = ">=1.13.0" },
-    { name = "numpy", specifier = "==2.3.2" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "plyfile", specifier = ">=1.1.2" },
     { name = "roma", specifier = ">=1.5.3" },
@@ -153,6 +162,10 @@ requires-dist = [
     { name = "torch", specifier = ">=2.9,<2.10", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchvision", specifier = ">=0.24,<0.25", index = "https://download.pytorch.org/whl/cu128" },
 ]
+provides-extras = ["flash"]
+
+[package.metadata.requires-dev]
+flash = [{ name = "flash-attn", url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }]
 
 [[package]]
 name = "gsplat"
