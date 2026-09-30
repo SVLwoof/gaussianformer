@@ -72,11 +72,13 @@ In Python:
 ```python
 import torch
 from gaussianformer import GaussianFormerRenderingPipeline, load_ply
+from gaussianformer.utils.cameras import orbit
 
 pipeline = GaussianFormerRenderingPipeline.from_pretrained("shahafvl/gaussianformer").to(torch.device("cuda"))
 gaussians = load_ply("object.ply", up="z")[None]  # [1, N, 14]
 mask = torch.ones(gaussians.shape[:2], dtype=torch.bool, device="cuda")
-# c2w [1, V, 4, 4] camera-to-world (-Z forward, +Y up); fov [1, V] in degrees
+c2w = torch.from_numpy(orbit(8, 1.7))[None].cuda()  # [1, V, 4, 4] camera-to-world (-Z forward, +Y up)
+fov = torch.full((1, 8), 45.0, device="cuda")        # [1, V] in degrees
 images = pipeline(gaussians, mask, c2w, fov, resolution=512)  # [1, V, 512, 512, 3]
 ```
 
