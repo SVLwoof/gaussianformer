@@ -55,24 +55,37 @@ which the windowed cross-attention needs; gsplat compiles its CUDA kernels on fi
 
 ## Rendering
 
+From a 3D Gaussian Splatting PLY (the standard format written by 3DGS trainers):
+
 ```bash
-uv run python infer.py --h5 scene.h5 --out renders/
+uv run python -m tools.ply_to_h5 --ply object.ply --out object.h5 --up z   # --up: the file's up axis (y, z or -y)
+uv run python infer.py --h5 object.h5 --out renders/                        # one PNG per camera
 ```
+
+In Python:
 
 ```python
 import torch
-from gaussianformer import GaussianFormerRenderingPipeline
+from gaussianformer import GaussianFormerRenderingPipeline, load_ply
 
 pipeline = GaussianFormerRenderingPipeline.from_pretrained("shahafvl/gaussianformer").to(torch.device("cuda"))
-# gaussians [B, N, 14] = pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1); mask [B, N] bool
-# c2w [B, V, 4, 4] camera-to-world (-Z forward, +Y up); fov [B, V] in degrees
-images = pipeline(gaussians, mask, c2w, fov, resolution=512)  # [B, V, 512, 512, 3]
+gaussians = load_ply("object.ply", up="z")[None]  # [1, N, 14]
+mask = torch.ones(gaussians.shape[:2], dtype=torch.bool, device="cuda")
+# c2w [1, V, 4, 4] camera-to-world (-Z forward, +Y up); fov [1, V] in degrees
+images = pipeline(gaussians, mask, c2w, fov, resolution=512)  # [1, V, 512, 512, 3]
 ```
 
-A scene is an HDF5 file with `means [N,3]`, `scales [N,3]`, `rotations [N,4]` (w,x,y,z), `colors [N,3]`,
-`opacities [N,1]`, `c2w [V,4,4]` and `fov [V]`. The model is trained on single objects scaled into
-[-0.45, 0.45]³, about 20k Gaussians each, seen from 1.15 to 2.45 units away with a 45° field of view. Colors are
-view-independent.
+The model takes each Gaussian as 14 activated values, pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1): linear
+scales, a unit quaternion, colors and opacity in [0, 1]. A PLY stores log scales, raw quaternions, spherical-harmonic
+coefficients and opacity logits instead; `load_ply` (`gaussianformer/splat.py`) converts them, keeps only the
+degree-0 color, and puts the object in the frame the model is trained on: centred, Y-up and scaled into
+[-0.45, 0.45]³. It also prunes the splat to 20k Gaussians, the size the model is trained on, and fine-tunes the kept
+Gaussians against the full splat (about a minute on a GPU; `recovery=False` / `--no_recovery` skips it).
+Cameras should be 1.15 to 2.45 units from the object with a 45° field of view.
+
+`infer.py` renders the cameras stored in an HDF5 scene: `means [N,3]`, `scales [N,3]`, `rotations [N,4]` (w,x,y,z),
+`colors [N,3]`, `opacities [N,1]`, `c2w [V,4,4]` and `fov [V]`. `tools/render_video.py` renders orbit, dolly and
+motion clips next to the rasterized input.
 
 ## Model
 
@@ -129,7 +142,7 @@ The log-L1 term compares log10(image + 1) and weights background pixels by 0.05 
 
 ```bash
 uv run python evaluate.py --data data/val --objects data/splits/heldout300.json
-uv run python -m tests.test_model   # CPU tests
+uv run python -m tests.test_model && uv run python -m tests.test_splat   # CPU tests
 ```
 
 ## Acknowledgements

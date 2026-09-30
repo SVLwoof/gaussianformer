@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from data.cameras import DISTANCES, to_gsplat
+from gaussianformer.utils.cameras import DISTANCES, to_gsplat
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
 from gaussianformer.utils.checkpoint import load_checkpoint
 from training.dataset import load_gaussians
