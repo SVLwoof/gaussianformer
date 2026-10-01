@@ -73,9 +73,8 @@ def main() -> None:
                 colors=g["colors"], viewmats=viewmats, Ks=Ks, width=512, height=512, sh_degree=None, eps2d=0.3,
                 render_mode="RGB", near_plane=0.01, packed=True)
         raster = raster.clamp(0, 1).cpu().numpy()
-        mask = torch.ones(1, len(gaussians), dtype=torch.bool, device=device)
-        model = pipe(torch.from_numpy(gaussians)[None].to(device), mask, torch.from_numpy(c2w[views])[None].to(device),
-                     torch.from_numpy(fov[views])[None].to(device))[0].float().clamp(0, 1).cpu().numpy()
+        model = pipe(torch.from_numpy(gaussians), torch.from_numpy(c2w[views]),
+                     torch.from_numpy(fov[views])).float().clamp(0, 1).cpu().numpy()
         for j, v in enumerate(views):
             gt = iio.imread(a.data / "renders" / f"{name}_view_{v}.png")[..., :3].astype(np.float32) / 255.0
             c_gt, c_raster, c_model = crop([gt, raster[j], model[j]], gt)

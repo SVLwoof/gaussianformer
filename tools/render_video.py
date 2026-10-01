@@ -63,21 +63,20 @@ def main() -> None:
     device = torch.device("cuda")
     pipe = GaussianFormerRenderingPipeline.from_pretrained(a.model).to(device)
     g0 = torch.from_numpy(load_gaussians(a.h5)[0]).to(device)
-    mask = torch.ones(1, len(g0), dtype=torch.bool, device=device)
     a.out.mkdir(parents=True, exist_ok=True)
     for clip in a.clips:
         frames = []
         for i in range(a.frames):
             t = i / a.frames
             g, c2w = move_object(g0, clip, t), camera(clip, t, a.radius)
-            model = pipe(g[None], mask, torch.from_numpy(c2w)[None, None].to(device), torch.tensor([[FOV]], device=device))
+            model = pipe(g, torch.from_numpy(c2w)[None], FOV)
             viewmat, K = (torch.from_numpy(x).to(device) for x in to_gsplat(c2w[None]))
             raster, _, _ = gsplat.rasterization(
                 means=g[:, :3], quats=g[:, 6:10], scales=g[:, 3:6], opacities=g[:, 13], colors=g[:, 10:13],
                 viewmats=viewmat, Ks=K, width=512, height=512, sh_degree=None, eps2d=0.3, render_mode="RGB",
                 near_plane=0.01, packed=True)
             frames.append(np.concatenate([label(raster[0].clamp(0, 1).cpu().numpy(), "rasterizer"),
-                                          label(model[0, 0].float().clamp(0, 1).cpu().numpy(), "GaussianFormer")], 1))
+                                          label(model[0].float().clamp(0, 1).cpu().numpy(), "GaussianFormer")], 1))
         path = a.out / f"{a.h5.stem}_{clip}.mp4"
         iio.imwrite(path, np.stack(frames), fps=24, quality=9)
         print(f"wrote {path}")

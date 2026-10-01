@@ -31,18 +31,29 @@ class GaussianFormerRenderingPipeline:
     def device(self):
         return self.model.device
 
-    def to(self, device: torch.device):
+    def to(self, device: str | torch.device):
         self.model.to(device)
         return self
 
     @torch.no_grad()
-    def __call__(self, gaussians, mask, c2w, fov, resolution: int = 512, torch_dtype: torch.dtype = torch.bfloat16):
+    def __call__(self, gaussians, c2w, fov=45.0, mask=None, resolution: int = 512,
+                 torch_dtype: torch.dtype = torch.bfloat16):
         """
-        gaussians [B, N, 14] = pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1); mask [B, N] bool;
-        c2w [B, V, 4, 4] camera-to-world (Blender convention); fov [B, V] in degrees.
-        Returns images [B, V, H, W, 3], display-referred (clip to [0, 1] for 8-bit output).
+        One object: gaussians [N, 14] = pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1), c2w [V, 4, 4]
+        camera-to-world (Blender convention) -> images [V, H, W, 3]. A padded batch: gaussians [B, N, 14],
+        c2w [B, V, 4, 4], mask [B, N] (True = real Gaussian; default all) -> images [B, V, H, W, 3].
+        fov in degrees: a number or a tensor broadcastable to [V] / [B, V]. Inputs are moved to the model's device.
+        Images are display-referred (clip to [0, 1] for 8-bit output).
         """
+        single = gaussians.dim() == 2
+        if single:
+            gaussians, c2w = gaussians[None], c2w[None]
+        gaussians, c2w = gaussians.to(self.device), c2w.to(self.device)
+        fov = torch.as_tensor(fov, dtype=torch.float32, device=self.device).expand(c2w.shape[:2])
+        mask = (torch.ones(gaussians.shape[:2], dtype=torch.bool, device=self.device) if mask is None
+                else mask.to(self.device))
         with torch.autocast(device_type=self.device.type, dtype=torch_dtype):
-            log_img = model_forward(self.model, gaussians, mask, c2w, fov.reshape(c2w.shape[:2]), resolution,
+            log_img = model_forward(self.model, gaussians, mask, c2w, fov, resolution,
                                     tf32_view=torch_dtype != torch.float32)
-        return torch.pow(10.0, log_img) - 1.0
+        images = torch.pow(10.0, log_img) - 1.0
+        return images[0] if single else images

@@ -9,7 +9,7 @@ import torch
 from gaussianformer.layers.window import build_window
 from gaussianformer.models.config import GaussianFormerConfig
 from gaussianformer.models.gaussianformer import GaussianFormer
-from gaussianformer.pipelines.rendering_pipeline import model_forward
+from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline, model_forward
 from gaussianformer.utils.checkpoint import load_seed
 from gaussianformer.utils.transform import transform_gaussians_to_cam_coord
 from training.train import Loss
@@ -40,6 +40,15 @@ def test_train_step():
         loss.backward()
         assert torch.isfinite(loss) and model.gaussian_encoder.weight.grad.abs().sum() > 0, cfg
 
+
+
+def test_pipeline_single_object_matches_batch():
+    pipe = GaussianFormerRenderingPipeline(GaussianFormer(SMALL).eval())
+    g, mask, c2w, fov = scene(pad=0)
+    batched = pipe(g, c2w, fov, mask=mask, resolution=64, torch_dtype=torch.float32)
+    single = pipe(g[0], c2w[0], 45.0, resolution=64, torch_dtype=torch.float32)
+    assert batched.shape == (1, 1, 64, 64, 3) and single.shape == (1, 64, 64, 3)
+    assert torch.allclose(single, batched[0])
 
 def test_window_matches_dense_with_huge_margin():
     dense = GaussianFormer(SMALL.with_overrides(FINE)).eval()
