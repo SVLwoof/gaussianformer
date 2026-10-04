@@ -46,17 +46,24 @@ On 300 training objects it scores 37.19 dB: seen and unseen objects differ by 0.
 
 ## Installation
 
-Linux with an NVIDIA GPU and Python 3.12. To use the model in your own code:
+Linux with an NVIDIA GPU and Python 3.12, with [uv](https://docs.astral.sh/uv/). To use the model in your own
+project:
 
 ```bash
-pip install "gaussianformer @ git+https://github.com/SVLwoof/gaussianformer"   # or: uv add / uv pip install
-pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+uv add "gaussianformer[flash] @ git+https://github.com/SVLwoof/gaussianformer"
 ```
 
-Flash Attention is needed for the windowed cross-attention; the wheel above matches PyTorch 2.9 and CUDA 12
-(`pip install "gaussianformer[flash] @ git+..."` builds it from source instead). To train, evaluate or build the
-dataset, clone the repository and run `uv sync`, which installs the locked environment including Flash Attention.
-gsplat compiles its CUDA kernels on first use.
+This installs PyTorch 2.9 for CUDA 12.8 and a prebuilt Flash Attention wheel, which the windowed cross-attention
+needs. In a virtual environment without a uv project, `uv pip install` takes the same argument. To train, evaluate or
+build the dataset, clone the repository and run `uv sync`, which installs the locked environment. gsplat compiles its
+CUDA kernels on first use.
+
+pip does not read uv's package sources, so with pip install the Flash Attention wheel yourself:
+
+```bash
+pip install "gaussianformer @ git+https://github.com/SVLwoof/gaussianformer"
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+```
 
 ## Rendering
 
