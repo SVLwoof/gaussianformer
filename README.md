@@ -42,7 +42,7 @@ bounding box against the full-splat ground truth:
 | **GaussianFormer** | **37.08** |
 
 Closer in (distance 1.15, the same four angles), GaussianFormer scores 36.87 dB against 42.24 dB for rasterization.
-On 300 training objects it scores 37.19 dB: seen and unseen objects differ by 0.07 dB.
+On 300 training objects it scores 37.19 dB, 0.11 dB above the held-out objects.
 
 ## Installation
 
