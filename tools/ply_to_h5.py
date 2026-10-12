@@ -1,4 +1,4 @@
-"""Convert a 3D Gaussian Splatting PLY into a GaussianFormer scene: activated, normalised Gaussians, pruned to
+"""Convert a 3D Gaussian Splatting PLY into a GaussianFormer scene: activated, normalized Gaussians, pruned to
 about 20k, plus orbit cameras.
 
   python -m tools.ply_to_h5 --ply object.ply --out object.h5 --up z

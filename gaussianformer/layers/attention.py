@@ -146,7 +146,7 @@ class TransformerDecoder(nn.Module):
 
     RoPE per head: the pretrained 3-D band (camera origin for patches, Gaussian position for
     Gaussians), then with proj_rope_2d a 2-D band in the channel pairs right after it
-    (patch centre for patches, projected position for Gaussians).
+    (patch center for patches, projected position for Gaussians).
     """
 
     def __init__(self, num_layers: int, num_heads: int, dim: int, ctx_dim: int, ffn_hidden_dim: int,

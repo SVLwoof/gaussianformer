@@ -90,7 +90,7 @@ images = pipeline(gaussians, c2w, fov=45.0)    # [V, 512, 512, 3]
 The model takes each Gaussian as 14 activated values, pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1): linear
 scales, a unit quaternion, colors and opacity in [0, 1]. A PLY stores log scales, raw quaternions, spherical-harmonic
 coefficients and opacity logits instead; `load_ply` (`gaussianformer/splat.py`) converts them, keeps only the
-degree-0 color, and puts the object in the frame the model is trained on: centred, Y-up and scaled into
+degree-0 color, and puts the object in the frame the model is trained on: centered, Y-up and scaled into
 [-0.45, 0.45]³. It also prunes the splat to 20k Gaussians, the size the model is trained on, and fine-tunes the kept
 Gaussians against the full splat (about a minute on a GPU; `recovery=False` / `--no_recovery` skips it).
 Cameras should be 1.15 to 2.45 units from the object with a 45° field of view.

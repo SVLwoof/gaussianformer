@@ -15,7 +15,7 @@ from torch import Tensor
 def build_window(uv: Tensor, radius: Tensor, key_ok: Tensor, n_reg: int, patch_h: int, patch_w: int,
                  tile: int, margin: float) -> dict:
     """
-    uv      [B, N, 2]  projected key centres in patch units (registers included, ignored)
+    uv      [B, N, 2]  projected key centers in patch units (registers included, ignored)
     radius  [B, N]     projected footprint radius in patch units
     key_ok  [B, N]     valid Gaussian keys (False for padding, behind-camera, registers)
     n_reg               register tokens (keys 0..n_reg-1), attended by every tile

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class RayGenerator(nn.Module):
-    """Pinhole camera rays through pixel centres (Blender convention: -Z forward, +Y up)."""
+    """Pinhole camera rays through pixel centers (Blender convention: -Z forward, +Y up)."""
 
     def forward(self, c2w: torch.Tensor, fov: torch.Tensor, img_res: int = 256):
         """c2w [..., 4, 4], fov [..., 1] in radians -> origins [..., 3], unit directions [..., H, W, 3]."""

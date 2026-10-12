@@ -1,7 +1,7 @@
 """Build the dataset from Objaverse_Splats: for every object, 28 ground-truth views of the full splat and a
 20k-Gaussian input.
 
-Per object: decode the 3DGS PLY, centre it, turn it Y-up and scale it into [-0.45, 0.45]^3; render the
+Per object: decode the 3DGS PLY, center it, turn it Y-up and scale it into [-0.45, 0.45]^3; render the
 28 views of cameras.all_views() from the full splat; keep the 20k Gaussians with the highest LightGaussian
 importance and fine-tune them (L1 + SSIM, no densification) to match the full splat from 64 views
 (gaussianformer/splat.py). Objects whose maximum opacity is below 0.4 are skipped. Resumable; shard with

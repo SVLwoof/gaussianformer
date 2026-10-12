@@ -28,7 +28,7 @@ class GaussianFormerConfig:
 
     proj_rope_2d: bool = False
     """2-D RoPE in the cross-attention: keys carry each Gaussian's projected image position, queries
-    their patch centre; patch self-attention uses the same 2-D band."""
+    their patch center; patch self-attention uses the same 2-D band."""
     ray_rope_2d_dim: int = 16
     ray_rope_2d_scale: float = 0.25
     """Patch coordinates are multiplied by this before the 2-D RoPE."""

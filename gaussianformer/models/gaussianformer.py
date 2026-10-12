@@ -31,7 +31,7 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         return next(self.parameters()).device
 
     def _with_registers(self, pos, mask):
-        """Prepend register tokens positioned at the centre of the valid Gaussians."""
+        """Prepend register tokens positioned at the center of the valid Gaussians."""
         n = self.config.num_register_tokens
         w = (mask.float() / (mask.sum(dim=1, keepdim=True) + 1e-5))[..., None]
         center = (w * pos).sum(dim=1, keepdim=True)

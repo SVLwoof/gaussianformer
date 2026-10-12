@@ -1,14 +1,14 @@
 """3D Gaussian Splatting PLY files -> model inputs.
 
-A 3DGS PLY stores the optimiser's raw parameters; GaussianFormer takes activated values in a normalised object
+A 3DGS PLY stores the optimizer's raw parameters; GaussianFormer takes activated values in a normalized object
 frame, [N, 14] = pos(3) | scale(3) | quat wxyz(4) | rgb(3) | opacity(1):
 
     scale    exp(scale_0..2)
-    quat     rot_0..3 (w, x, y, z), normalised
+    quat     rot_0..3 (w, x, y, z), normalized
     rgb      clip(0.5 + SH_C0 * f_dc_0..2, 0, 1)   (higher spherical-harmonic orders are dropped)
     opacity  sigmoid(opacity)
 
-The object is centred on its median position, turned Y-up and scaled so its largest coordinate is 0.45, and
+The object is centered on its median position, turned Y-up and scaled so its largest coordinate is 0.45, and
 pruned to about 20k Gaussians (the size the model is trained on) by LightGaussian importance, followed by a
 short fine-tune of the kept Gaussians against the full splat.
 
@@ -52,7 +52,7 @@ def read_ply(src: str | Path | bytes) -> dict[str, np.ndarray]:
 
 
 def normalize(g: dict[str, np.ndarray], up: str = "y") -> dict[str, np.ndarray] | None:
-    """Centre on the median position, rotate `up` to +Y and scale into [-0.45, 0.45]^3; None if degenerate."""
+    """Center on the median position, rotate `up` to +Y and scale into [-0.45, 0.45]^3; None if degenerate."""
     R = TO_Y_UP[up]
     means = ((g["means"] - np.median(g["means"], axis=0)) @ R.T).astype(np.float32)
     rot = roma.unitquat_to_rotmat(torch.from_numpy(g["rotations"])[:, [1, 2, 3, 0]])
@@ -142,7 +142,7 @@ def to_tensor(g: dict[str, torch.Tensor | np.ndarray]) -> torch.Tensor:
 
 def load_ply(path: str | Path, up: str = "y", keep: int = KEEP, recovery: bool = True,
              device: str | torch.device = "cuda") -> torch.Tensor:
-    """3DGS PLY -> model input [N, 14] on `device`: activated, normalised and pruned to at most `keep` Gaussians.
+    """3DGS PLY -> model input [N, 14] on `device`: activated, normalized and pruned to at most `keep` Gaussians.
     `up` is the file's up axis ('y', 'z' or '-y'). `recovery` fine-tunes the kept Gaussians against the full
     splat (about a minute on a GPU); without it a large splat pruned to 20k loses coverage and turns dark."""
     g = normalize(read_ply(path), up)

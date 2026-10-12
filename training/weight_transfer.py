@@ -9,7 +9,7 @@ RENDERFORMER = "microsoft/renderformer-v1-base"
 
 def from_renderformer(config: GaussianFormerConfig, model_id: str = RENDERFORMER) -> tuple[GaussianFormer, list[str]]:
     """GaussianFormer with every tensor it shares with RenderFormer (by name and shape) copied from the
-    pretrained checkpoint. Returns the model and the names of its own, randomly initialised parameters
+    pretrained checkpoint. Returns the model and the names of its own, randomly initialized parameters
     (the Gaussian input head)."""
     rf = safetensors.torch.load_file(hf_hub_download(model_id, "model.safetensors"))
     model = GaussianFormer(config)
