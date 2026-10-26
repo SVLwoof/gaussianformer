@@ -41,6 +41,12 @@ class GaussianFormerConfig:
     xattn_sigmas: float = 3.0
     """Footprint radius in units of the Gaussian's largest scale."""
 
+    cov_key_embed: bool = False
+    """Projected footprint on the cross-attention keys: each Gaussian's covariance projected into the view (Jacobian
+    of the pinhole projection at its center, in patch units, plus gsplat's 0.3 px^2 low-pass term), described by
+    (log sigma_1, log sigma_2, cos 2t, sin 2t) and added to its key through a zero-initialized Linear per decoder
+    layer."""
+
     view_bf16: bool = False
     """Run the view decoder in bf16 (Flash Attention for the patch self-attention)."""
     view_grad_checkpoint: bool = False

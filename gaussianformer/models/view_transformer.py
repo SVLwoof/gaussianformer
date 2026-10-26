@@ -1,3 +1,4 @@
+import roma
 import torch
 import torch.nn as nn
 from einops import rearrange
@@ -32,6 +33,7 @@ class ViewTransformer(nn.Module):
             ray_rope_2d_dim=config.ray_rope_2d_dim,
             ray_rope_2d_scale=config.ray_rope_2d_scale,
             grad_checkpoint=config.view_grad_checkpoint,
+            key_feat_dim=4 if config.cov_key_embed else 0,
         )
         self.out_dpt = DPTHead(dim, features=config.dpt_features, out_channels=config.dpt_out_channels)
         self.out_layers = list(range(config.view_transformer_n_layers - 4, config.view_transformer_n_layers))
@@ -47,10 +49,35 @@ class ViewTransformer(nn.Module):
         v = (H / 2 - focal * Y / depth) / self.config.patch_size
         return torch.stack([u, v], -1), depth, Z > -1e-3, focal
 
-    def forward(self, camera_o, ray_map, ctx_tokens, ctx_pos, ctx_scale, key_mask, fov, tf32_mode=False):
+    def footprint(self, pos, shape, fov, H, W):
+        """Projected covariance of each Gaussian in patch units -> [B, N, 4] = (log sigma_1, log sigma_2, cos 2t, sin 2t)
+        of its image-space axes (sigma_1 >= sigma_2). shape = camera-frame [scale(3), quat wxyz(4)]. Zero for register
+        tokens and Gaussians behind the camera. fp32 with autocast off: in bf16 / fp16 the minor axis cancels away."""
+        ps = self.config.patch_size
+        with torch.autocast(pos.device.type, enabled=False):
+            pos = pos.float()
+            _, depth, behind, focal = self.project(pos, fov.float(), H, W)
+            f = focal / ps
+            scale, quat = shape[..., :3].float(), shape[..., 3:7].float()
+            R = roma.unitquat_to_rotmat(quat[..., [1, 2, 3, 0]])
+            cov = (R * scale[..., None, :] ** 2) @ R.transpose(-1, -2)
+            X, Y = pos[..., 0], pos[..., 1]
+            zero = torch.zeros_like(depth)
+            J = torch.stack([torch.stack([f / depth, zero, f * X / depth ** 2], -1),
+                             torch.stack([zero, -f / depth, -f * Y / depth ** 2], -1)], -2)
+            c2 = J @ cov @ J.transpose(-1, -2) + 0.3 / ps ** 2 * torch.eye(2, device=cov.device)  # gsplat's eps2d
+            a, b, c = c2[..., 0, 0], c2[..., 0, 1], c2[..., 1, 1]
+            half = torch.hypot((a - c) / 2, b)
+            l1, l2 = (a + c) / 2 + half, ((a + c) / 2 - half).clamp_min(1e-8)
+            feat = torch.stack([0.5 * l1.log(), 0.5 * l2.log(), (a - c) / (2 * half + 1e-8), 2 * b / (2 * half + 1e-8)], -1)
+            ok = (scale.amax(-1) > 0) & ~behind & torch.isfinite(feat).all(-1)
+            return torch.where(ok[..., None], feat.clamp(-6, 6), 0.0)
+
+    def forward(self, camera_o, ray_map, ctx_tokens, ctx_pos, ctx_shape, key_mask, fov, tf32_mode=False):
         """
         camera_o [B, 3]; ray_map [B, H, W, 3] ray directions; ctx_tokens [B, N, D] scene tokens;
-        ctx_pos [B, N, 3] and ctx_scale [B, N, 3] camera-frame positions and scales (registers first);
+        ctx_pos [B, N, 3] camera-frame positions and ctx_shape [B, N, 7] camera-frame scales and rotations
+        (registers first, with zeros);
         key_mask [B, N]; fov [B] in radians. Returns log-HDR images [B, 3, H, W].
         """
         cfg = self.config
@@ -72,16 +99,18 @@ class ViewTransformer(nn.Module):
                                     torch.arange(patch_w, device=ray_map.device), indexing="ij")
             uv_q = (torch.stack([jj, ii], -1).reshape(1, -1, 2).float() + 0.5).expand(B, -1, -1)
         if cfg.xattn_window:
-            radius = cfg.xattn_sigmas * ctx_scale.amax(-1) * focal / depth / cfg.patch_size
+            radius = cfg.xattn_sigmas * ctx_shape[..., :3].amax(-1) * focal / depth / cfg.patch_size
             key_ok = key_mask & ~behind
             key_ok[:, :cfg.num_register_tokens] = False
             window = build_window(uv_k, radius, key_ok, cfg.num_register_tokens, patch_h, patch_w,
                                   cfg.xattn_window, cfg.xattn_margin)
         if not cfg.proj_rope_2d:
             uv_q = uv_k = None
+        key_feat = self.footprint(ctx_pos, ctx_shape, fov, H, W) if cfg.cov_key_embed else None
 
         fp32 = tf32_mode and not cfg.view_bf16
         with torch.autocast(device_type="cuda", dtype=torch.float32 if fp32 else torch.bfloat16):
             features = self.transformer(ray_tokens, ctx_tokens, key_mask, ctx_pos, ray_pos, self.out_layers,
-                                        force_sdpa=fp32, uv_q=uv_q, uv_k=uv_k, window=window)
+                                        force_sdpa=fp32, uv_q=uv_q, uv_k=uv_k, window=window,
+                                        key_feat=key_feat)
         return self.out_proj_act(self.out_dpt(features, patch_h, patch_w, patch_size=cfg.patch_size))

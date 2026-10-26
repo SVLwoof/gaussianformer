@@ -54,12 +54,12 @@ class GaussianFormer(nn.Module, PyTorchModelHubMixin):
         seq = seq.repeat_interleave(V, dim=0)
         gaussians_cam = gaussians_cam.reshape(B * V, *gaussians_cam.shape[2:])
         pos_cam, mask_cam = self._with_registers(gaussians_cam[..., :3], valid_mask.repeat_interleave(V, dim=0))
-        scale = gaussians_cam[..., 3:6]
-        scale_cam = torch.cat([scale.new_zeros(B * V, self.config.num_register_tokens, 3), scale], dim=1)
+        shape = gaussians_cam[..., 3:10]  # scale, rotation; registers get zeros (no footprint)
+        shape_cam = torch.cat([shape.new_zeros(B * V, self.config.num_register_tokens, 7), shape], dim=1)
         rays_o, rays_d, fov = rays_o.reshape(B * V, 3), rays_d.reshape(B * V, *rays_d.shape[2:]), fov.reshape(-1)
         out = torch.cat([
             self.view_transformer(rays_o[i:i + VIEW_CHUNK], rays_d[i:i + VIEW_CHUNK], seq[i:i + VIEW_CHUNK],
-                                  pos_cam[i:i + VIEW_CHUNK], scale_cam[i:i + VIEW_CHUNK], mask_cam[i:i + VIEW_CHUNK],
+                                  pos_cam[i:i + VIEW_CHUNK], shape_cam[i:i + VIEW_CHUNK], mask_cam[i:i + VIEW_CHUNK],
                                   fov[i:i + VIEW_CHUNK], tf32_mode=tf32_view)
             for i in range(0, B * V, VIEW_CHUNK)])
         return out.view(B, V, *out.shape[1:])
