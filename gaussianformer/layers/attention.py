@@ -50,11 +50,12 @@ class MultiHeadAttention(nn.Module):
         self.q_norm = nn.RMSNorm(query_dim, eps=EPS)
         self.k_norm = nn.RMSNorm(query_dim, eps=EPS)
 
-    def forward(self, q, kv, key_mask=None, rope_q=None, rope_k=None, force_sdpa=False, window=None, k_add=None):
+    def forward(self, q, kv, key_mask=None, rope_q=None, rope_k=None, force_sdpa=False, window=None, k_add=None,
+                v_add=None):
         """
         q [B, S, D], kv [B, N, D_kv]; key_mask [B, N] (True = attend); rope_q / rope_k (cos, sin) tables
         [B, 1, S|N, head_dim] (rope_k defaults to rope_q); window from layers.window.build_window;
-        k_add [B, N, D] added to the projected keys (cross-attention only).
+        k_add / v_add [B, N, D] added to the projected keys / values (cross-attention only).
         """
         bs, src_len, ctx_len = q.shape[0], q.shape[1], kv.shape[1]
         if self.is_self_attn:
@@ -63,6 +64,8 @@ class MultiHeadAttention(nn.Module):
             q, k, v = self.q_proj(q), self.k_proj(kv), self.v_proj(kv)
             if k_add is not None:
                 k = k + k_add.to(k.dtype)
+            if v_add is not None:
+                v = v + v_add.to(v.dtype)
         q = self.q_norm(q).type(v.dtype)
         k = self.k_norm(k).type(v.dtype)
 
@@ -117,12 +120,14 @@ class AttentionLayer(nn.Module):
         self.ffn_norm = nn.RMSNorm(dim, eps=EPS)
         self.ffn = FeedForwardSwiGLU(dim, ffn_hidden_dim)
 
-    def forward(self, x, ctx=None, key_mask=None, rope_q=None, rope_k=None, force_sdpa=False, window=None, k_add=None):
+    def forward(self, x, ctx=None, key_mask=None, rope_q=None, rope_k=None, force_sdpa=False, window=None, k_add=None,
+                v_add=None):
         q = self.query_norm(x)
         if ctx is None:
             x = x + self.multihead_attn(q, q, key_mask, rope_q, force_sdpa=force_sdpa)
         else:
-            x = x + self.multihead_attn(q, self.kv_norm(ctx), key_mask, rope_q, rope_k, force_sdpa, window, k_add)
+            x = x + self.multihead_attn(q, self.kv_norm(ctx), key_mask, rope_q, rope_k, force_sdpa, window, k_add,
+                                        v_add)
             q = self.self_attn_norm(x)
             x = x + self.self_attn(q, q, None, rope_q, force_sdpa=force_sdpa)
         return x + self.ffn(self.ffn_norm(x))
@@ -154,7 +159,7 @@ class TransformerDecoder(nn.Module):
 
     def __init__(self, num_layers: int, num_heads: int, dim: int, ctx_dim: int, ffn_hidden_dim: int,
                  rope_dim: int, proj_rope_2d: bool, ray_rope_2d_dim: int, ray_rope_2d_scale: float,
-                 grad_checkpoint: bool, key_feat_dim: int = 0):
+                 grad_checkpoint: bool, key_feat_dim: int = 0, value_feat: bool = False):
         super().__init__()
         self.head_dim = dim // num_heads
         self.layers = nn.ModuleList([AttentionLayer(dim, num_heads, ffn_hidden_dim, ctx_dim)
@@ -168,6 +173,12 @@ class TransformerDecoder(nn.Module):
         if key_feat_dim:
             self.key_embed = nn.ModuleList([nn.Linear(key_feat_dim, dim) for _ in range(num_layers)])
             for lin in self.key_embed:
+                nn.init.zeros_(lin.weight)
+                nn.init.zeros_(lin.bias)
+        self.value_embed = None  # cov_key_values: the footprint on the values too, through its own zero-initialized layers
+        if key_feat_dim and value_feat:
+            self.value_embed = nn.ModuleList([nn.Linear(key_feat_dim, dim) for _ in range(num_layers)])
+            for lin in self.value_embed:
                 nn.init.zeros_(lin.weight)
                 nn.init.zeros_(lin.bias)
 
@@ -185,6 +196,8 @@ class TransformerDecoder(nn.Module):
         out = []
         for i, layer in enumerate(self.layers):
             kw_i = kw if key_feat is None else dict(kw, k_add=self.key_embed[i](key_feat))
+            if key_feat is not None and self.value_embed is not None:
+                kw_i = dict(kw_i, v_add=self.value_embed[i](key_feat))
             if self.grad_checkpoint and self.training and torch.is_grad_enabled():
                 x = torch.utils.checkpoint.checkpoint(lambda x_, layer_=layer, kw_=kw_i: layer_(x_, ctx, **kw_), x,
                                                       use_reentrant=False)

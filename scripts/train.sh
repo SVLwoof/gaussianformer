@@ -5,7 +5,7 @@
 set -euo pipefail
 RUN=(torchrun --standalone --nproc_per_node="${GPUS:-8}" -m training.train
      --data data/train --val_data data/val --val_objects data/splits/val100.json)
-FINE=(proj_rope_2d=true xattn_window=8 patch_size=4 ray_embed_patch=8 view_bf16=true view_grad_checkpoint=true)
+FINE=(proj_rope_2d=true cov_key_embed=true patch_size=4 ray_embed_patch=8 view_bf16=true view_grad_checkpoint=true)
 BASE=${BASE:-checkpoints/2_base/step_402000.pt}
 
 if [[ $BASE == checkpoints/* ]]; then
@@ -17,7 +17,7 @@ if [[ $BASE == checkpoints/* ]]; then
       --steps 402000 --decay_steps 402000 --lpips_weight 0 --bg_weight 1
 fi
 
-# 3. Projected 2-D RoPE, windowed cross-attention and 4 px patches: a short recovery at 256 px.
+# 3. Projected 2-D RoPE, projected footprint and 4 px patches (dense cross-attention): a short recovery at 256 px.
 "${RUN[@]}" --init "$BASE" --model_cfg "${FINE[@]}" --save_dir checkpoints/3_recovery \
     --resolution 256 --steps 3000 --warmup_steps 101 --decay_steps 1000 --save_every 1000 --lpips_weight 0
 

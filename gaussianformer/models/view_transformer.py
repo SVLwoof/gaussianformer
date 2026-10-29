@@ -34,6 +34,7 @@ class ViewTransformer(nn.Module):
             ray_rope_2d_scale=config.ray_rope_2d_scale,
             grad_checkpoint=config.view_grad_checkpoint,
             key_feat_dim=4 if config.cov_key_embed else 0,
+            value_feat=config.cov_key_values,
         )
         self.out_dpt = DPTHead(dim, features=config.dpt_features, out_channels=config.dpt_out_channels)
         self.out_layers = list(range(config.view_transformer_n_layers - 4, config.view_transformer_n_layers))
@@ -65,7 +66,7 @@ class ViewTransformer(nn.Module):
             zero = torch.zeros_like(depth)
             J = torch.stack([torch.stack([f / depth, zero, f * X / depth ** 2], -1),
                              torch.stack([zero, -f / depth, -f * Y / depth ** 2], -1)], -2)
-            c2 = J @ cov @ J.transpose(-1, -2) + 0.3 / ps ** 2 * torch.eye(2, device=cov.device)  # gsplat's eps2d
+            c2 = J @ cov @ J.transpose(-1, -2) + self.config.cov_key_eps2d / ps ** 2 * torch.eye(2, device=cov.device)
             a, b, c = c2[..., 0, 0], c2[..., 0, 1], c2[..., 1, 1]
             half = torch.hypot((a - c) / 2, b)
             l1, l2 = (a + c) / 2 + half, ((a + c) / 2 - half).clamp_min(1e-8)

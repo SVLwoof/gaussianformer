@@ -28,10 +28,11 @@ class GaussianRenderDataset(Dataset):
     """
 
     def __init__(self, h5_dir: Path, renders_dir: Path, resolution: int, augment_rotation: bool = False,
-                 views_per_epoch: int | None = None, objects: list[int] | None = None):
+                 views_per_epoch: int | None = None, objects: list[int] | None = None, seed: int = 0):
         self.resolution = resolution
         self.augment_rotation = augment_rotation
         self.views_per_epoch = views_per_epoch
+        self.seed = seed  # 0 = the released runs' view draw
         rendered = set(os.listdir(renders_dir))
         self.samples: list[tuple[Path, int, Path]] = []
         self.by_scene: list[list[int]] = []
@@ -56,7 +57,7 @@ class GaussianRenderDataset(Dataset):
         if not self.views_per_epoch:
             self.active = list(range(len(self.samples)))
             return
-        rng = random.Random(epoch)  # same draw on every rank
+        rng = random.Random(epoch if self.seed == 0 else epoch + self.seed * 10_000_019)  # same draw on every rank
         self.active = [i for idx in self.by_scene for i in rng.sample(idx, min(self.views_per_epoch, len(idx)))]
 
     def __len__(self) -> int:

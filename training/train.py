@@ -56,6 +56,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lpips_weight", type=float, default=0.5, help="LPIPS weight; the log-L1 term gets 1 - this")
     p.add_argument("--bg_weight", type=float, default=0.05, help="weight of background pixels in the L1 term")
     p.add_argument("--head_only", action="store_true", help="train only the Gaussian input head")
+    p.add_argument("--seed", type=int, default=0,
+                   help="data order, view draw and augmentation seed; 0 = the released runs (unseeded rotations)")
     p.add_argument("--save_every", type=int, default=2000)
     p.add_argument("--keep_last", type=int, default=2)
     p.add_argument("--num_workers", type=int, default=8)
@@ -136,8 +138,10 @@ def main() -> None:
     a = parse_args()
     local_rank, world_size, device = setup_ddp()
     data = GaussianRenderDataset(a.data / "h5s", a.data / "renders", a.resolution, augment_rotation=True,
-                                 views_per_epoch=1)
-    sampler = DistributedSampler(data) if world_size > 1 else None
+                                 views_per_epoch=1, seed=a.seed)
+    if a.seed:  # a replicate run: different order, views and rotations from the same recipe
+        torch.manual_seed(a.seed * 1000 + local_rank)
+    sampler = DistributedSampler(data, seed=a.seed) if world_size > 1 else None
     loader = DataLoader(data, batch_size=1, sampler=sampler, shuffle=sampler is None, num_workers=a.num_workers,
                         pin_memory=True, collate_fn=collate_fn)
     val = GaussianRenderDataset(a.val_data / "h5s", a.val_data / "renders", a.resolution,

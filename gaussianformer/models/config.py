@@ -46,6 +46,12 @@ class GaussianFormerConfig:
     of the pinhole projection at its center, in patch units, plus gsplat's 0.3 px^2 low-pass term), described by
     (log sigma_1, log sigma_2, cos 2t, sin 2t) and added to its key through a zero-initialized Linear per decoder
     layer."""
+    cov_key_eps2d: float = 0.3
+    """Isotropic term added to the projected covariance, in square pixels (gsplat's eps2d low-pass filter); 0 removes
+    it (ablation)."""
+    cov_key_values: bool = False
+    """Also add the footprint to the cross-attention values, through its own zero-initialized Linear per decoder
+    layer (ablation; the released models use the keys only)."""
 
     view_bf16: bool = False
     """Run the view decoder in bf16 (Flash Attention for the patch self-attention)."""
