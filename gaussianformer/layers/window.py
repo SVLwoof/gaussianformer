@@ -61,8 +61,8 @@ def build_window(uv: Tensor, radius: Tensor, key_ok: Tensor, n_reg: int, patch_h
     counts = torch.bincount(seg, minlength=B * T)
     cu_k = F.pad(counts.cumsum(0), (1, 0)).to(torch.int32)
     cu_q = torch.arange(0, B * T + 1, device=dev, dtype=torch.int32) * (tile * tile)
-    return dict(q_perm=q_perm, q_inv=q_inv, kv_index=key, cu_q=cu_q, cu_k=cu_k,
-                max_k=int(counts.max()), tiles=T, tile_q=tile * tile, B=B, N=N)
+    return {"q_perm": q_perm, "q_inv": q_inv, "kv_index": key, "cu_q": cu_q, "cu_k": cu_k,
+            "max_k": int(counts.max()), "tiles": T, "tile_q": tile * tile, "B": B, "N": N}
 
 
 def windowed_attention(q: Tensor, k: Tensor, v: Tensor, win: dict, flash_available: bool) -> Tensor:

@@ -14,8 +14,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from gaussianformer.utils.cameras import DISTANCES, to_gsplat
 from gaussianformer.pipelines.rendering_pipeline import GaussianFormerRenderingPipeline
+from gaussianformer.utils.cameras import DISTANCES, to_gsplat
 from gaussianformer.utils.checkpoint import load_checkpoint
 from training.dataset import load_gaussians
 
@@ -64,8 +64,9 @@ def main() -> None:
         gaussians, c2w, fov = load_gaussians(a.data / "h5s" / f"{name}.h5")
         wanted = range(len(c2w)) if a.views == "all" else [int(v) for v in a.views.split(",")]
         views = [v for v in wanted if (a.data / "renders" / f"{name}_view_{v}.png").exists()]
-        g = {k: torch.from_numpy(x).to(device) for k, x in
-             zip(("means", "scales", "rotations", "colors", "opacities"), np.split(gaussians, [3, 6, 10, 13], -1))}
+        fields = ("means", "scales", "rotations", "colors", "opacities")
+        g = {k: torch.from_numpy(x).to(device)
+             for k, x in zip(fields, np.split(gaussians, [3, 6, 10, 13], -1), strict=True)}
         viewmats, Ks = (torch.from_numpy(x).to(device) for x in to_gsplat(c2w[views]))
         with torch.no_grad():
             raster, _, _ = gsplat.rasterization(
@@ -82,9 +83,10 @@ def main() -> None:
                 pair = lambda x: torch.from_numpy(x).permute(2, 0, 1)[None].to(device) * 2 - 1
                 lp_model = lpips_fn(pair(c_model), pair(c_gt)).item()
                 lp_raster = lpips_fn(pair(c_raster), pair(c_gt)).item()
-            rows.append(dict(scene=scene, view=v, distance=DISTANCES[group_of[v]][0] if v < len(group_of) else None,
-                             psnr=psnr(c_model, c_gt), lpips=lp_model, raster_psnr=psnr(c_raster, c_gt),
-                             raster_lpips=lp_raster))
+            rows.append({"scene": scene, "view": v,
+                         "distance": DISTANCES[group_of[v]][0] if v < len(group_of) else None,
+                         "psnr": psnr(c_model, c_gt), "lpips": lp_model, "raster_psnr": psnr(c_raster, c_gt),
+                         "raster_lpips": lp_raster})
         print(f"{name}: {np.mean([r['psnr'] for r in rows if r['scene'] == scene]):.2f} dB", flush=True)
     if a.out:
         a.out.write_text("".join(json.dumps(r) + "\n" for r in rows))

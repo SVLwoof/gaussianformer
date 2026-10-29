@@ -55,3 +55,14 @@ flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/down
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-select = ["B", "C4", "I", "UP", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# the timing and figure scripts call their closures right away, inside the loop that defines them
+"paper/**" = ["B023"]

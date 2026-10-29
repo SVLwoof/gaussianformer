@@ -1,10 +1,10 @@
 import os
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
 from einops import rearrange
+from torch import nn
 
 from gaussianformer.encodings.rope import SpatialRotaryEmbedding, apply_rotary_emb, freqs_to_cos_sin
 from gaussianformer.layers.window import windowed_attention
@@ -15,7 +15,11 @@ ATTN = os.environ.get("ATTN_IMPL", "flash_attn")
 assert ATTN in ("flash_attn", "sdpa"), "ATTN_IMPL must be 'flash_attn' or 'sdpa'"
 if ATTN == "flash_attn":
     try:
-        from flash_attn import flash_attn_qkvpacked_func, flash_attn_varlen_kvpacked_func, flash_attn_varlen_qkvpacked_func
+        from flash_attn import (
+            flash_attn_qkvpacked_func,
+            flash_attn_varlen_kvpacked_func,
+            flash_attn_varlen_qkvpacked_func,
+        )
         from flash_attn.bert_padding import pad_input, unpad_input
     except ImportError:
         print("flash_attn is not installed, falling back to PyTorch SDPA.")
@@ -191,8 +195,8 @@ class TransformerDecoder(nn.Module):
 
     def forward(self, x, ctx, key_mask, ctx_pos, ray_pos, out_layers, force_sdpa=False,
                 uv_q=None, uv_k=None, window=None, key_feat=None):
-        kw = dict(key_mask=key_mask, rope_q=self._rope(ray_pos, uv_q), rope_k=self._rope(ctx_pos, uv_k),
-                  force_sdpa=force_sdpa, window=window)
+        kw = {"key_mask": key_mask, "rope_q": self._rope(ray_pos, uv_q), "rope_k": self._rope(ctx_pos, uv_k),
+              "force_sdpa": force_sdpa, "window": window}
         out = []
         for i, layer in enumerate(self.layers):
             kw_i = kw if key_feat is None else dict(kw, k_add=self.key_embed[i](key_feat))

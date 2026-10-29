@@ -20,8 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 def _make_scratch(in_shape, out_shape, groups=1, expand=False):
@@ -88,7 +88,7 @@ class FeatureFusionBlock(nn.Module):
         size=None,
         no_resconv1=False,
     ):
-        super(FeatureFusionBlock, self).__init__()
+        super().__init__()
 
         self.deconv = deconv
         self.align_corners = align_corners
@@ -148,10 +148,10 @@ class DPTHead(nn.Module):
         self,
         in_channels,
         features=256,
-        out_channels=[256, 512, 1024, 1024],
+        out_channels=(256, 512, 1024, 1024),
         out_dim=3,
     ):
-        super(DPTHead, self).__init__()
+        super().__init__()
 
         self.projects = nn.ModuleList([
             nn.Conv2d(

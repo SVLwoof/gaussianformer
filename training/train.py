@@ -20,13 +20,12 @@ from pathlib import Path
 import lpips
 import torch
 import torch.distributed as dist
-import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from gaussianformer.models.config import GaussianFormerConfig
-from gaussianformer.pipelines.rendering_pipeline import model_forward
 from gaussianformer.models.gaussianformer import GaussianFormer
+from gaussianformer.pipelines.rendering_pipeline import model_forward
 from gaussianformer.utils.checkpoint import load_checkpoint, load_seed
 from training.dataset import GaussianRenderDataset, collate_fn
 from training.weight_transfer import from_renderformer

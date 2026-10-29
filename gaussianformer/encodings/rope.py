@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from math import log
+from math import log2
 
 import torch
 from einops import rearrange
@@ -55,7 +55,7 @@ class SpatialRotaryEmbedding(nn.Module):
         super().__init__()
         self.pos_dim = pos_dim
         self.pos_scale = pos_scale
-        self.register_buffer("freqs", 2 ** torch.linspace(0, log(dim // 2 - 1, 2), dim // 2))
+        self.register_buffer("freqs", 2 ** torch.linspace(0, log2(dim // 2 - 1), dim // 2))
 
     @autocast("cuda", enabled=False)
     def get_spatial_freqs(self, pos: Tensor) -> Tensor:

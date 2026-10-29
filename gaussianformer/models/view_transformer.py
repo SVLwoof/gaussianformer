@@ -1,7 +1,7 @@
 import roma
 import torch
-import torch.nn as nn
 from einops import rearrange
+from torch import nn
 
 from gaussianformer.layers.attention import TransformerDecoder
 from gaussianformer.layers.dpt import DPTHead

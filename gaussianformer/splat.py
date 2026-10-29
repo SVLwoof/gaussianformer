@@ -42,13 +42,13 @@ def read_ply(src: str | Path | bytes) -> dict[str, np.ndarray]:
     """3DGS PLY (path or bytes) -> activated Gaussians: means, scales, rotations (wxyz), colors, opacities."""
     v = PlyData.read(io.BytesIO(src) if isinstance(src, bytes) else str(src))["vertex"]
     quats = np.stack([v[f"rot_{i}"] for i in range(4)], -1).astype(np.float32)
-    return dict(
-        means=np.stack([v["x"], v["y"], v["z"]], -1).astype(np.float32),
-        scales=np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], -1)).astype(np.float32),
-        rotations=quats / (np.linalg.norm(quats, axis=-1, keepdims=True) + 1e-9),
-        colors=np.clip(0.5 + SH_C0 * np.stack([v[f"f_dc_{i}"] for i in range(3)], -1), 0, 1).astype(np.float32),
-        opacities=(1.0 / (1.0 + np.exp(-np.asarray(v["opacity"], np.float32)))).astype(np.float32),
-    )
+    return {
+        "means": np.stack([v["x"], v["y"], v["z"]], -1).astype(np.float32),
+        "scales": np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], -1)).astype(np.float32),
+        "rotations": quats / (np.linalg.norm(quats, axis=-1, keepdims=True) + 1e-9),
+        "colors": np.clip(0.5 + SH_C0 * np.stack([v[f"f_dc_{i}"] for i in range(3)], -1), 0, 1).astype(np.float32),
+        "opacities": (1.0 / (1.0 + np.exp(-np.asarray(v["opacity"], np.float32)))).astype(np.float32),
+    }
 
 
 def normalize(g: dict[str, np.ndarray], up: str = "y") -> dict[str, np.ndarray] | None:
@@ -61,8 +61,8 @@ def normalize(g: dict[str, np.ndarray], up: str = "y") -> dict[str, np.ndarray] 
     if extent < 1e-4:
         return None
     s = 0.45 / extent
-    return dict(means=means * s, scales=g["scales"] * s, rotations=rotations, colors=g["colors"],
-                opacities=g["opacities"])
+    return {"means": means * s, "scales": g["scales"] * s, "rotations": rotations, "colors": g["colors"],
+            "opacities": g["opacities"]}
 
 
 def rasterize(g: dict[str, torch.Tensor], viewmats: torch.Tensor, Ks: torch.Tensor):
@@ -108,8 +108,8 @@ def recover(g: dict[str, torch.Tensor], target: torch.Tensor, viewmats, Ks) -> d
     lrs = {"means": 1.6e-4, "log_scales": 5e-3, "rotations": 1e-3, "opacity_logits": 5e-2, "color_logits": 2.5e-3}
     opt = torch.optim.Adam([{"params": [p[k]], "lr": lr} for k, lr in lrs.items()])
     sched = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=0.95 ** (1 / 400))
-    current = lambda: dict(means=p["means"], scales=p["log_scales"].exp(), rotations=p["rotations"],
-                           opacities=p["opacity_logits"].sigmoid(), colors=p["color_logits"].sigmoid())
+    current = lambda: {"means": p["means"], "scales": p["log_scales"].exp(), "rotations": p["rotations"],
+                       "opacities": p["opacity_logits"].sigmoid(), "colors": p["color_logits"].sigmoid()}
     for _ in range(RECOVERY_ITERS):
         v = torch.randint(0, len(viewmats), (4,), device=target.device)
         img = rasterize(current(), viewmats[v], Ks[v])[0].clamp(0, 1)

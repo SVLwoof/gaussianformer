@@ -32,7 +32,7 @@ def scene(n=200, pad=10):
 
 
 def test_train_step():
-    for cfg in ([], FINE, FINE + ["xattn_window=4"]):
+    for cfg in ([], FINE, [*FINE, "xattn_window=4"]):
         model = GaussianFormer(SMALL.with_overrides(cfg)).train()
         g, mask, c2w, fov = scene()
         pred = model_forward(model, g, mask, c2w, fov, 64, tf32_view=True)
@@ -64,7 +64,7 @@ def test_window_matches_dense_with_huge_margin():
 
 def test_window_is_sparse():
     model = GaussianFormer(SMALL.with_overrides(FINE)).eval()
-    g, mask, c2w, fov = scene()
+    g, mask, c2w, _fov = scene()
     cam = transform_gaussians_to_cam_coord(c2w[:, 0], g)
     fov_rad = torch.tensor([math.radians(45.0)])
     uv, depth, behind, focal = model.view_transformer.project(cam[..., :3], fov_rad, 64, 64)
