@@ -5,7 +5,7 @@ type: software
 url: "https://github.com/SVLwoof/gaussianformer"
 license: MIT
 authors:
-  - family-names: "Valenciale"
+  - family-names: "Valencia Levy"
     given-names: "Shahaf"
   - family-names: "Benaim"
     given-names: "Sagie"

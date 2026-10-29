@@ -15,7 +15,8 @@ pretrained weights.
 
 <div align="center">
   <img src="medias/heldout_gallery.png" width="100%"/>
-  <em>Eight objects never seen in training: ground truth (full splat) and GaussianFormer, PSNR per view.</em>
+  <em>Eight objects never seen in training: ground truth (full splat) and GaussianFormer, PSNR on the crop around the
+  object.</em>
 </div>
 
 <div align="center">
@@ -33,16 +34,18 @@ pretrained weights.
 
 ## Results
 
-300 objects held out from training, 4 views each (views 0, 4, 7 and 11 at distance 1.7), PSNR on the object's
-bounding box against the full-splat ground truth:
+300 objects held out from training and never used while developing the model, PSNR on the square crop around the
+object against the full-splat ground truth, over all 28 training views (14 at camera distance 1.7, 7 each at 1.15
+and 2.45) and over 4 of them (views 0, 4, 7 and 11 at distance 1.7):
 
-| | PSNR (dB) |
-|---|---|
-| gsplat rasterization of the same 20k-Gaussian input | 44.97 |
-| **GaussianFormer** | **37.08** |
+| | 28 views | 4 views | SSIM | LPIPS |
+|---|---|---|---|---|
+| gsplat rasterization of the same 20k-Gaussian input | 44.02 | 44.97 | 0.9954 | 0.0046 |
+| **GaussianFormer** | **38.08** | **38.36** | **0.9814** | **0.0113** |
 
-Closer in (distance 1.15, the same four angles), GaussianFormer scores 36.87 dB against 42.24 dB for rasterization.
-On 300 training objects it scores 37.19 dB, 0.11 dB above the held-out objects.
+By camera distance, GaussianFormer scores 38.47, 38.38 and 37.08 dB at 1.15, 1.7 and 2.45 (rasterization 42.39,
+45.14 and 43.39). On 300 training objects, at their 28 training views, it scores 38.25 dB, 0.17 dB above the
+held-out objects.
 
 ## Installation
 
@@ -50,19 +53,26 @@ Linux with an NVIDIA GPU and Python 3.12, with [uv](https://docs.astral.sh/uv/).
 project:
 
 ```bash
+uv add "gaussianformer @ git+https://github.com/SVLwoof/gaussianformer"
+```
+
+This installs PyTorch 2.9 for CUDA 12.8. [Flash Attention](https://github.com/Dao-AILab/flash-attention) is optional
+and recommended for speed: without it the model falls back to PyTorch's scaled-dot-product attention. The `flash`
+extra adds a prebuilt wheel:
+
+```bash
 uv add "gaussianformer[flash] @ git+https://github.com/SVLwoof/gaussianformer"
 ```
 
-This installs PyTorch 2.9 for CUDA 12.8 and a prebuilt Flash Attention wheel, which the windowed cross-attention
-needs. In a virtual environment without a uv project, `uv pip install` takes the same argument. To train, evaluate or
-build the dataset, clone the repository and run `uv sync`, which installs the locked environment. gsplat compiles its
-CUDA kernels on first use.
+In a virtual environment without a uv project, `uv pip install` takes the same arguments. To train, evaluate or
+build the dataset, clone the repository and run `uv sync`, which installs the locked environment, Flash Attention
+included. gsplat compiles its CUDA kernels on first use.
 
-pip does not read uv's package sources, so with pip install the Flash Attention wheel yourself:
+pip does not read uv's package sources, so with pip install the Flash Attention wheel yourself if you want it:
 
 ```bash
 pip install "gaussianformer @ git+https://github.com/SVLwoof/gaussianformer"
-pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl  # optional
 ```
 
 ## Rendering
@@ -110,10 +120,15 @@ Changes over RenderFormer besides the input tokens (options in `gaussianformer/m
 
 - `proj_rope_2d`: each Gaussian is projected into the view, and its image position enters the cross-attention as a
   2-D RoPE matched against each patch's position.
-- `xattn_window`: each 8×8-patch tile attends only to the Gaussians whose projected footprint reaches it
-  (`gaussianformer/layers/window.py`), which makes the finer patch grid affordable.
+- `cov_key_embed`: each Gaussian's covariance is projected into the view, and its footprint in the image (the sizes
+  and orientation of its two axes) is added to the Gaussian's key in the cross-attention through a zero-initialized
+  linear layer per decoder layer, so each patch can tell how far a Gaussian reaches.
 - `patch_size=4` with `ray_embed_patch=8`: 4 px patches (RenderFormer: 8 px) that reuse the pretrained 8 px ray
   embedding.
+
+Every patch attends to every Gaussian. `xattn_window` (`gaussianformer/layers/window.py`) restricts each 8×8-patch
+tile to the Gaussians whose projected footprint reaches it, which saves memory in training but is not used by the
+released model; it needs Flash Attention on GPU.
 
 ## Data
 
@@ -167,7 +182,8 @@ data is the Objaverse_Splats subset of [Objaverse](https://objaverse.allenai.org
 ## License
 
 - **Code:** MIT.
-- **Weights:** CC-BY-NC-4.0, following the non-commercial terms of the Objaverse_Splats training data.
+- **Weights:** MIT. The model is trained on [Objaverse_Splats](https://huggingface.co/datasets/ShapeSplats/Objaverse_Splats),
+  splats fit to [Objaverse](https://objaverse.allenai.org/) objects, each of which keeps its creator's license.
 
 ## Citation
 

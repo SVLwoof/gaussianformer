@@ -24,7 +24,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Needed for the windowed cross-attention on GPU; pip builds it from source unless a matching wheel is installed.
+# Optional and faster; needed only by the windowed cross-attention option on GPU. pip builds it from source unless a
+# matching wheel is installed.
 flash = ["flash-attn>=2.7.0"]
 
 [project.urls]
